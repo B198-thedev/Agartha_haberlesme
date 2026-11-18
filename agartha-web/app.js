@@ -107,6 +107,23 @@ function getDmRoomId(id1, id2) {
   return "dm_" + [id1, id2].sort().join("__");
 }
 
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  if (window.crypto && window.crypto.subtle) {
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  // Güvenli olmayan bağlamlar (ör. file://) için basit fallback
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash << 5) - hash + text.charCodeAt(i);
+    hash |= 0;
+  }
+  return "fallback_" + Math.abs(hash).toString(16);
+}
+
 // Başlatma
 function init() {
   if (!isConfigured()) {
@@ -167,7 +184,16 @@ loginForm.addEventListener("submit", async (e) => {
   if (!username || !code) return;
 
   try {
-    if (code === ADMIN_ACCESS_CODE) {
+    const codeHash = await sha256(code);
+    const adminHashSnap = await state.db.ref("config/adminHash").once("value");
+    const savedAdminHash = adminHashSnap.val();
+
+    // İlk kez kurulum: Henüz Admin şifresi yoksa ilk giren kişi Admin şifresini belirler
+    if (!savedAdminHash) {
+      await state.db.ref("config/adminHash").set(codeHash);
+    }
+
+    if (!savedAdminHash || codeHash === savedAdminHash) {
       const userId = "admin_" + username.toLowerCase().replace(/[^a-z0-9]/g, "");
       await state.db.ref("users/" + userId).set({
         name: username,
