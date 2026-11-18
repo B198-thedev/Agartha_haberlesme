@@ -28,15 +28,40 @@
           Firebase bağlantısı henüz yapılmamış. <code>firebase-config.js</code> dosyasını doldurun.
         </div>
 
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-auth-tab="login">Giriş Yap</button>
+          <button type="button" class="auth-tab" data-auth-tab="register">Hesap Oluştur</button>
+        </div>
+
         <form id="login-form">
           <label for="login-username">Kullanıcı Adı</label>
-          <input id="login-username" type="text" placeholder="Örn. Ahmet" maxlength="24" autocomplete="nickname" required />
+          <input id="login-username" type="text" placeholder="Örn. Ahmet" maxlength="24" autocomplete="username" required />
 
-          <label for="login-code">Erişim Kodu</label>
-          <input id="login-code" type="text" placeholder="Admin veya davet kodunu gir" autocomplete="off" required />
+          <label for="login-code">Şifre / Admin Kodu</label>
+          <input id="login-code" type="text" placeholder="Kendi şifreni veya Admin kodunu gir" autocomplete="current-password" required />
 
           <div id="login-error" class="error-text hidden"></div>
           <button type="submit" class="btn-primary">Giriş Yap</button>
+        </form>
+
+        <form id="register-form" class="hidden">
+          <div class="avatar-picker">
+            <img id="reg-avatar-preview" src="./icon-192.png" alt="Profil" />
+            <input id="reg-avatar-input" type="file" accept="image/*" class="hidden" />
+            <button id="reg-avatar-btn" type="button" class="icon-btn">Profil Fotoğrafı Seç (Opsiyonel)</button>
+          </div>
+
+          <label for="reg-username">Kullanıcı Adı</label>
+          <input id="reg-username" type="text" placeholder="Örn. Arda" maxlength="24" autocomplete="username" required />
+
+          <label for="reg-password">Şifre Belirle</label>
+          <input id="reg-password" type="text" placeholder="Kendi şifreni oluştur" minlength="3" maxlength="40" autocomplete="new-password" required />
+
+          <label for="reg-invite">Erişim / Davet Kodu</label>
+          <input id="reg-invite" type="text" placeholder="Admin'den aldığın kod (AGAR-XXXX)" autocomplete="off" required />
+
+          <div id="register-error" class="error-text hidden"></div>
+          <button type="submit" class="btn-primary">Hesabı Oluştur</button>
         </form>
       </div>
     </section>
@@ -44,8 +69,8 @@
     <!-- ANA UYGULAMA EKRANI -->
     <section id="main-view" class="view">
       <header class="top-bar">
-        <div class="top-bar-left">
-          <img src="./icon-192.png" alt="" class="mini-logo" />
+        <div class="top-bar-left" id="profile-trigger" style="cursor:pointer" title="Profil fotoğrafını değiştir">
+          <img id="header-avatar" src="./icon-192.png" alt="" class="mini-logo round-avatar" />
           <div>
             <div class="app-title">Agartha</div>
             <div id="current-user-label" class="user-sub"></div>
@@ -154,6 +179,23 @@
         <button type="submit" class="send-btn">Gönder</button>
       </form>
     </section>
+
+    <!-- PROFİL FOTOĞRAFI MODALI -->
+    <div id="profile-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Profil Ayarları</h2>
+          <button id="close-profile-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <div class="avatar-picker">
+            <img id="profile-avatar-preview" src="./icon-192.png" alt="Profil" />
+            <input id="profile-avatar-input" type="file" accept="image/*" class="hidden" />
+            <button id="profile-avatar-btn" type="button" class="btn-primary">Yeni Profil Fotoğrafı Seç</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- FOTOĞRAF BÜYÜTME MODALI -->
     <div id="image-modal" class="modal hidden">

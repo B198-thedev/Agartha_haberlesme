@@ -86,17 +86,72 @@ html, body {
   font-size: 14px;
 }
 
-#login-form {
+#login-form, #register-form {
   display: flex;
   flex-direction: column;
   text-align: left;
   gap: 10px;
 }
 
-#login-form label {
+#login-form label, #register-form label {
   font-size: 13px;
   color: var(--muted);
   margin-top: 4px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.auth-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.auth-tab.active {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.avatar-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.avatar-picker img {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent);
+}
+
+.round-avatar {
+  border-radius: 50% !important;
+  object-fit: cover;
+}
+
+.avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 input, select {

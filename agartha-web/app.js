@@ -19,7 +19,8 @@ const state = {
   unreadRooms: new Set(),
   dmListeners: {},
   presenceSetup: false,
-  driveConfig: { url: "", secret: "" }
+  driveConfig: { url: "", secret: "" },
+  pendingRegAvatar: ""
 };
 
 // DOM Elemanları
@@ -33,6 +34,17 @@ const loginUsername = document.getElementById("login-username");
 const loginCode = document.getElementById("login-code");
 const loginError = document.getElementById("login-error");
 
+const registerForm = document.getElementById("register-form");
+const regAvatarPreview = document.getElementById("reg-avatar-preview");
+const regAvatarInput = document.getElementById("reg-avatar-input");
+const regAvatarBtn = document.getElementById("reg-avatar-btn");
+const regUsername = document.getElementById("reg-username");
+const regPassword = document.getElementById("reg-password");
+const regInvite = document.getElementById("reg-invite");
+const registerError = document.getElementById("register-error");
+
+const profileTrigger = document.getElementById("profile-trigger");
+const headerAvatar = document.getElementById("header-avatar");
 const currentUserLabel = document.getElementById("current-user-label");
 const notifyBtn = document.getElementById("notify-btn");
 const openAdminBtn = document.getElementById("open-admin-btn");
@@ -68,6 +80,12 @@ const imageModal = document.getElementById("image-modal");
 const imageModalImg = document.getElementById("image-modal-img");
 const downloadImageBtn = document.getElementById("download-image-btn");
 const closeImageBtn = document.getElementById("close-image-btn");
+
+const profileModal = document.getElementById("profile-modal");
+const closeProfileBtn = document.getElementById("close-profile-btn");
+const profileAvatarPreview = document.getElementById("profile-avatar-preview");
+const profileAvatarInput = document.getElementById("profile-avatar-input");
+const profileAvatarBtn = document.getElementById("profile-avatar-btn");
 
 const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
@@ -143,7 +161,45 @@ function showError(msg) {
 function clearError() {
   loginError.textContent = "";
   loginError.classList.add("hidden");
+  registerError.textContent = "";
+  registerError.classList.add("hidden");
 }
+
+function showRegisterError(msg) {
+  registerError.textContent = msg;
+  registerError.classList.remove("hidden");
+}
+
+document.querySelectorAll("[data-auth-tab]").forEach((tabBtn) => {
+  tabBtn.addEventListener("click", () => {
+    clearError();
+    const mode = tabBtn.dataset.authTab;
+    document.querySelectorAll("[data-auth-tab]").forEach((b) => b.classList.remove("active"));
+    tabBtn.classList.add("active");
+    if (mode === "register") {
+      loginForm.classList.add("hidden");
+      registerForm.classList.remove("hidden");
+    } else {
+      registerForm.classList.add("hidden");
+      loginForm.classList.remove("hidden");
+    }
+  });
+});
+
+regAvatarBtn.addEventListener("click", () => regAvatarInput.click());
+
+regAvatarInput.addEventListener("change", async () => {
+  const file = regAvatarInput.files && regAvatarInput.files[0];
+  regAvatarInput.value = "";
+  if (!file) return;
+  try {
+    const avatarData = await compressImageToBase64(file, 180, 0.75);
+    state.pendingRegAvatar = avatarData;
+    regAvatarPreview.src = avatarData;
+  } catch {
+    showRegisterError("Profil fotoğrafı yüklenemedi.");
+  }
+});
 
 function slugifyId(name) {
   const base = normalizeTurkish(name) || "user";
@@ -312,7 +368,8 @@ function verifyAndEnter(sessionUser) {
       state.user = {
         id: sessionUser.id,
         name: data.name,
-        isAdmin: Boolean(data.isAdmin)
+        isAdmin: Boolean(data.isAdmin),
+        avatarData: data.avatarData || ""
       };
       enterMainApp();
     })
@@ -337,7 +394,8 @@ function waitForReactivation(sessionUser) {
       state.user = {
         id: sessionUser.id,
         name: data.name,
-        isAdmin: Boolean(data.isAdmin)
+        isAdmin: Boolean(data.isAdmin),
+        avatarData: data.avatarData || ""
       };
       enterMainApp();
     }
@@ -371,27 +429,32 @@ loginForm.addEventListener("submit", async (e) => {
       const userId = "admin_" + (normalizeTurkish(username) || "root");
       const existingAdminSnap = await state.db.ref("users/" + userId).once("value");
       const existingAdmin = existingAdminSnap.val();
+      const avatarData = (existingAdmin && existingAdmin.avatarData) || "";
       await state.db.ref("users/" + userId).set({
         name: username,
         isAdmin: true,
         active: existingAdmin ? existingAdmin.active !== false : true,
         online: true,
+        avatarData,
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
-      state.user = { id: userId, name: username, isAdmin: true };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
+      state.user = { id: userId, name: username, isAdmin: true, avatarData };
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
       return;
     }
 
-    // Mevcut kullanıcı başka bir cihazdan kendi adı + kendi koduyla tekrar giriş yapıyorsa
+    // Mevcut kullanıcı kendi adı + şifresi (veya eski davet kodu) ile giriş yapıyorsa
     const usersSnap = await state.db.ref("users").once("value");
     const allUsers = usersSnap.val() || {};
     const matchedEntry = Object.entries(allUsers).find(([, u]) => {
       const sameName =
         String(u.name || "").trim().toLowerCase() === username.toLowerCase();
-      const sameCode = u.codeHash === codeHash || u.inviteCode === code;
-      return sameName && sameCode;
+      const sameSecret =
+        u.passwordHash === codeHash ||
+        u.codeHash === codeHash ||
+        u.inviteCode === code;
+      return sameName && sameSecret;
     });
 
     if (matchedEntry) {
@@ -404,36 +467,68 @@ loginForm.addEventListener("submit", async (e) => {
       state.user = {
         id: existingId,
         name: existingUser.name,
-        isAdmin: Boolean(existingUser.isAdmin)
+        isAdmin: Boolean(existingUser.isAdmin),
+        avatarData: existingUser.avatarData || ""
       };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ id: existingId, name: existingUser.name, isAdmin: Boolean(existingUser.isAdmin) })
+      );
       enterMainApp();
       return;
     }
 
+    showError("Kullanıcı adı veya şifre hatalı. Yeni kullanıcıysanız 'Hesap Oluştur' sekmesini kullanın.");
+  } catch (err) {
+    showError("Giriş hatası: " + (err.message || "Bağlantı sorunu"));
+  }
+});
+
+// Hesap Oluşturma İşlemi
+registerForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearError();
+
+  if (!state.db) {
+    showRegisterError("Önce firebase-config.js dosyasını doldurun.");
+    return;
+  }
+
+  const username = regUsername.value.trim();
+  const password = regPassword.value.trim();
+  const code = regInvite.value.trim();
+  if (!username || !password || !code) return;
+
+  try {
     const inviteSnap = await state.db.ref("invites/" + code).once("value");
     const invite = inviteSnap.val();
     if (!invite || invite.active !== true) {
-      showError("Geçersiz veya daha önce kullanılmış erişim kodu.");
+      showRegisterError("Geçersiz veya daha önce kullanılmış erişim kodu.");
       return;
     }
 
+    const usersSnap = await state.db.ref("users").once("value");
+    const allUsers = usersSnap.val() || {};
     const nameTaken = Object.values(allUsers).some(
       (u) => String(u.name || "").trim().toLowerCase() === username.toLowerCase()
     );
     if (nameTaken) {
-      showError("Bu kullanıcı adı zaten kullanılıyor. Farklı bir kullanıcı adı seçin.");
+      showRegisterError("Bu kullanıcı adı zaten alınmış. Farklı bir kullanıcı adı seçin.");
       return;
     }
 
+    const passwordHash = await sha256(password);
     const userId = slugifyId(username);
+    const avatarData = state.pendingRegAvatar || "";
+
     await state.db.ref("users/" + userId).set({
       name: username,
       isAdmin: false,
       active: true,
       online: true,
       inviteCode: code,
-      codeHash,
+      passwordHash,
+      avatarData,
       joinedAt: Date.now()
     });
 
@@ -444,11 +539,11 @@ loginForm.addEventListener("submit", async (e) => {
       usedAt: Date.now()
     });
 
-    state.user = { id: userId, name: username, isAdmin: false };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
+    state.user = { id: userId, name: username, isAdmin: false, avatarData };
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: false }));
     enterMainApp();
   } catch (err) {
-    showError("Giriş hatası: " + (err.message || "Bağlantı sorunu"));
+    showRegisterError("Kayıt hatası: " + (err.message || "Bağlantı sorunu"));
   }
 });
 
@@ -456,6 +551,7 @@ function enterMainApp() {
   currentUserLabel.textContent = state.user.isAdmin
     ? `${state.user.name} (Admin)`
     : state.user.name;
+  headerAvatar.src = state.user.avatarData || "./icon-192.png";
 
   if (state.user.isAdmin) {
     openAdminBtn.classList.remove("hidden");
@@ -641,10 +737,14 @@ function renderContactsList() {
         ? `Son görülme ${formatTime(u.lastSeen)}`
         : "Özel sohbet aç";
 
+      const avatarHtml = u.avatarData
+        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="${escapeHtml(u.name)}" />`
+        : `<div class="avatar">${initial}</div>`;
+
       return `
         <button class="chat-item" data-dm-id="${escapeHtml(id)}" data-dm-name="${escapeHtml(u.name)}">
           <div class="avatar-wrap">
-            <div class="avatar">${initial}</div>
+            ${avatarHtml}
             ${onlineDot}
           </div>
           <div class="chat-item-body">
@@ -1002,6 +1102,33 @@ imageModal.addEventListener("click", (e) => {
   if (e.target === imageModal) {
     imageModal.classList.add("hidden");
     imageModalImg.src = "";
+  }
+});
+
+// Profil Fotoğrafı Güncelleme
+profileTrigger.addEventListener("click", () => {
+  profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
+  profileModal.classList.remove("hidden");
+});
+
+closeProfileBtn.addEventListener("click", () => {
+  profileModal.classList.add("hidden");
+});
+
+profileAvatarBtn.addEventListener("click", () => profileAvatarInput.click());
+
+profileAvatarInput.addEventListener("change", async () => {
+  const file = profileAvatarInput.files && profileAvatarInput.files[0];
+  profileAvatarInput.value = "";
+  if (!file || !state.user) return;
+  try {
+    const avatarData = await compressImageToBase64(file, 180, 0.75);
+    await state.db.ref("users/" + state.user.id + "/avatarData").set(avatarData);
+    state.user.avatarData = avatarData;
+    headerAvatar.src = avatarData;
+    profileAvatarPreview.src = avatarData;
+  } catch {
+    alert("Profil fotoğrafı güncellenemedi.");
   }
 });
 
