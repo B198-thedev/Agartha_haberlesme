@@ -434,29 +434,113 @@ input:-webkit-autofill:focus {
 
 /* BOTTOM NAV */
 .bottom-nav {
-  display: flex;
+  --nav-padding: 8px;
+  --nav-selected: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  order: 1;
   background: var(--surface);
   border-top: 1px solid var(--border);
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-  gap: 6px;
+  padding: 0 var(--nav-padding) env(safe-area-inset-bottom);
   flex-shrink: 0;
 }
 
+.bottom-nav:has([data-tab="places"].active) {
+  --nav-selected: 1;
+}
+
+.bottom-nav:has([data-tab="ai"].active) {
+  --nav-selected: 2;
+}
+
+.nav-indicator {
+  position: absolute;
+  inset: 0 auto auto var(--nav-padding);
+  width: calc((100% - 2 * var(--nav-padding)) / 3);
+  height: 3px;
+  pointer-events: none;
+  transform: translateX(calc(var(--nav-selected) * 100%));
+  transition: transform 240ms cubic-bezier(0.24, 0.82, 0.25, 1);
+}
+
+.nav-indicator::before {
+  content: "";
+  display: block;
+  width: 26px;
+  height: 100%;
+  margin-inline: auto;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
 .nav-btn {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 64px;
   background: transparent;
-  border: none;
-  color: var(--muted);
-  padding: 10px 6px;
-  border-radius: 10px;
-  font-size: 13px;
+  border: 0;
+  color: #acbbce;
+  padding: 10px 4px 8px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
-.nav-btn.active {
+.nav-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -5px;
+}
+
+.nav-btn:active {
   background: var(--surface-2);
+}
+
+.nav-btn.active {
   color: var(--accent);
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 180ms ease-out;
+}
+
+.nav-btn.active .nav-icon {
+  transform: translateY(-2px);
+}
+
+@media (hover: hover) {
+  .nav-btn:hover {
+    background: rgb(255 255 255 / 4%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-indicator,
+  .nav-icon {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .nav-indicator::before {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
 }
 
 /* CHAT VIEW */
