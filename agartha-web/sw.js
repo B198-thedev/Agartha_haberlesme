@@ -1,4 +1,4 @@
-const CACHE_NAME = "agartha-v1";
+const CACHE_NAME = "agartha-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,7 +6,8 @@ const ASSETS = [
   "./app.js",
   "./firebase-config.js",
   "./manifest.json",
-  "./icon.svg"
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -40,5 +41,17 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      if (list.length > 0) {
+        return list[0].focus();
+      }
+      return clients.openWindow("./index.html");
+    })
   );
 });

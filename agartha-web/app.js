@@ -10,7 +10,10 @@ const state = {
   user: null, // { id, name, isAdmin }
   activeRoom: null, // { id, title, isGroup }
   chatRef: null,
-  usersCache: {}
+  usersCache: {},
+  startedAt: Date.now(),
+  notifiedMsgKeys: new Set(),
+  dmListeners: {}
 };
 
 // DOM Elemanları
@@ -25,6 +28,7 @@ const loginCode = document.getElementById("login-code");
 const loginError = document.getElementById("login-error");
 
 const currentUserLabel = document.getElementById("current-user-label");
+const notifyBtn = document.getElementById("notify-btn");
 const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
@@ -249,6 +253,7 @@ function enterMainApp() {
   }
 
   showView(mainView);
+  updateNotifyButton();
   listenUsers();
   listenMainGroupPreview();
   listenPlaces();
@@ -256,11 +261,83 @@ function enterMainApp() {
   watchOwnAccess();
 }
 
+function updateNotifyButton() {
+  if (!("Notification" in window)) {
+    notifyBtn.classList.add("hidden");
+    return;
+  }
+  if (Notification.permission === "granted") {
+    notifyBtn.textContent = "Bildirim: Açık";
+    notifyBtn.style.borderColor = "rgba(34, 197, 94, 0.5)";
+  } else if (Notification.permission === "denied") {
+    notifyBtn.textContent = "Bildirim: Engelli";
+  } else {
+    notifyBtn.textContent = "Bildirim Aç";
+  }
+}
+
+notifyBtn.addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    alert("Bu tarayıcı bildirimleri desteklemiyor. iPhone'da önce Ana Ekrana Ekle yapmalısınız.");
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  updateNotifyButton();
+  if (perm === "granted") {
+    showIncomingNotification("Agartha", "Bildirimler açıldı! Yeni mesaj geldiğinde haber vereceğiz.", "test");
+  }
+});
+
+async function showIncomingNotification(title, body, uniqueKey) {
+  if (uniqueKey && state.notifiedMsgKeys.has(uniqueKey)) return;
+  if (uniqueKey) state.notifiedMsgKeys.add(uniqueKey);
+
+  if (navigator.vibrate) {
+    navigator.vibrate([120, 60, 120]);
+  }
+
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, {
+        body,
+        icon: "./icon-192.png",
+        badge: "./icon-192.png",
+        tag: uniqueKey || "agartha-msg"
+      });
+      return;
+    }
+  } catch {
+    // Fallback'e düş
+  }
+
+  new Notification(title, { body, icon: "./icon-192.png" });
+}
+
 function watchOwnAccess() {
-  state.db.ref("users/" + state.user.id + "/active").on("value", (snap) => {
-    if (snap.val() === false) {
+  state.db.ref("users/" + state.user.id).on("value", (snap) => {
+    const data = snap.val();
+    if (!data || data.active === false) {
       logout();
       showError("Yönetici tarafından erişiminiz kapatıldı.");
+      return;
+    }
+    const nextAdmin = Boolean(data.isAdmin);
+    if (nextAdmin !== state.user.isAdmin) {
+      state.user.isAdmin = nextAdmin;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
+      currentUserLabel.textContent = nextAdmin
+        ? `${state.user.name} (Admin)`
+        : state.user.name;
+      if (nextAdmin) {
+        openAdminBtn.classList.remove("hidden");
+        renderAdminUsers(state.usersCache);
+      } else {
+        openAdminBtn.classList.add("hidden");
+        adminModal.classList.add("hidden");
+      }
     }
   });
 }
@@ -326,6 +403,29 @@ function listenUsers() {
     if (state.user.isAdmin) {
       renderAdminUsers(users);
     }
+
+    // Her yetkili kişiyle olan özel sohbeti bildirim için dinle
+    others.forEach(([otherId, u]) => {
+      const dmId = getDmRoomId(state.user.id, otherId);
+      if (state.dmListeners[dmId]) return;
+      const ref = state.db.ref(`chats/${dmId}/messages`).limitToLast(1);
+      state.dmListeners[dmId] = ref;
+      ref.on("child_added", (msgSnap) => {
+        const msg = msgSnap.val();
+        if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
+        if (msg.senderId === state.user.id) return;
+        const isViewingThis =
+          state.activeRoom &&
+          state.activeRoom.id === dmId &&
+          document.visibilityState === "visible";
+        if (isViewingThis) return;
+        showIncomingNotification(
+          `${msg.senderName || u.name} (Özel)`,
+          msg.text,
+          msgSnap.key
+        );
+      });
+    });
   });
 }
 
@@ -336,9 +436,19 @@ function listenMainGroupPreview() {
     .on("value", (snap) => {
       const val = snap.val();
       if (!val) return;
-      const msg = Object.values(val)[0];
+      const [key, msg] = Object.entries(val)[0];
       mainGroupPreview.textContent = `${msg.senderName}: ${msg.text}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
+
+      if ((msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
+        const isViewingGroup =
+          state.activeRoom &&
+          state.activeRoom.id === "main_group" &&
+          document.visibilityState === "visible";
+        if (!isViewingGroup) {
+          showIncomingNotification("Ana Grup", `${msg.senderName}: ${msg.text}`, key);
+        }
+      }
     });
 }
 
@@ -592,7 +702,10 @@ function renderAdminUsers(users) {
           : `<span class="badge-revoked">Engelli</span>`;
       const actionBtn = isSelf
         ? ""
-        : `<button class="icon-btn ${u.active !== false ? "danger" : ""}" data-toggle-user="${escapeHtml(id)}" data-next="${u.active === false}">
+        : `<button class="icon-btn" data-toggle-admin="${escapeHtml(id)}" data-next-admin="${!u.isAdmin}">
+            ${u.isAdmin ? "Adminliği Al" : "Admin Yap"}
+          </button>
+          <button class="icon-btn ${u.active !== false ? "danger" : ""}" data-toggle-user="${escapeHtml(id)}" data-next="${u.active === false}">
             ${u.active !== false ? "Yetkiyi Kaldır" : "Yetki Ver"}
           </button>`;
 
@@ -613,6 +726,14 @@ function renderAdminUsers(users) {
       const uid = btn.dataset.toggleUser;
       const nextActive = btn.dataset.next === "true";
       state.db.ref("users/" + uid + "/active").set(nextActive);
+    });
+  });
+
+  adminUsersList.querySelectorAll("[data-toggle-admin]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.toggleAdmin;
+      const nextAdmin = btn.dataset.nextAdmin === "true";
+      state.db.ref("users/" + uid + "/isAdmin").set(nextAdmin);
     });
   });
 }
