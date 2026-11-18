@@ -107,6 +107,10 @@ const closeProfileBtn = document.getElementById("close-profile-btn");
 const profileAvatarPreview = document.getElementById("profile-avatar-preview");
 const profileAvatarInput = document.getElementById("profile-avatar-input");
 const profileAvatarBtn = document.getElementById("profile-avatar-btn");
+const profileColorInput = document.getElementById("profile-color-input");
+const profileColorPreview = document.getElementById("profile-color-preview");
+const saveColorBtn = document.getElementById("save-color-btn");
+const resetColorBtn = document.getElementById("reset-color-btn");
 
 const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
@@ -133,6 +137,19 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function isValidHexColor(hex) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(hex || "").trim());
+}
+
+function getContrastTextColor(hex) {
+  if (!isValidHexColor(hex)) return "#f8fafc";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? "#0f172a" : "#f8fafc";
 }
 
 function linkifyText(str) {
@@ -435,7 +452,8 @@ function verifyAndEnter(sessionUser) {
         id: sessionUser.id,
         name: data.name,
         isAdmin: Boolean(data.isAdmin),
-        avatarData: data.avatarData || ""
+        avatarData: data.avatarData || "",
+        bubbleColor: data.bubbleColor || ""
       };
       enterMainApp();
     })
@@ -461,7 +479,8 @@ function waitForReactivation(sessionUser) {
         id: sessionUser.id,
         name: data.name,
         isAdmin: Boolean(data.isAdmin),
-        avatarData: data.avatarData || ""
+        avatarData: data.avatarData || "",
+        bubbleColor: data.bubbleColor || ""
       };
       enterMainApp();
     }
@@ -496,15 +515,17 @@ loginForm.addEventListener("submit", async (e) => {
       const existingAdminSnap = await state.db.ref("users/" + userId).once("value");
       const existingAdmin = existingAdminSnap.val();
       const avatarData = (existingAdmin && existingAdmin.avatarData) || "";
+      const bubbleColor = (existingAdmin && existingAdmin.bubbleColor) || "";
       await state.db.ref("users/" + userId).set({
         name: username,
         isAdmin: true,
         active: existingAdmin ? existingAdmin.active !== false : true,
         online: true,
         avatarData,
+        bubbleColor,
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
-      state.user = { id: userId, name: username, isAdmin: true, avatarData };
+      state.user = { id: userId, name: username, isAdmin: true, avatarData, bubbleColor };
       localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
       return;
@@ -534,7 +555,8 @@ loginForm.addEventListener("submit", async (e) => {
         id: existingId,
         name: existingUser.name,
         isAdmin: Boolean(existingUser.isAdmin),
-        avatarData: existingUser.avatarData || ""
+        avatarData: existingUser.avatarData || "",
+        bubbleColor: existingUser.bubbleColor || ""
       };
       localStorage.setItem(
         SESSION_KEY,
@@ -605,7 +627,13 @@ registerForm.addEventListener("submit", async (e) => {
       usedAt: Date.now()
     });
 
-    state.user = { id: userId, name: username, isAdmin: false, avatarData };
+    state.user = {
+      id: userId,
+      name: username,
+      isAdmin: false,
+      avatarData,
+      bubbleColor: ""
+    };
     localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: false }));
     enterMainApp();
   } catch (err) {
@@ -739,6 +767,9 @@ function watchOwnAccess() {
       showView(mainView);
     }
     const nextAdmin = Boolean(data.isAdmin);
+    state.user.avatarData = data.avatarData || "";
+    state.user.bubbleColor = data.bubbleColor || "";
+    headerAvatar.src = state.user.avatarData || "./icon-192.png";
     if (nextAdmin !== state.user.isAdmin) {
       state.user.isAdmin = nextAdmin;
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
@@ -974,9 +1005,18 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       .map(([msgKey, m]) => {
         const isMe = m.senderId === state.user.id;
         const canDelete = isMe || state.user.isAdmin;
+        const senderUser = state.usersCache[m.senderId];
+        const customColor =
+          senderUser && isValidHexColor(senderUser.bubbleColor)
+            ? senderUser.bubbleColor
+            : "";
+        const customStyle = customColor
+          ? ` style="background-color:${customColor};color:${getContrastTextColor(customColor)};border-color:${customColor};"`
+          : "";
+        const senderColorStyle = customColor ? ` style="color:inherit;opacity:0.9;"` : "";
         const senderHtml =
           !isMe && isGroup
-            ? `<div class="msg-sender">${escapeHtml(m.senderName)}</div>`
+            ? `<div class="msg-sender"${senderColorStyle}>${escapeHtml(m.senderName)}</div>`
             : "";
         const delHtml = canDelete
           ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
@@ -994,7 +1034,6 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
           : "";
         const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
-        const senderUser = state.usersCache[m.senderId];
         const senderAvatarHtml = !isMe
           ? senderUser && senderUser.avatarData
             ? `<img class="msg-avatar" src="${escapeHtml(senderUser.avatarData)}" alt="" />`
@@ -1003,7 +1042,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         return `
           <div class="msg-row ${isMe ? "me" : "other"}">
             ${senderAvatarHtml}
-            <div class="msg-bubble ${isMe ? "me" : "other"}">
+            <div class="msg-bubble ${isMe ? "me" : "other"}"${customStyle}>
               ${senderHtml}
               ${imgHtml}
               ${audioHtml}
@@ -1347,10 +1386,47 @@ imageModal.addEventListener("click", (e) => {
   }
 });
 
-// Profil Fotoğrafı Güncelleme
+// Profil Fotoğrafı ve Baloncuk Rengi Güncelleme
+function updateColorPreview(hex) {
+  if (isValidHexColor(hex)) {
+    profileColorPreview.style.backgroundColor = hex;
+    profileColorPreview.style.color = getContrastTextColor(hex);
+  } else {
+    profileColorPreview.style.backgroundColor = "";
+    profileColorPreview.style.color = "";
+  }
+}
+
 profileTrigger.addEventListener("click", () => {
   profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
+  const currentHex = isValidHexColor(state.user.bubbleColor)
+    ? state.user.bubbleColor
+    : "#1d4ed8";
+  profileColorInput.value = currentHex;
+  updateColorPreview(state.user.bubbleColor || "");
   profileModal.classList.remove("hidden");
+});
+
+profileColorInput.addEventListener("input", () => {
+  updateColorPreview(profileColorInput.value);
+});
+
+saveColorBtn.addEventListener("click", async () => {
+  if (!state.user) return;
+  const color = profileColorInput.value;
+  if (!isValidHexColor(color)) return;
+  await state.db.ref("users/" + state.user.id + "/bubbleColor").set(color);
+  state.user.bubbleColor = color;
+  profileModal.classList.add("hidden");
+});
+
+resetColorBtn.addEventListener("click", async () => {
+  if (!state.user) return;
+  await state.db.ref("users/" + state.user.id + "/bubbleColor").remove();
+  state.user.bubbleColor = "";
+  profileColorInput.value = "#1d4ed8";
+  updateColorPreview("");
+  profileModal.classList.add("hidden");
 });
 
 closeProfileBtn.addEventListener("click", () => {

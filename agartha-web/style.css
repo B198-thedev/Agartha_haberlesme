@@ -493,7 +493,8 @@ input:focus, select:focus {
 
 .msg-time {
   font-size: 10px;
-  color: rgba(248, 250, 252, 0.6);
+  color: inherit;
+  opacity: 0.72;
   text-align: right;
   margin-top: 4px;
 }
@@ -641,7 +642,8 @@ input:focus, select:focus {
 .msg-delete-btn {
   background: transparent;
   border: none;
-  color: rgba(248, 250, 252, 0.45);
+  color: inherit;
+  opacity: 0.65;
   font-size: 12px;
   cursor: pointer;
   padding: 0 2px;
@@ -766,5 +768,20 @@ input:focus, select:focus {
   font-size: 12px;
   font-weight: 700;
   border: 1px solid var(--border);
+}
+
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-picker-row input[type="color"] {
+  width: 54px;
+  height: 44px;
+  padding: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
