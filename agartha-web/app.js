@@ -48,6 +48,7 @@ const chatBackBtn = document.getElementById("chat-back-btn");
 const chatRoomTitle = document.getElementById("chat-room-title");
 const chatRoomSubtitle = document.getElementById("chat-room-subtitle");
 const quickPlaceBtn = document.getElementById("quick-place-btn");
+const deleteChatBtn = document.getElementById("delete-chat-btn");
 const messagesContainer = document.getElementById("messages-container");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
@@ -137,6 +138,12 @@ function init() {
 
   firebase.initializeApp(FIREBASE_CONFIG);
   state.db = firebase.database();
+
+  const kickedMsg = sessionStorage.getItem("agartha_kicked");
+  if (kickedMsg) {
+    sessionStorage.removeItem("agartha_kicked");
+    showError(kickedMsg);
+  }
 
   const saved = localStorage.getItem(SESSION_KEY);
   if (saved) {
@@ -320,8 +327,11 @@ function watchOwnAccess() {
   state.db.ref("users/" + state.user.id).on("value", (snap) => {
     const data = snap.val();
     if (!data || data.active === false) {
+      sessionStorage.setItem(
+        "agartha_kicked",
+        "Erişim yetkiniz yönetici tarafından kaldırıldı."
+      );
       logout();
-      showError("Yönetici tarafından erişiminiz kapatıldı.");
       return;
     }
     const nextAdmin = Boolean(data.isAdmin);
@@ -465,6 +475,11 @@ function openChatRoom(roomId, title, isGroup) {
   state.activeRoom = { id: roomId, title, isGroup };
   chatRoomTitle.textContent = title;
   chatRoomSubtitle.textContent = isGroup ? "Tüm yetkili arkadaşlar" : "Özel sohbet";
+  if (!isGroup || state.user.isAdmin) {
+    deleteChatBtn.classList.remove("hidden");
+  } else {
+    deleteChatBtn.classList.add("hidden");
+  }
   messagesContainer.innerHTML = "";
   showView(chatView);
 
@@ -505,6 +520,21 @@ chatBackBtn.addEventListener("click", () => {
     state.chatRef = null;
   }
   state.activeRoom = null;
+  showView(mainView);
+});
+
+deleteChatBtn.addEventListener("click", async () => {
+  if (!state.activeRoom) return;
+  const label = state.activeRoom.isGroup ? "Ana Grup mesajları" : `${state.activeRoom.title} ile olan özel konuşma`;
+  if (!confirm(`${label} kalıcı olarak silinsin mi?`)) return;
+
+  const roomId = state.activeRoom.id;
+  if (state.chatRef) {
+    state.chatRef.off();
+    state.chatRef = null;
+  }
+  state.activeRoom = null;
+  await state.db.ref(`chats/${roomId}`).remove();
   showView(mainView);
 });
 
@@ -622,6 +652,7 @@ function listenAiRecommendations() {
 openAdminBtn.addEventListener("click", () => {
   adminModal.classList.remove("hidden");
   listenInvites();
+  renderAdminUsers(state.usersCache);
 });
 
 closeAdminBtn.addEventListener("click", () => {
@@ -706,7 +737,10 @@ function renderAdminUsers(users) {
             ${u.isAdmin ? "Adminliği Al" : "Admin Yap"}
           </button>
           <button class="icon-btn ${u.active !== false ? "danger" : ""}" data-toggle-user="${escapeHtml(id)}" data-next="${u.active === false}">
-            ${u.active !== false ? "Yetkiyi Kaldır" : "Yetki Ver"}
+            ${u.active !== false ? "Engelle" : "Aktif Et"}
+          </button>
+          <button class="icon-btn danger" data-delete-user="${escapeHtml(id)}" data-user-name="${escapeHtml(u.name)}">
+            Sil
           </button>`;
 
       return `
@@ -734,6 +768,15 @@ function renderAdminUsers(users) {
       const uid = btn.dataset.toggleAdmin;
       const nextAdmin = btn.dataset.nextAdmin === "true";
       state.db.ref("users/" + uid + "/isAdmin").set(nextAdmin);
+    });
+  });
+
+  adminUsersList.querySelectorAll("[data-delete-user]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.deleteUser;
+      const uname = btn.dataset.userName || "Bu kullanıcı";
+      if (!confirm(`${uname} tamamen silinsin mi? (Açık oturumu anında kapanır)`)) return;
+      state.db.ref("users/" + uid).remove();
     });
   });
 }
