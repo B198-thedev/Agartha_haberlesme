@@ -12,6 +12,5 @@ const FIREBASE_CONFIG = {
   measurementId: "G-K64CRC40RL"
 };
 
-// Admin şifresi güvenlik için artık kodun içinde tutulmuyor.
-// İlk kez giriş yaparken yazdığınız Erişim Kodu, SHA-256 ile özetlenerek
-// doğrudan Firebase veritabanına Admin şifresi olarak kaydedilir.
+// Admin şifresi ve Google Drive yükleme adresi güvenlik için kodun içinde tutulmaz.
+// İkisi de doğrudan Firebase veritabanında saklanır ve Admin panelinden yönetilir.

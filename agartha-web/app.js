@@ -18,7 +18,8 @@ const state = {
   notifiedMsgKeys: new Set(),
   unreadRooms: new Set(),
   dmListeners: {},
-  presenceSetup: false
+  presenceSetup: false,
+  driveConfig: { url: "", secret: "" }
 };
 
 // DOM Elemanları
@@ -60,6 +61,13 @@ const messagesContainer = document.getElementById("messages-container");
 const typingIndicator = document.getElementById("typing-indicator");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
+const photoInput = document.getElementById("photo-input");
+const photoBtn = document.getElementById("photo-btn");
+
+const imageModal = document.getElementById("image-modal");
+const imageModalImg = document.getElementById("image-modal-img");
+const downloadImageBtn = document.getElementById("download-image-btn");
+const closeImageBtn = document.getElementById("close-image-btn");
 
 const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
@@ -67,6 +75,9 @@ const inviteForm = document.getElementById("invite-form");
 const inviteLabelInput = document.getElementById("invite-label");
 const invitesList = document.getElementById("invites-list");
 const adminUsersList = document.getElementById("admin-users-list");
+const driveConfigForm = document.getElementById("drive-config-form");
+const driveUrlInput = document.getElementById("drive-url-input");
+const driveSecretInput = document.getElementById("drive-secret-input");
 
 // Yardımcılar
 function isConfigured() {
@@ -157,6 +168,75 @@ async function sha256(text) {
     hash |= 0;
   }
   return "fallback_" + Math.abs(hash).toString(16);
+}
+
+function compressImageToBase64(file, maxSize = 900, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Dosya okunamadı"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Görsel yüklenemedi"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          if (width >= height) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          } else {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function fileToRawBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Dosya okunamadı"));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const idx = result.indexOf(",");
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadToGoogleDrive(file) {
+  if (!file.type || !file.type.startsWith("image/")) {
+    throw new Error("Sadece fotoğraf dosyaları yüklenebilir");
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    throw new Error("Fotoğraf boyutu en fazla 25 MB olabilir");
+  }
+  const base64 = await fileToRawBase64(file);
+  const res = await fetch(state.driveConfig.url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      secret: state.driveConfig.secret || "",
+      fileName: file.name || ("agartha_" + Date.now() + ".jpg"),
+      mimeType: file.type || "image/jpeg",
+      base64
+    })
+  });
+  const data = await res.json();
+  if (!data || !data.ok || !data.url) {
+    throw new Error((data && data.error) || "Drive yükleme hatası");
+  }
+  return data;
 }
 
 // Başlatma
@@ -322,11 +402,22 @@ function enterMainApp() {
   showView(mainView);
   updateNotifyButton();
   setupPresence();
+  listenDriveConfig();
   listenUsers();
   listenMainGroupPreview();
   listenPlaces();
   listenAiRecommendations();
   watchOwnAccess();
+}
+
+function listenDriveConfig() {
+  state.db.ref("config/drive").on("value", (snap) => {
+    const val = snap.val() || {};
+    state.driveConfig = {
+      url: String(val.url || "").trim(),
+      secret: String(val.secret || "").trim()
+    };
+  });
 }
 
 function setupPresence() {
@@ -557,7 +648,7 @@ function listenUsers() {
         if (!(isViewingThis && document.visibilityState === "visible")) {
           showIncomingNotification(
             `${msg.senderName || u.name} (Özel)`,
-            msg.text,
+            msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf gönderdi" : ""),
             msgSnap.key
           );
         }
@@ -578,7 +669,8 @@ function listenMainGroupPreview() {
         return;
       }
       const [key, msg] = Object.entries(val)[0];
-      mainGroupPreview.textContent = `${msg.senderName}: ${msg.text}`;
+      const previewText = msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf" : "");
+      mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
 
       if ((msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
@@ -587,7 +679,7 @@ function listenMainGroupPreview() {
           mainGroupBadge.classList.remove("hidden");
         }
         if (!(isViewingGroup && document.visibilityState === "visible")) {
-          showIncomingNotification("Ana Grup", `${msg.senderName}: ${msg.text}`, key);
+          showIncomingNotification("Ana Grup", `${msg.senderName}: ${previewText}`, key);
         }
       }
     });
@@ -651,10 +743,16 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const delHtml = canDelete
           ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
           : "";
+        const imgSrc = m.imageUrl || m.imageData;
+        const imgHtml = imgSrc
+          ? `<img class="msg-image" src="${escapeHtml(imgSrc)}" data-download="${escapeHtml(m.downloadUrl || "")}" alt="Fotoğraf" loading="lazy" />`
+          : "";
+        const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
         return `
           <div class="msg-bubble ${isMe ? "me" : "other"}">
             ${senderHtml}
-            <div>${linkifyText(m.text)}</div>
+            ${imgHtml}
+            ${textHtml}
             <div class="msg-footer">
               ${delHtml}
               <span class="msg-time">${formatTime(m.timestamp)}</span>
@@ -663,6 +761,20 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         `;
       })
       .join("");
+
+    messagesContainer.querySelectorAll(".msg-image").forEach((imgEl) => {
+      imgEl.addEventListener("click", () => {
+        imageModalImg.src = imgEl.src;
+        const dl = imgEl.dataset.download;
+        if (dl) {
+          downloadImageBtn.href = dl;
+          downloadImageBtn.classList.remove("hidden");
+        } else {
+          downloadImageBtn.classList.add("hidden");
+        }
+        imageModal.classList.remove("hidden");
+      });
+    });
 
     messagesContainer.querySelectorAll("[data-del-msg]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -757,6 +869,59 @@ messageForm.addEventListener("submit", async (e) => {
     text,
     timestamp: Date.now()
   });
+});
+
+photoBtn.addEventListener("click", () => {
+  if (!state.activeRoom) return;
+  photoInput.click();
+});
+
+photoInput.addEventListener("change", async () => {
+  const file = photoInput.files && photoInput.files[0];
+  photoInput.value = "";
+  if (!file || !state.activeRoom) return;
+
+  photoBtn.disabled = true;
+  photoBtn.textContent = "...";
+  try {
+    if (state.driveConfig && state.driveConfig.url) {
+      const uploaded = await uploadToGoogleDrive(file);
+      await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
+        senderId: state.user.id,
+        senderName: state.user.name,
+        text: "",
+        imageUrl: uploaded.url,
+        downloadUrl: uploaded.downloadUrl,
+        timestamp: Date.now()
+      });
+    } else {
+      const imageData = await compressImageToBase64(file, 900, 0.72);
+      await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
+        senderId: state.user.id,
+        senderName: state.user.name,
+        text: "",
+        imageData,
+        timestamp: Date.now()
+      });
+    }
+  } catch (err) {
+    alert("Fotoğraf gönderilemedi: " + (err.message || "Hata"));
+  } finally {
+    photoBtn.disabled = false;
+    photoBtn.textContent = "📷";
+  }
+});
+
+closeImageBtn.addEventListener("click", () => {
+  imageModal.classList.add("hidden");
+  imageModalImg.src = "";
+});
+
+imageModal.addEventListener("click", (e) => {
+  if (e.target === imageModal) {
+    imageModal.classList.add("hidden");
+    imageModalImg.src = "";
+  }
 });
 
 quickPlaceBtn.addEventListener("click", async () => {
@@ -879,8 +1044,18 @@ function listenAiRecommendations() {
 // Admin Paneli
 openAdminBtn.addEventListener("click", () => {
   adminModal.classList.remove("hidden");
+  driveUrlInput.value = state.driveConfig.url || "";
+  driveSecretInput.value = state.driveConfig.secret || "";
   listenInvites();
   renderAdminUsers(state.usersCache);
+});
+
+driveConfigForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = driveUrlInput.value.trim();
+  const secret = driveSecretInput.value.trim();
+  await state.db.ref("config/drive").set({ url, secret });
+  alert("Google Drive ayarı kaydedildi.");
 });
 
 closeAdminBtn.addEventListener("click", () => {

@@ -148,10 +148,23 @@
       <div id="typing-indicator" class="typing-indicator hidden"></div>
 
       <form id="message-form" class="message-input-bar">
+        <input id="photo-input" type="file" accept="image/*" class="hidden" />
+        <button id="photo-btn" type="button" class="icon-btn" title="Fotoğraf Gönder">📷</button>
         <input id="message-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000" required />
         <button type="submit" class="send-btn">Gönder</button>
       </form>
     </section>
+
+    <!-- FOTOĞRAF BÜYÜTME MODALI -->
+    <div id="image-modal" class="modal hidden">
+      <div class="image-modal-content">
+        <img id="image-modal-img" src="" alt="Fotoğraf" />
+        <div class="top-bar-actions">
+          <a id="download-image-btn" class="icon-btn hidden" href="#" target="_blank" rel="noopener noreferrer">Orijinali İndir</a>
+          <button id="close-image-btn" class="icon-btn">Kapat</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ADMIN YETKİ YÖNETİMİ MODALI -->
     <div id="admin-modal" class="modal hidden">
@@ -175,6 +188,16 @@
 
           <div class="section-label">Kayıtlı Kullanıcılar</div>
           <div id="admin-users-list" class="list-stack"></div>
+
+          <div class="section-label">5 TB Google Drive Medya Ayarı</div>
+          <div class="card">
+            <p class="muted">Apps Script linki ve gizli anahtar GitHub'da değil, burada saklanır.</p>
+            <form id="drive-config-form" class="stack-form">
+              <input id="drive-url-input" type="url" placeholder="Apps Script Web App URL (.../exec)" />
+              <input id="drive-secret-input" type="password" placeholder="Gizli Anahtar (SECRET_TOKEN)" />
+              <button type="submit" class="btn-primary">Drive Ayarını Kaydet</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
