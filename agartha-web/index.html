@@ -66,7 +66,7 @@
             <div class="avatar group-avatar">#</div>
             <div class="chat-item-body">
               <div class="chat-item-top">
-                <span class="chat-name">Ana Grup</span>
+                <span class="chat-name">Ana Grup <span id="main-group-badge" class="unread-dot hidden"></span></span>
                 <span id="main-group-time" class="chat-time"></span>
               </div>
               <div id="main-group-preview" class="chat-preview">Herkesin ortak sohbet odası</div>
@@ -87,6 +87,14 @@
             <form id="place-form" class="stack-form">
               <input id="place-name" type="text" placeholder="Mekan adı (Örn. Walter's Coffee)" maxlength="60" required />
               <input id="place-area" type="text" placeholder="Semt / Şehir (Örn. Moda, Kadıköy)" maxlength="50" required />
+              <select id="place-category">
+                <option value="Kafe">Kafe</option>
+                <option value="Restoran">Restoran</option>
+                <option value="Bar / Pub">Bar / Pub</option>
+                <option value="Doğa / Park">Doğa / Park</option>
+                <option value="Eğlence / Kültür">Eğlence / Kültür</option>
+                <option value="Diğer">Diğer</option>
+              </select>
               <input id="place-note" type="text" placeholder="Kısa not (Örn. Sessiz, kahvesi güzel)" maxlength="100" />
               <button type="submit" class="btn-primary">Mekanı Kaydet</button>
             </form>
@@ -137,6 +145,7 @@
       </header>
 
       <div id="messages-container" class="messages-container"></div>
+      <div id="typing-indicator" class="typing-indicator hidden"></div>
 
       <form id="message-form" class="message-input-bar">
         <input id="message-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000" required />

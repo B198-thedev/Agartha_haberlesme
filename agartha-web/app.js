@@ -8,12 +8,17 @@ const SESSION_KEY = "agartha_session_v1";
 const state = {
   db: null,
   user: null, // { id, name, isAdmin }
-  activeRoom: null, // { id, title, isGroup }
+  activeRoom: null, // { id, title, isGroup, otherId }
   chatRef: null,
+  typingRef: null,
+  invitesRef: null,
+  typingTimeout: null,
   usersCache: {},
   startedAt: Date.now(),
   notifiedMsgKeys: new Set(),
-  dmListeners: {}
+  unreadRooms: new Set(),
+  dmListeners: {},
+  presenceSetup: false
 };
 
 // DOM Elemanları
@@ -33,6 +38,7 @@ const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 const openMainGroupBtn = document.getElementById("open-main-group-btn");
+const mainGroupBadge = document.getElementById("main-group-badge");
 const mainGroupPreview = document.getElementById("main-group-preview");
 const mainGroupTime = document.getElementById("main-group-time");
 const contactsList = document.getElementById("contacts-list");
@@ -40,6 +46,7 @@ const contactsList = document.getElementById("contacts-list");
 const placeForm = document.getElementById("place-form");
 const placeNameInput = document.getElementById("place-name");
 const placeAreaInput = document.getElementById("place-area");
+const placeCategoryInput = document.getElementById("place-category");
 const placeNoteInput = document.getElementById("place-note");
 const placesList = document.getElementById("places-list");
 const aiList = document.getElementById("ai-list");
@@ -50,6 +57,7 @@ const chatRoomSubtitle = document.getElementById("chat-room-subtitle");
 const quickPlaceBtn = document.getElementById("quick-place-btn");
 const deleteChatBtn = document.getElementById("delete-chat-btn");
 const messagesContainer = document.getElementById("messages-container");
+const typingIndicator = document.getElementById("typing-indicator");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
 
@@ -77,10 +85,38 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function linkifyText(str) {
+  const safe = escapeHtml(str);
+  return safe.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a class="msg-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
+
 function formatTime(ts) {
   if (!ts) return "";
   const d = new Date(ts);
   return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function normalizeTurkish(str) {
+  return String(str || "")
+    .replace(/ç/g, "c")
+    .replace(/Ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/Ğ/g, "g")
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/Ö/g, "o")
+    .replace(/ş/g, "s")
+    .replace(/Ş/g, "s")
+    .replace(/ü/g, "u")
+    .replace(/Ü/g, "u")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 function showView(viewEl) {
@@ -99,13 +135,8 @@ function clearError() {
 }
 
 function slugifyId(name) {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_|_$/g, "") || "user"
-  ) + "_" + Math.random().toString(36).slice(2, 6);
+  const base = normalizeTurkish(name) || "user";
+  return base + "_" + Math.random().toString(36).slice(2, 6);
 }
 
 function getDmRoomId(id1, id2) {
@@ -120,7 +151,6 @@ async function sha256(text) {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
   }
-  // Güvenli olmayan bağlamlar (ör. file://) için basit fallback
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     hash = (hash << 5) - hash + text.charCodeAt(i);
@@ -228,17 +258,17 @@ loginForm.addEventListener("submit", async (e) => {
     const adminHashSnap = await state.db.ref("config/adminHash").once("value");
     const savedAdminHash = adminHashSnap.val();
 
-    // İlk kez kurulum: Henüz Admin şifresi yoksa ilk giren kişi Admin şifresini belirler
     if (!savedAdminHash) {
       await state.db.ref("config/adminHash").set(codeHash);
     }
 
     if (!savedAdminHash || codeHash === savedAdminHash) {
-      const userId = "admin_" + username.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const userId = "admin_" + (normalizeTurkish(username) || "root");
       await state.db.ref("users/" + userId).set({
         name: username,
         isAdmin: true,
         active: true,
+        online: true,
         joinedAt: Date.now()
       });
       state.user = { id: userId, name: username, isAdmin: true };
@@ -259,6 +289,7 @@ loginForm.addEventListener("submit", async (e) => {
       name: username,
       isAdmin: false,
       active: true,
+      online: true,
       inviteCode: code,
       joinedAt: Date.now()
     });
@@ -290,11 +321,29 @@ function enterMainApp() {
 
   showView(mainView);
   updateNotifyButton();
+  setupPresence();
   listenUsers();
   listenMainGroupPreview();
   listenPlaces();
   listenAiRecommendations();
   watchOwnAccess();
+}
+
+function setupPresence() {
+  if (state.presenceSetup) return;
+  state.presenceSetup = true;
+
+  const userRef = state.db.ref("users/" + state.user.id);
+  const connectedRef = state.db.ref(".info/connected");
+  connectedRef.on("value", (snap) => {
+    if (snap.val() === true) {
+      userRef.onDisconnect().update({
+        online: false,
+        lastSeen: firebase.database.ServerValue.TIMESTAMP
+      });
+      userRef.update({ online: true });
+    }
+  });
 }
 
 function updateNotifyButton() {
@@ -364,7 +413,6 @@ function watchOwnAccess() {
       return;
     }
     if (data.active === false) {
-      // Engellenen kullanıcının oturum bilgisini sakla ki yetki geri verilince otomatik girsin
       showView(authView);
       showError("Erişiminiz askıya alındı. Yönetici yetkiyi açtığında otomatik giriş yapılacaktır.");
       return;
@@ -392,6 +440,12 @@ function watchOwnAccess() {
 }
 
 function logout() {
+  if (state.db && state.user) {
+    state.db.ref("users/" + state.user.id).update({
+      online: false,
+      lastSeen: Date.now()
+    }).catch(() => {});
+  }
   localStorage.removeItem(SESSION_KEY);
   location.reload();
 }
@@ -409,51 +463,83 @@ document.querySelectorAll(".nav-btn").forEach((btn) => {
   });
 });
 
+function renderContactsList() {
+  const others = Object.entries(state.usersCache).filter(
+    ([id, u]) => id !== state.user.id && u.active !== false
+  );
+
+  if (others.length === 0) {
+    contactsList.innerHTML = `<div class="empty-hint">Henüz başka yetkili kişi yok.</div>`;
+    return;
+  }
+
+  contactsList.innerHTML = others
+    .map(([id, u]) => {
+      const initial = escapeHtml((u.name || "?").charAt(0).toUpperCase());
+      const role = u.isAdmin ? " • Yönetici" : "";
+      const dmId = getDmRoomId(state.user.id, id);
+      const unreadHtml = state.unreadRooms.has(dmId) ? `<span class="unread-dot"></span>` : "";
+      const onlineDot = u.online ? `<span class="online-dot"></span>` : "";
+      const statusText = u.online
+        ? "Çevrimiçi"
+        : u.lastSeen
+        ? `Son görülme ${formatTime(u.lastSeen)}`
+        : "Özel sohbet aç";
+
+      return `
+        <button class="chat-item" data-dm-id="${escapeHtml(id)}" data-dm-name="${escapeHtml(u.name)}">
+          <div class="avatar-wrap">
+            <div class="avatar">${initial}</div>
+            ${onlineDot}
+          </div>
+          <div class="chat-item-body">
+            <div class="chat-item-top">
+              <span class="chat-name">${escapeHtml(u.name)}${unreadHtml}</span>
+            </div>
+            <div class="chat-preview">${statusText}${role}</div>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  contactsList.querySelectorAll("[data-dm-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const otherId = btn.dataset.dmId;
+      const otherName = btn.dataset.dmName;
+      openChatRoom(getDmRoomId(state.user.id, otherId), otherName, false, otherId);
+    });
+  });
+}
+
 // Kişiler Listesi
 function listenUsers() {
   state.db.ref("users").on("value", (snap) => {
     const users = snap.val() || {};
     state.usersCache = users;
 
-    const others = Object.entries(users).filter(
-      ([id, u]) => id !== state.user.id && u.active !== false
-    );
+    renderContactsList();
 
-    if (others.length === 0) {
-      contactsList.innerHTML = `<div class="empty-hint">Henüz başka yetkili kişi yok.</div>`;
-    } else {
-      contactsList.innerHTML = others
-        .map(([id, u]) => {
-          const initial = escapeHtml((u.name || "?").charAt(0).toUpperCase());
-          const role = u.isAdmin ? " • Yönetici" : "";
-          return `
-            <button class="chat-item" data-dm-id="${escapeHtml(id)}" data-dm-name="${escapeHtml(u.name)}">
-              <div class="avatar">${initial}</div>
-              <div class="chat-item-body">
-                <div class="chat-item-top">
-                  <span class="chat-name">${escapeHtml(u.name)}</span>
-                </div>
-                <div class="chat-preview">Özel sohbet aç${role}</div>
-              </div>
-            </button>
-          `;
-        })
-        .join("");
-
-      contactsList.querySelectorAll("[data-dm-id]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const otherId = btn.dataset.dmId;
-          const otherName = btn.dataset.dmName;
-          openChatRoom(getDmRoomId(state.user.id, otherId), otherName, false);
-        });
-      });
+    // Aktif özel sohbette karşı tarafın çevrimiçi durumunu güncelle
+    if (state.activeRoom && !state.activeRoom.isGroup && state.activeRoom.otherId) {
+      const other = users[state.activeRoom.otherId];
+      if (other) {
+        chatRoomSubtitle.textContent = other.online
+          ? "Çevrimiçi"
+          : other.lastSeen
+          ? `Son görülme ${formatTime(other.lastSeen)}`
+          : "Özel sohbet";
+      }
     }
 
     if (state.user.isAdmin) {
       renderAdminUsers(users);
     }
 
-    // Her yetkili kişiyle olan özel sohbeti bildirim için dinle
+    const others = Object.entries(users).filter(
+      ([id, u]) => id !== state.user.id && u.active !== false
+    );
+
     others.forEach(([otherId, u]) => {
       const dmId = getDmRoomId(state.user.id, otherId);
       if (state.dmListeners[dmId]) return;
@@ -463,16 +549,18 @@ function listenUsers() {
         const msg = msgSnap.val();
         if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
         if (msg.senderId === state.user.id) return;
-        const isViewingThis =
-          state.activeRoom &&
-          state.activeRoom.id === dmId &&
-          document.visibilityState === "visible";
-        if (isViewingThis) return;
-        showIncomingNotification(
-          `${msg.senderName || u.name} (Özel)`,
-          msg.text,
-          msgSnap.key
-        );
+        const isViewingThis = state.activeRoom && state.activeRoom.id === dmId;
+        if (!isViewingThis) {
+          state.unreadRooms.add(dmId);
+          renderContactsList();
+        }
+        if (!(isViewingThis && document.visibilityState === "visible")) {
+          showIncomingNotification(
+            `${msg.senderName || u.name} (Özel)`,
+            msg.text,
+            msgSnap.key
+          );
+        }
       });
     });
   });
@@ -484,17 +572,21 @@ function listenMainGroupPreview() {
     .limitToLast(1)
     .on("value", (snap) => {
       const val = snap.val();
-      if (!val) return;
+      if (!val) {
+        mainGroupPreview.textContent = "Herkesin ortak sohbet odası";
+        mainGroupTime.textContent = "";
+        return;
+      }
       const [key, msg] = Object.entries(val)[0];
       mainGroupPreview.textContent = `${msg.senderName}: ${msg.text}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
 
       if ((msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
-        const isViewingGroup =
-          state.activeRoom &&
-          state.activeRoom.id === "main_group" &&
-          document.visibilityState === "visible";
+        const isViewingGroup = state.activeRoom && state.activeRoom.id === "main_group";
         if (!isViewingGroup) {
+          mainGroupBadge.classList.remove("hidden");
+        }
+        if (!(isViewingGroup && document.visibilityState === "visible")) {
           showIncomingNotification("Ana Grup", `${msg.senderName}: ${msg.text}`, key);
         }
       }
@@ -502,76 +594,148 @@ function listenMainGroupPreview() {
 }
 
 openMainGroupBtn.addEventListener("click", () => {
-  openChatRoom("main_group", "Ana Grup", true);
+  mainGroupBadge.classList.add("hidden");
+  openChatRoom("main_group", "Ana Grup", true, null);
 });
 
 // Sohbet Odası
-function openChatRoom(roomId, title, isGroup) {
-  if (state.chatRef) {
-    state.chatRef.off();
+function openChatRoom(roomId, title, isGroup, otherId) {
+  cleanupActiveRoomListeners();
+
+  state.unreadRooms.delete(roomId);
+  if (!isGroup) renderContactsList();
+
+  state.activeRoom = { id: roomId, title, isGroup, otherId };
+  chatRoomTitle.textContent = title;
+  if (isGroup) {
+    chatRoomSubtitle.textContent = "Tüm yetkili arkadaşlar";
+  } else {
+    const other = otherId ? state.usersCache[otherId] : null;
+    chatRoomSubtitle.textContent = other?.online
+      ? "Çevrimiçi"
+      : other?.lastSeen
+      ? `Son görülme ${formatTime(other.lastSeen)}`
+      : "Özel sohbet";
   }
 
-  state.activeRoom = { id: roomId, title, isGroup };
-  chatRoomTitle.textContent = title;
-  chatRoomSubtitle.textContent = isGroup ? "Tüm yetkili arkadaşlar" : "Özel sohbet";
   if (!isGroup || state.user.isAdmin) {
     deleteChatBtn.classList.remove("hidden");
   } else {
     deleteChatBtn.classList.add("hidden");
   }
+
   messagesContainer.innerHTML = "";
+  typingIndicator.classList.add("hidden");
   showView(chatView);
 
   state.chatRef = state.db.ref(`chats/${roomId}/messages`).limitToLast(100);
   state.chatRef.on("value", (snap) => {
     const data = snap.val() || {};
-    const list = Object.values(data).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    const entries = Object.entries(data).sort(
+      (a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0)
+    );
 
-    if (list.length === 0) {
+    if (entries.length === 0) {
       messagesContainer.innerHTML = `<div class="empty-hint">Henüz mesaj yok. İlk mesajı sen yaz!</div>`;
       return;
     }
 
-    messagesContainer.innerHTML = list
-      .map((m) => {
+    messagesContainer.innerHTML = entries
+      .map(([msgKey, m]) => {
         const isMe = m.senderId === state.user.id;
+        const canDelete = isMe || state.user.isAdmin;
         const senderHtml =
           !isMe && isGroup
             ? `<div class="msg-sender">${escapeHtml(m.senderName)}</div>`
             : "";
+        const delHtml = canDelete
+          ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
+          : "";
         return `
           <div class="msg-bubble ${isMe ? "me" : "other"}">
             ${senderHtml}
-            <div>${escapeHtml(m.text)}</div>
-            <div class="msg-time">${formatTime(m.timestamp)}</div>
+            <div>${linkifyText(m.text)}</div>
+            <div class="msg-footer">
+              ${delHtml}
+              <span class="msg-time">${formatTime(m.timestamp)}</span>
+            </div>
           </div>
         `;
       })
       .join("");
 
+    messagesContainer.querySelectorAll("[data-del-msg]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Bu mesaj silinsin mi?")) return;
+        state.db.ref(`chats/${roomId}/messages/${btn.dataset.delMsg}`).remove();
+      });
+    });
+
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  });
+
+  // Yazıyor... (Typing) dinleyicisi
+  state.typingRef = state.db.ref(`chats/${roomId}/typing`);
+  state.typingRef.on("value", (snap) => {
+    const val = snap.val() || {};
+    const typers = Object.entries(val)
+      .filter(([uid, name]) => uid !== state.user.id && name)
+      .map(([, name]) => name);
+
+    if (typers.length > 0) {
+      typingIndicator.textContent = `${typers.join(", ")} yazıyor...`;
+      typingIndicator.classList.remove("hidden");
+    } else {
+      typingIndicator.classList.add("hidden");
+    }
   });
 }
 
-chatBackBtn.addEventListener("click", () => {
+function cleanupActiveRoomListeners() {
   if (state.chatRef) {
     state.chatRef.off();
     state.chatRef = null;
   }
+  if (state.typingRef) {
+    state.typingRef.off();
+    state.typingRef = null;
+  }
+  if (state.activeRoom && state.db && state.user) {
+    state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
+  }
+  clearTimeout(state.typingTimeout);
+}
+
+messageInput.addEventListener("input", () => {
+  if (!state.activeRoom || !state.db || !state.user) return;
+  const myTypingRef = state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`);
+  if (messageInput.value.trim()) {
+    myTypingRef.set(state.user.name);
+    myTypingRef.onDisconnect().remove();
+    clearTimeout(state.typingTimeout);
+    state.typingTimeout = setTimeout(() => {
+      myTypingRef.remove();
+    }, 2500);
+  } else {
+    myTypingRef.remove();
+  }
+});
+
+chatBackBtn.addEventListener("click", () => {
+  cleanupActiveRoomListeners();
   state.activeRoom = null;
   showView(mainView);
 });
 
 deleteChatBtn.addEventListener("click", async () => {
   if (!state.activeRoom) return;
-  const label = state.activeRoom.isGroup ? "Ana Grup mesajları" : `${state.activeRoom.title} ile olan özel konuşma`;
+  const label = state.activeRoom.isGroup
+    ? "Ana Grup mesajları"
+    : `${state.activeRoom.title} ile olan özel konuşma`;
   if (!confirm(`${label} kalıcı olarak silinsin mi?`)) return;
 
   const roomId = state.activeRoom.id;
-  if (state.chatRef) {
-    state.chatRef.off();
-    state.chatRef = null;
-  }
+  cleanupActiveRoomListeners();
   state.activeRoom = null;
   await state.db.ref(`chats/${roomId}`).remove();
   showView(mainView);
@@ -584,6 +748,9 @@ messageForm.addEventListener("submit", async (e) => {
   if (!text) return;
 
   messageInput.value = "";
+  clearTimeout(state.typingTimeout);
+  state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
+
   await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
     senderId: state.user.id,
     senderName: state.user.name,
@@ -602,6 +769,7 @@ quickPlaceBtn.addEventListener("click", async () => {
   await state.db.ref("places").push({
     name: name.trim(),
     area: area.trim(),
+    category: "Diğer",
     note: `${state.activeRoom.title} sohbetinden paylaşıldı`,
     addedBy: state.user.id,
     addedByName: state.user.name,
@@ -621,12 +789,14 @@ placeForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = placeNameInput.value.trim();
   const area = placeAreaInput.value.trim();
+  const category = placeCategoryInput.value;
   const note = placeNoteInput.value.trim();
   if (!name || !area) return;
 
   await state.db.ref("places").push({
     name,
     area,
+    category,
     note,
     addedBy: state.user.id,
     addedByName: state.user.name,
@@ -641,24 +811,43 @@ placeForm.addEventListener("submit", async (e) => {
 function listenPlaces() {
   state.db.ref("places").limitToLast(50).on("value", (snap) => {
     const data = snap.val() || {};
-    const list = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const entries = Object.entries(data).sort(
+      (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
+    );
 
-    if (list.length === 0) {
+    if (entries.length === 0) {
       placesList.innerHTML = `<div class="empty-hint">Henüz mekan eklenmemiş.</div>`;
       return;
     }
 
-    placesList.innerHTML = list
-      .map(
-        (p) => `
+    placesList.innerHTML = entries
+      .map(([key, p]) => {
+        const canDel = state.user.isAdmin || p.addedBy === state.user.id;
+        const delBtn = canDel
+          ? `<button class="icon-btn danger" data-del-place="${escapeHtml(key)}">Sil</button>`
+          : "";
+        const cat = p.category ? `${escapeHtml(p.category)} • ` : "";
+        return `
         <div class="place-card">
-          <div class="place-title">📍 ${escapeHtml(p.name)}</div>
-          <div class="place-meta">${escapeHtml(p.area)} • ${escapeHtml(p.addedByName || "")}</div>
+          <div class="place-header">
+            <div>
+              <div class="place-title">📍 ${escapeHtml(p.name)}</div>
+              <div class="place-meta">${cat}${escapeHtml(p.area)} • ${escapeHtml(p.addedByName || "")}</div>
+            </div>
+            ${delBtn}
+          </div>
           ${p.note ? `<div class="place-note">${escapeHtml(p.note)}</div>` : ""}
         </div>
-      `
-      )
+      `;
+      })
       .join("");
+
+    placesList.querySelectorAll("[data-del-place]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Bu mekan kaydı silinsin mi?")) return;
+        state.db.ref("places/" + btn.dataset.delPlace).remove();
+      });
+    });
   });
 }
 
@@ -696,6 +885,10 @@ openAdminBtn.addEventListener("click", () => {
 
 closeAdminBtn.addEventListener("click", () => {
   adminModal.classList.add("hidden");
+  if (state.invitesRef) {
+    state.invitesRef.off();
+    state.invitesRef = null;
+  }
 });
 
 inviteForm.addEventListener("submit", async (e) => {
@@ -714,7 +907,11 @@ inviteForm.addEventListener("submit", async (e) => {
 });
 
 function listenInvites() {
-  state.db.ref("invites").on("value", (snap) => {
+  if (state.invitesRef) {
+    state.invitesRef.off();
+  }
+  state.invitesRef = state.db.ref("invites");
+  state.invitesRef.on("value", (snap) => {
     const data = snap.val() || {};
     const entries = Object.entries(data).sort(
       (a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)
