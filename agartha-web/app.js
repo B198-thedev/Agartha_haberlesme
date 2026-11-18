@@ -55,6 +55,7 @@ const regInvite = document.getElementById("reg-invite");
 const registerError = document.getElementById("register-error");
 
 const profileTrigger = document.getElementById("profile-trigger");
+const openProfileBtn = document.getElementById("open-profile-btn");
 const headerAvatar = document.getElementById("header-avatar");
 const currentUserLabel = document.getElementById("current-user-label");
 const notifyBtn = document.getElementById("notify-btn");
@@ -108,7 +109,9 @@ const profileAvatarPreview = document.getElementById("profile-avatar-preview");
 const profileAvatarInput = document.getElementById("profile-avatar-input");
 const profileAvatarBtn = document.getElementById("profile-avatar-btn");
 const profileColorInput = document.getElementById("profile-color-input");
+const profileColorHex = document.getElementById("profile-color-hex");
 const profileColorPreview = document.getElementById("profile-color-preview");
+const colorPresets = document.getElementById("color-presets");
 const saveColorBtn = document.getElementById("save-color-btn");
 const resetColorBtn = document.getElementById("reset-color-btn");
 
@@ -1450,30 +1453,62 @@ function updateColorPreview(hex) {
   }
 }
 
+function openProfileModal() {
+  profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
+  if (profileColorInput && profileColorPreview) {
+    const currentHex = isValidHexColor(state.user.bubbleColor)
+      ? state.user.bubbleColor
+      : "#1d4ed8";
+    profileColorInput.value = currentHex;
+    if (profileColorHex) profileColorHex.value = currentHex;
+    updateColorPreview(state.user.bubbleColor || "");
+  }
+  profileModal.classList.remove("hidden");
+}
+
 if (profileTrigger) {
-  profileTrigger.addEventListener("click", () => {
-    profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
-    if (profileColorInput && profileColorPreview) {
-      const currentHex = isValidHexColor(state.user.bubbleColor)
-        ? state.user.bubbleColor
-        : "#1d4ed8";
-      profileColorInput.value = currentHex;
-      updateColorPreview(state.user.bubbleColor || "");
-    }
-    profileModal.classList.remove("hidden");
-  });
+  profileTrigger.addEventListener("click", openProfileModal);
+}
+
+if (openProfileBtn) {
+  openProfileBtn.addEventListener("click", openProfileModal);
 }
 
 if (profileColorInput) {
   profileColorInput.addEventListener("input", () => {
+    if (profileColorHex) profileColorHex.value = profileColorInput.value;
     updateColorPreview(profileColorInput.value);
+  });
+}
+
+if (profileColorHex) {
+  profileColorHex.addEventListener("input", () => {
+    let val = profileColorHex.value.trim();
+    if (val && !val.startsWith("#")) val = "#" + val;
+    if (isValidHexColor(val)) {
+      if (profileColorInput) profileColorInput.value = val;
+      updateColorPreview(val);
+    }
+  });
+}
+
+if (colorPresets) {
+  colorPresets.querySelectorAll("[data-color]").forEach((swatch) => {
+    swatch.addEventListener("click", () => {
+      const c = swatch.dataset.color;
+      if (profileColorInput) profileColorInput.value = c;
+      if (profileColorHex) profileColorHex.value = c;
+      updateColorPreview(c);
+    });
   });
 }
 
 if (saveColorBtn) {
   saveColorBtn.addEventListener("click", async () => {
     if (!state.user || !profileColorInput) return;
-    const color = profileColorInput.value;
+    let color = profileColorHex ? profileColorHex.value.trim() : profileColorInput.value;
+    if (color && !color.startsWith("#")) color = "#" + color;
+    if (!isValidHexColor(color)) color = profileColorInput.value;
     if (!isValidHexColor(color)) return;
     await state.db.ref("users/" + state.user.id + "/bubbleColor").set(color);
     state.user.bubbleColor = color;
@@ -1487,6 +1522,7 @@ if (resetColorBtn) {
     await state.db.ref("users/" + state.user.id + "/bubbleColor").remove();
     state.user.bubbleColor = "";
     if (profileColorInput) profileColorInput.value = "#1d4ed8";
+    if (profileColorHex) profileColorHex.value = "#1d4ed8";
     updateColorPreview("");
     profileModal.classList.add("hidden");
   });

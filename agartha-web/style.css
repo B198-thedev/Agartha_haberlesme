@@ -211,6 +211,8 @@ input:-webkit-autofill:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -875,5 +877,21 @@ input:-webkit-autofill:focus {
   border-radius: 10px;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+.color-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
 }
 
