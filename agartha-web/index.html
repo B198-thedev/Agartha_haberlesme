@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Agartha" />
+  <title>Agartha Haberleşme</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- GİRİŞ EKRANI -->
+    <section id="auth-view" class="view active">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <img src="./icon.svg" alt="Agartha" />
+        </div>
+        <h1>Agartha</h1>
+        <p class="subtitle">Özel grup haberleşme &amp; mekan rehberi</p>
+
+        <div id="config-warning" class="alert hidden">
+          Firebase bağlantısı henüz yapılmamış. <code>firebase-config.js</code> dosyasını doldurun.
+        </div>
+
+        <form id="login-form">
+          <label for="login-username">Kullanıcı Adı</label>
+          <input id="login-username" type="text" placeholder="Örn. Ahmet" maxlength="24" autocomplete="nickname" required />
+
+          <label for="login-code">Erişim Kodu</label>
+          <input id="login-code" type="password" placeholder="Admin veya davet kodunu gir" autocomplete="off" required />
+
+          <div id="login-error" class="error-text hidden"></div>
+          <button type="submit" class="btn-primary">Giriş Yap</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ANA UYGULAMA EKRANI -->
+    <section id="main-view" class="view">
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <img src="./icon.svg" alt="" class="mini-logo" />
+          <div>
+            <div class="app-title">Agartha</div>
+            <div id="current-user-label" class="user-sub"></div>
+          </div>
+        </div>
+        <div class="top-bar-actions">
+          <button id="open-admin-btn" class="icon-btn hidden" title="Yetki Yönetimi">Yetkiler</button>
+          <button id="logout-btn" class="icon-btn danger" title="Çıkış Yap">Çıkış</button>
+        </div>
+      </header>
+
+      <main class="tab-content">
+        <!-- SEKME 1: SOHBETLER & KİŞİLER -->
+        <div id="tab-chats" class="tab-pane active">
+          <div class="section-label">Ortak Alan</div>
+          <button id="open-main-group-btn" class="chat-item group-card">
+            <div class="avatar group-avatar">#</div>
+            <div class="chat-item-body">
+              <div class="chat-item-top">
+                <span class="chat-name">Ana Grup</span>
+                <span id="main-group-time" class="chat-time"></span>
+              </div>
+              <div id="main-group-preview" class="chat-preview">Herkesin ortak sohbet odası</div>
+            </div>
+          </button>
+
+          <div class="section-label">Kişiler (Özel Sohbet)</div>
+          <div id="contacts-list" class="list-stack">
+            <div class="empty-hint">Yetkili kişiler yükleniyor...</div>
+          </div>
+        </div>
+
+        <!-- SEKME 2: ZİYARET EDİLEN MEKANLAR -->
+        <div id="tab-places" class="tab-pane">
+          <div class="card">
+            <h3>Mekan / Check-in Ekle</h3>
+            <p class="muted">Gittiğiniz yerleri kaydedin; bilgisayarınızdaki AI analizde bunları kullanır.</p>
+            <form id="place-form" class="stack-form">
+              <input id="place-name" type="text" placeholder="Mekan adı (Örn. Walter's Coffee)" maxlength="60" required />
+              <input id="place-area" type="text" placeholder="Semt / Şehir (Örn. Moda, Kadıköy)" maxlength="50" required />
+              <input id="place-note" type="text" placeholder="Kısa not (Örn. Sessiz, kahvesi güzel)" maxlength="100" />
+              <button type="submit" class="btn-primary">Mekanı Kaydet</button>
+            </form>
+          </div>
+
+          <div class="section-label">Ziyaret Edilen Yerler</div>
+          <div id="places-list" class="list-stack">
+            <div class="empty-hint">Henüz mekan eklenmemiş.</div>
+          </div>
+        </div>
+
+        <!-- SEKME 3: AI MEKAN ÖNERİLERİ -->
+        <div id="tab-ai" class="tab-pane">
+          <div class="card ai-banner">
+            <h3>Yapay Zeka Mekan Önerileri</h3>
+            <p class="muted">
+              Bilgisayarınızdaki açık kaynaklı AI modeli konuşmaları ve gidilen yerleri analiz edip buraya öneri gönderir.
+            </p>
+          </div>
+
+          <div id="ai-list" class="list-stack">
+            <div class="empty-hint">Henüz AI önerisi yok. Bilgisayarınız analiz yaptığında öneriler burada görünecek.</div>
+          </div>
+        </div>
+      </main>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn active" data-tab="chats">Sohbetler</button>
+        <button class="nav-btn" data-tab="places">Mekanlar</button>
+        <button class="nav-btn" data-tab="ai">AI Önerileri</button>
+      </nav>
+    </section>
+
+    <!-- SOHBET ODASI EKRANI -->
+    <section id="chat-view" class="view">
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <button id="chat-back-btn" class="icon-btn">&larr; Geri</button>
+          <div>
+            <div id="chat-room-title" class="app-title">Sohbet</div>
+            <div id="chat-room-subtitle" class="user-sub"></div>
+          </div>
+        </div>
+        <button id="quick-place-btn" class="icon-btn" title="Bu sohbette mekan paylaş">+ Mekan</button>
+      </header>
+
+      <div id="messages-container" class="messages-container"></div>
+
+      <form id="message-form" class="message-input-bar">
+        <input id="message-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000" required />
+        <button type="submit" class="send-btn">Gönder</button>
+      </form>
+    </section>
+
+    <!-- ADMIN YETKİ YÖNETİMİ MODALI -->
+    <div id="admin-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Yetki &amp; Davet Yönetimi</h2>
+          <button id="close-admin-btn" class="icon-btn">Kapat</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="card">
+            <h3>Yeni Erişim Kodu Oluştur</h3>
+            <form id="invite-form" class="inline-form">
+              <input id="invite-label" type="text" placeholder="Kimin için? (Örn. Mehmet)" maxlength="30" required />
+              <button type="submit" class="btn-primary">Kod Üret</button>
+            </form>
+          </div>
+
+          <div class="section-label">Aktif Davet Kodları</div>
+          <div id="invites-list" class="list-stack"></div>
+
+          <div class="section-label">Kayıtlı Kullanıcılar</div>
+          <div id="admin-users-list" class="list-stack"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase Compat Web SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="./firebase-config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
