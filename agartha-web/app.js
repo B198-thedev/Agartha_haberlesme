@@ -405,28 +405,38 @@ async function deleteFromGoogleDrive(fileId) {
 
 // Başlatma
 function init() {
-  if (!isConfigured()) {
-    configWarning.classList.remove("hidden");
-    return;
-  }
-
-  firebase.initializeApp(FIREBASE_CONFIG);
-  state.db = firebase.database();
-
-  const kickedMsg = sessionStorage.getItem("agartha_kicked");
-  if (kickedMsg) {
-    sessionStorage.removeItem("agartha_kicked");
-    showError(kickedMsg);
-  }
-
-  const saved = localStorage.getItem(SESSION_KEY);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      verifyAndEnter(parsed);
-    } catch {
-      localStorage.removeItem(SESSION_KEY);
+  try {
+    if (typeof firebase === "undefined") {
+      showError("Firebase kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.");
+      return;
     }
+    if (!isConfigured()) {
+      configWarning.classList.remove("hidden");
+      return;
+    }
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    state.db = firebase.database();
+
+    const kickedMsg = sessionStorage.getItem("agartha_kicked");
+    if (kickedMsg) {
+      sessionStorage.removeItem("agartha_kicked");
+      showError(kickedMsg);
+    }
+
+    const saved = localStorage.getItem(SESSION_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        verifyAndEnter(parsed);
+      } catch {
+        localStorage.removeItem(SESSION_KEY);
+      }
+    }
+  } catch (err) {
+    showError("Başlatma hatası: " + (err.message || err));
   }
 }
 
@@ -493,7 +503,12 @@ loginForm.addEventListener("submit", async (e) => {
   clearError();
 
   if (!state.db) {
-    showError("Önce firebase-config.js dosyasını doldurun.");
+    init();
+  }
+  if (!state.db) {
+    if (!isConfigured()) {
+      showError("Önce firebase-config.js dosyasını doldurun.");
+    }
     return;
   }
 
@@ -578,7 +593,12 @@ registerForm.addEventListener("submit", async (e) => {
   clearError();
 
   if (!state.db) {
-    showRegisterError("Önce firebase-config.js dosyasını doldurun.");
+    init();
+  }
+  if (!state.db) {
+    if (!isConfigured()) {
+      showRegisterError("Önce firebase-config.js dosyasını doldurun.");
+    }
     return;
   }
 
@@ -1397,37 +1417,47 @@ function updateColorPreview(hex) {
   }
 }
 
-profileTrigger.addEventListener("click", () => {
-  profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
-  const currentHex = isValidHexColor(state.user.bubbleColor)
-    ? state.user.bubbleColor
-    : "#1d4ed8";
-  profileColorInput.value = currentHex;
-  updateColorPreview(state.user.bubbleColor || "");
-  profileModal.classList.remove("hidden");
-});
+if (profileTrigger) {
+  profileTrigger.addEventListener("click", () => {
+    profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
+    if (profileColorInput && profileColorPreview) {
+      const currentHex = isValidHexColor(state.user.bubbleColor)
+        ? state.user.bubbleColor
+        : "#1d4ed8";
+      profileColorInput.value = currentHex;
+      updateColorPreview(state.user.bubbleColor || "");
+    }
+    profileModal.classList.remove("hidden");
+  });
+}
 
-profileColorInput.addEventListener("input", () => {
-  updateColorPreview(profileColorInput.value);
-});
+if (profileColorInput) {
+  profileColorInput.addEventListener("input", () => {
+    updateColorPreview(profileColorInput.value);
+  });
+}
 
-saveColorBtn.addEventListener("click", async () => {
-  if (!state.user) return;
-  const color = profileColorInput.value;
-  if (!isValidHexColor(color)) return;
-  await state.db.ref("users/" + state.user.id + "/bubbleColor").set(color);
-  state.user.bubbleColor = color;
-  profileModal.classList.add("hidden");
-});
+if (saveColorBtn) {
+  saveColorBtn.addEventListener("click", async () => {
+    if (!state.user || !profileColorInput) return;
+    const color = profileColorInput.value;
+    if (!isValidHexColor(color)) return;
+    await state.db.ref("users/" + state.user.id + "/bubbleColor").set(color);
+    state.user.bubbleColor = color;
+    profileModal.classList.add("hidden");
+  });
+}
 
-resetColorBtn.addEventListener("click", async () => {
-  if (!state.user) return;
-  await state.db.ref("users/" + state.user.id + "/bubbleColor").remove();
-  state.user.bubbleColor = "";
-  profileColorInput.value = "#1d4ed8";
-  updateColorPreview("");
-  profileModal.classList.add("hidden");
-});
+if (resetColorBtn) {
+  resetColorBtn.addEventListener("click", async () => {
+    if (!state.user) return;
+    await state.db.ref("users/" + state.user.id + "/bubbleColor").remove();
+    state.user.bubbleColor = "";
+    if (profileColorInput) profileColorInput.value = "#1d4ed8";
+    updateColorPreview("");
+    profileModal.classList.add("hidden");
+  });
+}
 
 closeProfileBtn.addEventListener("click", () => {
   profileModal.classList.add("hidden");
