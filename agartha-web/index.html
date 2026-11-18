@@ -83,9 +83,34 @@
         </div>
       </header>
 
+      <div class="bottom-nav" role="tablist" aria-label="Ana bölümler">
+        <button id="nav-chats" class="nav-btn active" type="button" role="tab" data-tab="chats" aria-controls="tab-chats" aria-selected="true">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M14 6H6a3 3 0 0 0-3 3v8l3-2h8a3 3 0 0 0 3-3V9a3 3 0 0 0-3-3Z" />
+            <path d="M20 10a3 3 0 0 1 1 2.25V20l-3-2h-7" />
+          </svg>
+          <span>Sohbetler</span>
+        </button>
+        <button id="nav-places" class="nav-btn" type="button" role="tab" data-tab="places" aria-controls="tab-places" aria-selected="false" tabindex="-1">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M19 10c0 4.5-7 10.5-7 10.5S5 14.5 5 10a7 7 0 0 1 14 0Z" />
+            <circle cx="12" cy="10" r="2.4" />
+          </svg>
+          <span>Mekanlar</span>
+        </button>
+        <button id="nav-ai" class="nav-btn" type="button" role="tab" data-tab="ai" aria-controls="tab-ai" aria-selected="false" tabindex="-1">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 4l1.8 5.2L16 11l-5.2 1.8L9 18l-1.8-5.2L2 11l5.2-1.8L9 4Z" />
+            <path d="M18.5 13.5v7m-3.5-3.5h7M19 3v4m-2-2h4" />
+          </svg>
+          <span>AI Önerileri</span>
+        </button>
+        <span class="nav-indicator" aria-hidden="true"></span>
+      </div>
+
       <main class="tab-content">
         <!-- SEKME 1: SOHBETLER & KİŞİLER -->
-        <div id="tab-chats" class="tab-pane active">
+        <div id="tab-chats" class="tab-pane active" role="tabpanel" aria-labelledby="nav-chats" tabindex="0">
           <div class="section-label">Ortak Alan</div>
           <button id="open-main-group-btn" class="chat-item group-card">
             <div class="avatar group-avatar">#</div>
@@ -105,7 +130,7 @@
         </div>
 
         <!-- SEKME 2: ZİYARET EDİLEN MEKANLAR -->
-        <div id="tab-places" class="tab-pane">
+        <div id="tab-places" class="tab-pane" role="tabpanel" aria-labelledby="nav-places" tabindex="0">
           <div class="card">
             <h3>Mekan / Check-in Ekle</h3>
             <p class="muted">Gittiğiniz yerleri kaydedin; bilgisayarınızdaki AI analizde bunları kullanır.</p>
@@ -132,7 +157,7 @@
         </div>
 
         <!-- SEKME 3: AI MEKAN ÖNERİLERİ -->
-        <div id="tab-ai" class="tab-pane">
+        <div id="tab-ai" class="tab-pane" role="tabpanel" aria-labelledby="nav-ai" tabindex="0">
           <div class="card ai-banner">
             <h3>Yapay Zeka Mekan Önerileri</h3>
             <p class="muted">
@@ -145,12 +170,6 @@
           </div>
         </div>
       </main>
-
-      <nav class="bottom-nav">
-        <button class="nav-btn active" data-tab="chats">Sohbetler</button>
-        <button class="nav-btn" data-tab="places">Mekanlar</button>
-        <button class="nav-btn" data-tab="ai">AI Önerileri</button>
-      </nav>
     </section>
 
     <!-- SOHBET ODASI EKRANI -->

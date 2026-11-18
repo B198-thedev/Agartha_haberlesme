@@ -821,13 +821,46 @@ function logout() {
 logoutBtn.addEventListener("click", logout);
 
 // Alt Sekme Geçişleri
-document.querySelectorAll(".nav-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const target = btn.dataset.tab;
-    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-pane").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById("tab-" + target).classList.add("active");
+const bottomTabs = Array.from(mainView.querySelectorAll(".bottom-nav .nav-btn"));
+const bottomPanels = bottomTabs.map((tab) => document.getElementById("tab-" + tab.dataset.tab));
+
+function selectBottomTab(index) {
+  bottomTabs.forEach((tab, tabIndex) => {
+    const selected = tabIndex === index;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    bottomPanels[tabIndex].classList.toggle("active", selected);
+  });
+}
+
+bottomTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectBottomTab(index));
+
+  tab.addEventListener("keydown", (event) => {
+    const lastIndex = bottomTabs.length - 1;
+    let nextIndex;
+
+    switch (event.key) {
+      case "ArrowLeft":
+        nextIndex = index === 0 ? lastIndex : index - 1;
+        break;
+      case "ArrowRight":
+        nextIndex = index === lastIndex ? 0 : index + 1;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = lastIndex;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    selectBottomTab(nextIndex);
+    bottomTabs[nextIndex].focus();
   });
 });
 
