@@ -20,7 +20,15 @@ const state = {
   dmListeners: {},
   presenceSetup: false,
   driveConfig: { url: "", secret: "" },
-  pendingRegAvatar: ""
+  pendingRegAvatar: "",
+  pendingPhotoFile: null,
+  pendingPhotoUrl: "",
+  mediaRecorder: null,
+  audioStream: null,
+  audioChunks: [],
+  recordingTimer: null,
+  recordingSeconds: 0,
+  pendingAudioData: ""
 };
 
 // DOM Elemanları
@@ -73,8 +81,17 @@ const messagesContainer = document.getElementById("messages-container");
 const typingIndicator = document.getElementById("typing-indicator");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
+const sendBtn = messageForm.querySelector(".send-btn");
 const photoInput = document.getElementById("photo-input");
 const photoBtn = document.getElementById("photo-btn");
+const photoPreviewBar = document.getElementById("photo-preview-bar");
+const photoPreviewImg = document.getElementById("photo-preview-img");
+const photoPreviewName = document.getElementById("photo-preview-name");
+const cancelPhotoBtn = document.getElementById("cancel-photo-btn");
+const micBtn = document.getElementById("mic-btn");
+const audioPreviewBar = document.getElementById("audio-preview-bar");
+const audioPreviewPlayer = document.getElementById("audio-preview-player");
+const cancelAudioBtn = document.getElementById("cancel-audio-btn");
 
 const imageModal = document.getElementById("image-modal");
 const imageModalImg = document.getElementById("image-modal-img");
@@ -293,6 +310,26 @@ async function uploadToGoogleDrive(file) {
     throw new Error((data && data.error) || "Drive yükleme hatası");
   }
   return data;
+}
+
+function pickAudioMimeType() {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+  const candidates = [
+    "audio/mp4",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus"
+  ];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Ses okunamadı"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function extractDriveFileId(msg) {
@@ -812,7 +849,7 @@ function listenUsers() {
         if (!(isViewingThis && document.visibilityState === "visible")) {
           showIncomingNotification(
             `${msg.senderName || u.name} (Özel)`,
-            msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf gönderdi" : ""),
+            msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf gönderdi" : msg.audioData ? "🎤 Sesli mesaj" : ""),
             msgSnap.key
           );
         }
@@ -833,7 +870,7 @@ function listenMainGroupPreview() {
         return;
       }
       const [key, msg] = Object.entries(val)[0];
-      const previewText = msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf" : "");
+      const previewText = msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf" : msg.audioData ? "🎤 Sesli mesaj" : "");
       mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
 
@@ -915,11 +952,15 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const imgHtml = fullImgSrc
           ? `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(m.downloadUrl || "")}" alt="Fotoğraf" loading="lazy" />`
           : "";
+        const audioHtml = m.audioData
+          ? `<audio class="msg-audio" controls preload="metadata" src="${m.audioData}"></audio>`
+          : "";
         const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
         return `
           <div class="msg-bubble ${isMe ? "me" : "other"}">
             ${senderHtml}
             ${imgHtml}
+            ${audioHtml}
             ${textHtml}
             <div class="msg-footer">
               ${delHtml}
@@ -990,6 +1031,42 @@ function cleanupActiveRoomListeners() {
     state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
   }
   clearTimeout(state.typingTimeout);
+  clearPendingPhoto();
+  stopActiveRecording(true);
+  clearPendingAudio();
+}
+
+function clearPendingAudio() {
+  state.pendingAudioData = "";
+  audioPreviewPlayer.src = "";
+  audioPreviewBar.classList.add("hidden");
+}
+
+function stopActiveRecording(discard = false) {
+  clearInterval(state.recordingTimer);
+  state.recordingTimer = null;
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+    if (discard) state.mediaRecorder.onstop = null;
+    state.mediaRecorder.stop();
+  }
+  if (state.audioStream) {
+    state.audioStream.getTracks().forEach((t) => t.stop());
+    state.audioStream = null;
+  }
+  state.mediaRecorder = null;
+  micBtn.classList.remove("mic-recording");
+  micBtn.textContent = "🎤";
+}
+
+function clearPendingPhoto() {
+  state.pendingPhotoFile = null;
+  if (state.pendingPhotoUrl) {
+    URL.revokeObjectURL(state.pendingPhotoUrl);
+    state.pendingPhotoUrl = "";
+  }
+  photoPreviewImg.src = "";
+  photoPreviewName.textContent = "";
+  photoPreviewBar.classList.add("hidden");
 }
 
 messageInput.addEventListener("input", () => {
@@ -1037,42 +1114,52 @@ messageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.activeRoom) return;
   const text = messageInput.value.trim();
-  if (!text) return;
+  const file = state.pendingPhotoFile;
+  const audioData = state.pendingAudioData;
+  if (!text && !file && !audioData) return;
 
   messageInput.value = "";
   clearTimeout(state.typingTimeout);
   state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
 
-  await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
-    senderId: state.user.id,
-    senderName: state.user.name,
-    text,
-    timestamp: Date.now()
-  });
-});
+  if (!file && !audioData) {
+    await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
+      senderId: state.user.id,
+      senderName: state.user.name,
+      text,
+      timestamp: Date.now()
+    });
+    return;
+  }
 
-photoBtn.addEventListener("click", () => {
-  if (!state.activeRoom) return;
-  photoInput.click();
-});
+  if (audioData && !file) {
+    clearPendingAudio();
+    await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
+      senderId: state.user.id,
+      senderName: state.user.name,
+      text,
+      audioData,
+      timestamp: Date.now()
+    });
+    return;
+  }
 
-photoInput.addEventListener("change", async () => {
-  const file = photoInput.files && photoInput.files[0];
-  photoInput.value = "";
-  if (!file || !state.activeRoom) return;
-
+  clearPendingPhoto();
+  if (audioData) clearPendingAudio();
+  sendBtn.disabled = true;
+  sendBtn.textContent = "Yükleniyor...";
   photoBtn.disabled = true;
-  photoBtn.textContent = "...";
   try {
     if (state.driveConfig && state.driveConfig.url) {
       const uploaded = await uploadToGoogleDrive(file);
       await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
         senderId: state.user.id,
         senderName: state.user.name,
-        text: "",
+        text,
         imageUrl: uploaded.url,
         downloadUrl: uploaded.downloadUrl,
         driveFileId: uploaded.id,
+        ...(audioData ? { audioData } : {}),
         timestamp: Date.now()
       });
     } else {
@@ -1080,16 +1167,97 @@ photoInput.addEventListener("change", async () => {
       await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
         senderId: state.user.id,
         senderName: state.user.name,
-        text: "",
+        text,
         imageData,
+        ...(audioData ? { audioData } : {}),
         timestamp: Date.now()
       });
     }
   } catch (err) {
     alert("Fotoğraf gönderilemedi: " + (err.message || "Hata"));
   } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = "Gönder";
     photoBtn.disabled = false;
-    photoBtn.textContent = "📷";
+  }
+});
+
+photoBtn.addEventListener("click", () => {
+  if (!state.activeRoom) return;
+  photoInput.click();
+});
+
+photoInput.addEventListener("change", () => {
+  const file = photoInput.files && photoInput.files[0];
+  photoInput.value = "";
+  if (!file || !state.activeRoom) return;
+
+  clearPendingPhoto();
+  state.pendingPhotoFile = file;
+  state.pendingPhotoUrl = URL.createObjectURL(file);
+  photoPreviewImg.src = state.pendingPhotoUrl;
+  photoPreviewName.textContent = file.name || "Seçilen fotoğraf";
+  photoPreviewBar.classList.remove("hidden");
+  messageInput.focus();
+});
+
+cancelPhotoBtn.addEventListener("click", clearPendingPhoto);
+cancelAudioBtn.addEventListener("click", clearPendingAudio);
+
+micBtn.addEventListener("click", async () => {
+  if (!state.activeRoom) return;
+  if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
+    stopActiveRecording(false);
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+    alert("Bu tarayıcıda ses kaydı desteklenmiyor.");
+    return;
+  }
+
+  try {
+    clearPendingAudio();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.audioStream = stream;
+    state.audioChunks = [];
+
+    const mimeType = pickAudioMimeType();
+    const options = mimeType ? { mimeType, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 };
+    const recorder = new MediaRecorder(stream, options);
+    state.mediaRecorder = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) state.audioChunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      const blob = new Blob(state.audioChunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+      state.audioChunks = [];
+      if (blob.size === 0) return;
+      const dataUrl = await blobToDataUrl(blob);
+      state.pendingAudioData = dataUrl;
+      audioPreviewPlayer.src = dataUrl;
+      audioPreviewBar.classList.remove("hidden");
+    };
+
+    recorder.start();
+    state.recordingSeconds = 0;
+    micBtn.classList.add("mic-recording");
+    micBtn.textContent = "⏹ 00:00";
+
+    state.recordingTimer = setInterval(() => {
+      state.recordingSeconds += 1;
+      const m = String(Math.floor(state.recordingSeconds / 60)).padStart(2, "0");
+      const s = String(state.recordingSeconds % 60).padStart(2, "0");
+      micBtn.textContent = `⏹ ${m}:${s}`;
+      if (state.recordingSeconds >= 60) {
+        stopActiveRecording(false);
+      }
+    }, 1000);
+  } catch (err) {
+    stopActiveRecording(true);
+    alert("Mikrofon izni verilmedi veya açılamadı.");
   }
 });
 

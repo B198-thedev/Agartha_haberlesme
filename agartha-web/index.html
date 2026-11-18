@@ -171,11 +171,21 @@
 
       <div id="messages-container" class="messages-container"></div>
       <div id="typing-indicator" class="typing-indicator hidden"></div>
+      <div id="photo-preview-bar" class="photo-preview-bar hidden">
+        <img id="photo-preview-img" src="" alt="Önizleme" />
+        <span id="photo-preview-name" class="user-sub"></span>
+        <button id="cancel-photo-btn" type="button" class="icon-btn danger">&times;</button>
+      </div>
+      <div id="audio-preview-bar" class="photo-preview-bar hidden">
+        <audio id="audio-preview-player" controls></audio>
+        <button id="cancel-audio-btn" type="button" class="icon-btn danger">&times;</button>
+      </div>
 
       <form id="message-form" class="message-input-bar">
         <input id="photo-input" type="file" accept="image/*" class="hidden" />
-        <button id="photo-btn" type="button" class="icon-btn" title="Fotoğraf Gönder">📷</button>
-        <input id="message-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000" required />
+        <button id="photo-btn" type="button" class="icon-btn" title="Fotoğraf Seç">📷</button>
+        <button id="mic-btn" type="button" class="icon-btn" title="Sesli Mesaj">🎤</button>
+        <input id="message-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000" />
         <button type="submit" class="send-btn">Gönder</button>
       </form>
     </section>
