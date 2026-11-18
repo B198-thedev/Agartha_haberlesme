@@ -609,3 +609,31 @@ input:focus, select:focus {
   gap: 8px;
 }
 
+.msg-image {
+  display: block;
+  width: 200px;
+  max-width: 100%;
+  height: 180px;
+  max-height: 180px;
+  border-radius: 10px;
+  margin-bottom: 4px;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.image-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 95vw;
+  max-height: 92dvh;
+}
+
+.image-modal-content img {
+  max-width: 95vw;
+  max-height: 80dvh;
+  border-radius: 12px;
+  object-fit: contain;
+}
+

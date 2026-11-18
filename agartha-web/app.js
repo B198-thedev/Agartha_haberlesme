@@ -743,9 +743,13 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const delHtml = canDelete
           ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
           : "";
-        const imgSrc = m.imageUrl || m.imageData;
-        const imgHtml = imgSrc
-          ? `<img class="msg-image" src="${escapeHtml(imgSrc)}" data-download="${escapeHtml(m.downloadUrl || "")}" alt="Fotoğraf" loading="lazy" />`
+        const fullImgSrc = m.imageUrl || m.imageData;
+        const thumbImgSrc =
+          m.imageUrl && m.imageUrl.includes("lh3.googleusercontent.com/d/")
+            ? m.imageUrl + "=w400"
+            : fullImgSrc;
+        const imgHtml = fullImgSrc
+          ? `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(m.downloadUrl || "")}" alt="Fotoğraf" loading="lazy" />`
           : "";
         const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
         return `
@@ -764,7 +768,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
     messagesContainer.querySelectorAll(".msg-image").forEach((imgEl) => {
       imgEl.addEventListener("click", () => {
-        imageModalImg.src = imgEl.src;
+        imageModalImg.src = imgEl.dataset.full || imgEl.src;
         const dl = imgEl.dataset.download;
         if (dl) {
           downloadImageBtn.href = dl;
