@@ -162,10 +162,16 @@ function verifyAndEnter(sessionUser) {
     .once("value")
     .then((snap) => {
       const data = snap.val();
-      if (!data || data.active === false) {
+      if (!data) {
         localStorage.removeItem(SESSION_KEY);
         showView(authView);
-        showError("Erişim yetkiniz kaldırılmış veya hesap bulunamadı.");
+        showError("Hesabınız yönetici tarafından silindi.");
+        return;
+      }
+      if (data.active === false) {
+        showView(authView);
+        showError("Erişiminiz askıya alındı. Yönetici yetkiyi açtığında otomatik giriş yapılacaktır.");
+        waitForReactivation(sessionUser);
         return;
       }
       state.user = {
@@ -178,6 +184,29 @@ function verifyAndEnter(sessionUser) {
     .catch(() => {
       showError("Sunucuya bağlanılamadı.");
     });
+}
+
+function waitForReactivation(sessionUser) {
+  const ref = state.db.ref("users/" + sessionUser.id);
+  ref.on("value", (snap) => {
+    const data = snap.val();
+    if (!data) {
+      ref.off();
+      localStorage.removeItem(SESSION_KEY);
+      showError("Hesabınız yönetici tarafından silindi.");
+      return;
+    }
+    if (data.active !== false) {
+      ref.off();
+      clearError();
+      state.user = {
+        id: sessionUser.id,
+        name: data.name,
+        isAdmin: Boolean(data.isAdmin)
+      };
+      enterMainApp();
+    }
+  });
 }
 
 // Giriş İşlemi
@@ -326,13 +355,23 @@ async function showIncomingNotification(title, body, uniqueKey) {
 function watchOwnAccess() {
   state.db.ref("users/" + state.user.id).on("value", (snap) => {
     const data = snap.val();
-    if (!data || data.active === false) {
+    if (!data) {
       sessionStorage.setItem(
         "agartha_kicked",
-        "Erişim yetkiniz yönetici tarafından kaldırıldı."
+        "Hesabınız yönetici tarafından silindi."
       );
       logout();
       return;
+    }
+    if (data.active === false) {
+      // Engellenen kullanıcının oturum bilgisini sakla ki yetki geri verilince otomatik girsin
+      showView(authView);
+      showError("Erişiminiz askıya alındı. Yönetici yetkiyi açtığında otomatik giriş yapılacaktır.");
+      return;
+    }
+    if (authView.classList.contains("active")) {
+      clearError();
+      showView(mainView);
     }
     const nextAdmin = Boolean(data.isAdmin);
     if (nextAdmin !== state.user.isAdmin) {
@@ -772,11 +811,15 @@ function renderAdminUsers(users) {
   });
 
   adminUsersList.querySelectorAll("[data-delete-user]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const uid = btn.dataset.deleteUser;
       const uname = btn.dataset.userName || "Bu kullanıcı";
-      if (!confirm(`${uname} tamamen silinsin mi? (Açık oturumu anında kapanır)`)) return;
-      state.db.ref("users/" + uid).remove();
+      if (!confirm(`${uname} ve kullandığı davet kodu tamamen silinsin mi? (Açık oturumu anında kapanır)`)) return;
+      const userRecord = state.usersCache[uid];
+      if (userRecord && userRecord.inviteCode) {
+        await state.db.ref("invites/" + userRecord.inviteCode).remove();
+      }
+      await state.db.ref("users/" + uid).remove();
     });
   });
 }
