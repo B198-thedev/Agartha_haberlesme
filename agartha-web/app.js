@@ -76,6 +76,7 @@ const placesList = document.getElementById("places-list");
 const aiList = document.getElementById("ai-list");
 
 const chatBackBtn = document.getElementById("chat-back-btn");
+const chatRoomAvatar = document.getElementById("chat-room-avatar");
 const chatRoomTitle = document.getElementById("chat-room-title");
 const chatRoomSubtitle = document.getElementById("chat-room-subtitle");
 const quickPlaceBtn = document.getElementById("quick-place-btn");
@@ -929,9 +930,17 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   state.activeRoom = { id: roomId, title, isGroup, otherId };
   chatRoomTitle.textContent = title;
   if (isGroup) {
+    chatRoomAvatar.src = "./icon-192.png";
+    chatRoomAvatar.classList.remove("hidden");
     chatRoomSubtitle.textContent = "Tüm yetkili arkadaşlar";
   } else {
     const other = otherId ? state.usersCache[otherId] : null;
+    if (other && other.avatarData) {
+      chatRoomAvatar.src = other.avatarData;
+      chatRoomAvatar.classList.remove("hidden");
+    } else {
+      chatRoomAvatar.classList.add("hidden");
+    }
     chatRoomSubtitle.textContent = other?.online
       ? "Çevrimiçi"
       : other?.lastSeen
@@ -985,15 +994,24 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
           : "";
         const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
+        const senderUser = state.usersCache[m.senderId];
+        const senderAvatarHtml = !isMe
+          ? senderUser && senderUser.avatarData
+            ? `<img class="msg-avatar" src="${escapeHtml(senderUser.avatarData)}" alt="" />`
+            : `<div class="msg-avatar">${escapeHtml((m.senderName || "?").charAt(0).toUpperCase())}</div>`
+          : "";
         return `
-          <div class="msg-bubble ${isMe ? "me" : "other"}">
-            ${senderHtml}
-            ${imgHtml}
-            ${audioHtml}
-            ${textHtml}
-            <div class="msg-footer">
-              ${delHtml}
-              <span class="msg-time">${formatTime(m.timestamp)}</span>
+          <div class="msg-row ${isMe ? "me" : "other"}">
+            ${senderAvatarHtml}
+            <div class="msg-bubble ${isMe ? "me" : "other"}">
+              ${senderHtml}
+              ${imgHtml}
+              ${audioHtml}
+              ${textHtml}
+              <div class="msg-footer">
+                ${delHtml}
+                <span class="msg-time">${formatTime(m.timestamp)}</span>
+              </div>
             </div>
           </div>
         `;
