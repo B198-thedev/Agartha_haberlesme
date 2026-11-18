@@ -239,6 +239,31 @@ async function uploadToGoogleDrive(file) {
   return data;
 }
 
+function extractDriveFileId(msg) {
+  if (!msg) return "";
+  if (msg.driveFileId) return msg.driveFileId;
+  const url = String(msg.imageUrl || "");
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : "";
+}
+
+async function deleteFromGoogleDrive(fileId) {
+  if (!fileId || !state.driveConfig || !state.driveConfig.url) return;
+  try {
+    await fetch(state.driveConfig.url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "delete",
+        secret: state.driveConfig.secret || "",
+        fileId
+      })
+    });
+  } catch {
+    // Drive silme başarısız olsa da sohbet akışını bozma
+  }
+}
+
 // Başlatma
 function init() {
   if (!isConfigured()) {
@@ -344,14 +369,43 @@ loginForm.addEventListener("submit", async (e) => {
 
     if (!savedAdminHash || codeHash === savedAdminHash) {
       const userId = "admin_" + (normalizeTurkish(username) || "root");
+      const existingAdminSnap = await state.db.ref("users/" + userId).once("value");
+      const existingAdmin = existingAdminSnap.val();
       await state.db.ref("users/" + userId).set({
         name: username,
         isAdmin: true,
-        active: true,
+        active: existingAdmin ? existingAdmin.active !== false : true,
         online: true,
-        joinedAt: Date.now()
+        joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
       state.user = { id: userId, name: username, isAdmin: true };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
+      enterMainApp();
+      return;
+    }
+
+    // Mevcut kullanıcı başka bir cihazdan kendi adı + kendi koduyla tekrar giriş yapıyorsa
+    const usersSnap = await state.db.ref("users").once("value");
+    const allUsers = usersSnap.val() || {};
+    const matchedEntry = Object.entries(allUsers).find(([, u]) => {
+      const sameName =
+        String(u.name || "").trim().toLowerCase() === username.toLowerCase();
+      const sameCode = u.codeHash === codeHash || u.inviteCode === code;
+      return sameName && sameCode;
+    });
+
+    if (matchedEntry) {
+      const [existingId, existingUser] = matchedEntry;
+      if (existingUser.active === false) {
+        showError("Erişiminiz yönetici tarafından askıya alınmış.");
+        return;
+      }
+      await state.db.ref("users/" + existingId).update({ online: true });
+      state.user = {
+        id: existingId,
+        name: existingUser.name,
+        isAdmin: Boolean(existingUser.isAdmin)
+      };
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
       enterMainApp();
       return;
@@ -364,6 +418,14 @@ loginForm.addEventListener("submit", async (e) => {
       return;
     }
 
+    const nameTaken = Object.values(allUsers).some(
+      (u) => String(u.name || "").trim().toLowerCase() === username.toLowerCase()
+    );
+    if (nameTaken) {
+      showError("Bu kullanıcı adı zaten kullanılıyor. Farklı bir kullanıcı adı seçin.");
+      return;
+    }
+
     const userId = slugifyId(username);
     await state.db.ref("users/" + userId).set({
       name: username,
@@ -371,12 +433,14 @@ loginForm.addEventListener("submit", async (e) => {
       active: true,
       online: true,
       inviteCode: code,
+      codeHash,
       joinedAt: Date.now()
     });
 
     await state.db.ref("invites/" + code).update({
       active: false,
       usedBy: username,
+      claimedByUserId: userId,
       usedAt: Date.now()
     });
 
@@ -781,9 +845,15 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     });
 
     messagesContainer.querySelectorAll("[data-del-msg]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         if (!confirm("Bu mesaj silinsin mi?")) return;
-        state.db.ref(`chats/${roomId}/messages/${btn.dataset.delMsg}`).remove();
+        const msgKey = btn.dataset.delMsg;
+        const targetMsg = data[msgKey];
+        const fileId = extractDriveFileId(targetMsg);
+        if (fileId) {
+          await deleteFromGoogleDrive(fileId);
+        }
+        await state.db.ref(`chats/${roomId}/messages/${msgKey}`).remove();
       });
     });
 
@@ -853,6 +923,12 @@ deleteChatBtn.addEventListener("click", async () => {
   const roomId = state.activeRoom.id;
   cleanupActiveRoomListeners();
   state.activeRoom = null;
+
+  const msgsSnap = await state.db.ref(`chats/${roomId}/messages`).once("value");
+  const msgs = msgsSnap.val() || {};
+  const fileIds = Object.values(msgs).map(extractDriveFileId).filter(Boolean);
+  await Promise.all(fileIds.map((fid) => deleteFromGoogleDrive(fid)));
+
   await state.db.ref(`chats/${roomId}`).remove();
   showView(mainView);
 });
@@ -896,6 +972,7 @@ photoInput.addEventListener("change", async () => {
         text: "",
         imageUrl: uploaded.url,
         downloadUrl: uploaded.downloadUrl,
+        driveFileId: uploaded.id,
         timestamp: Date.now()
       });
     } else {

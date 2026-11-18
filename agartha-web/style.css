@@ -413,6 +413,7 @@ input:focus, select:focus {
   font-size: 14px;
   line-height: 1.4;
   word-wrap: break-word;
+  overflow: hidden;
 }
 
 .msg-bubble.me {
