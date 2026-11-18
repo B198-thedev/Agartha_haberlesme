@@ -1049,11 +1049,13 @@ function stopActiveRecording(discard = false) {
     if (discard) state.mediaRecorder.onstop = null;
     state.mediaRecorder.stop();
   }
-  if (state.audioStream) {
+  if (discard && state.audioStream) {
     state.audioStream.getTracks().forEach((t) => t.stop());
     state.audioStream = null;
   }
-  state.mediaRecorder = null;
+  if (discard) {
+    state.mediaRecorder = null;
+  }
   micBtn.classList.remove("mic-recording");
   micBtn.textContent = "🎤";
 }
@@ -1223,8 +1225,14 @@ micBtn.addEventListener("click", async () => {
     state.audioChunks = [];
 
     const mimeType = pickAudioMimeType();
-    const options = mimeType ? { mimeType, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 };
-    const recorder = new MediaRecorder(stream, options);
+    let recorder;
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+    } catch {
+      recorder = new MediaRecorder(stream);
+    }
     state.mediaRecorder = recorder;
 
     recorder.ondataavailable = (e) => {
@@ -1232,16 +1240,26 @@ micBtn.addEventListener("click", async () => {
     };
 
     recorder.onstop = async () => {
-      const blob = new Blob(state.audioChunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+      if (state.audioStream) {
+        state.audioStream.getTracks().forEach((t) => t.stop());
+        state.audioStream = null;
+      }
+      state.mediaRecorder = null;
+      const finalType = recorder.mimeType || mimeType || "audio/mp4";
+      const blob = new Blob(state.audioChunks, { type: finalType });
       state.audioChunks = [];
-      if (blob.size === 0) return;
+      if (blob.size === 0) {
+        alert("Ses kaydı boş oluştu, lütfen tekrar deneyin.");
+        return;
+      }
       const dataUrl = await blobToDataUrl(blob);
       state.pendingAudioData = dataUrl;
       audioPreviewPlayer.src = dataUrl;
+      audioPreviewPlayer.load();
       audioPreviewBar.classList.remove("hidden");
     };
 
-    recorder.start();
+    recorder.start(250);
     state.recordingSeconds = 0;
     micBtn.classList.add("mic-recording");
     micBtn.textContent = "⏹ 00:00";
@@ -1257,7 +1275,7 @@ micBtn.addEventListener("click", async () => {
     }, 1000);
   } catch (err) {
     stopActiveRecording(true);
-    alert("Mikrofon izni verilmedi veya açılamadı.");
+    alert("Mikrofon hatası (" + (err.name || "") + "): " + (err.message || "İzin verilmedi"));
   }
 });
 
