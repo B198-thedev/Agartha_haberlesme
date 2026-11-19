@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (v60)
+          Duyurular &amp; Sürüm Geçmişi (v61)
         </button>
       </div>
     </section>
@@ -146,14 +146,14 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">v60</span>
+                <span id="home-announcement-version" class="exp-badge">v61</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">v60: Baloncuk tarzları, yazı boyutu/font, hazır desenler, sohbete özel arka plan, mesaj tepkileri ve okundu gizliliği eklendi!</div>
+              <div id="home-announcement-summary" class="chat-preview">v61: Her kullanıcıya özel Arkadaş Sistemi eklendi! Arkadaş kodu ile sadece kendi arkadaşlarını ekleyebilirsin.</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
 
-          <div class="section-label">Ortak Alan</div>
+          <div id="main-group-section-label" class="section-label">Ortak Alan</div>
           <button id="open-main-group-btn" class="chat-item group-card">
             <div id="main-group-avatar" class="avatar group-avatar">#</div>
             <div class="chat-item-body">
@@ -165,9 +165,32 @@
             </div>
           </button>
 
-          <div class="section-label">Kişiler (Özel Sohbet)</div>
+          <div class="section-label section-row-header">
+            <span>Arkadaşlarım (Özel Sohbet)</span>
+            <button id="toggle-add-friend-btn" type="button" class="icon-btn mini-pill-btn">+ Arkadaş Ekle</button>
+          </div>
+
+          <div id="add-friend-box" class="card friend-add-card hidden">
+            <div class="friend-code-row">
+              <div>
+                <div class="user-sub">Senin Arkadaş Kodun</div>
+                <strong id="my-friend-code-label">Yükleniyor...</strong>
+              </div>
+              <button id="copy-friend-code-btn" type="button" class="icon-btn mini-pill-btn">Kopyala</button>
+            </div>
+            <form id="add-friend-form" class="inline-form" style="margin-top:8px;">
+              <input id="friend-code-input" type="text" placeholder="Arkadaş kodu (ARK-...)" maxlength="20" autocomplete="off" required />
+              <button type="submit" class="btn-primary">İstek Gönder</button>
+            </form>
+          </div>
+
+          <div id="friend-requests-section" class="hidden" style="margin-bottom:10px;">
+            <div class="section-label">Gelen Arkadaşlık İstekleri</div>
+            <div id="friend-requests-list" class="list-stack"></div>
+          </div>
+
           <div id="contacts-list" class="list-stack">
-            <div class="empty-hint">Yetkili kişiler yükleniyor...</div>
+            <div class="empty-hint">Arkadaşların yükleniyor...</div>
           </div>
         </div>
 
@@ -406,7 +429,7 @@
             </div>
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – v60 tüm güncellemeler</span>
+              <span class="user-sub">v1 – v61 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yetkiler</span>
@@ -427,7 +450,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">v60</span>
+            <span id="announcements-modal-ver" class="exp-badge">v61</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -446,7 +469,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v60)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v61)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -731,6 +754,7 @@
               <div id="view-user-name" class="place-title"></div>
               <div id="view-user-status" class="place-meta"></div>
               <div id="view-user-bio" class="place-note" style="text-align:center;"></div>
+              <button id="remove-friend-btn" type="button" class="icon-btn danger hidden" style="margin-top:10px;">Arkadaşlıktan Çıkar</button>
             </div>
           </div>
         </div>
@@ -759,9 +783,15 @@
         <div class="modal-body">
           <div class="card">
             <h3>Yeni Erişim Kodu Oluştur</h3>
-            <form id="invite-form" class="inline-form">
-              <input id="invite-label" type="text" placeholder="Kimin için? (Örn. Mehmet)" maxlength="30" required />
-              <button type="submit" class="btn-primary">Kod Üret</button>
+            <form id="invite-form" class="stack-form">
+              <div class="inline-form">
+                <input id="invite-label" type="text" placeholder="Kimin için? (Örn. Mehmet)" maxlength="30" required />
+                <button type="submit" class="btn-primary">Kod Üret</button>
+              </div>
+              <select id="invite-scope-select" class="settings-select" style="width:100%;" aria-label="Davet kapsamı">
+                <option value="personal">Sadece Senin Arkadaşın (Gizli — Ana Grup görmez)</option>
+                <option value="group">Ana Grup Üyesi (Herkes görür)</option>
+              </select>
             </form>
           </div>
 

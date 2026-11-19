@@ -438,12 +438,21 @@ const customBgInput = document.getElementById("custom-bg-input");
 const applyCustomThemeBtn = document.getElementById("apply-custom-theme-btn");
 const randomThemeBtn = document.getElementById("random-theme-btn");
 
+const mainGroupSectionLabel = document.getElementById("main-group-section-label");
 const openMainGroupBtn = document.getElementById("open-main-group-btn");
 const mainGroupAvatar = document.getElementById("main-group-avatar");
 const mainGroupTitle = document.getElementById("main-group-title");
 const mainGroupBadge = document.getElementById("main-group-badge");
 const mainGroupPreview = document.getElementById("main-group-preview");
 const mainGroupTime = document.getElementById("main-group-time");
+const toggleAddFriendBtn = document.getElementById("toggle-add-friend-btn");
+const addFriendBox = document.getElementById("add-friend-box");
+const myFriendCodeLabel = document.getElementById("my-friend-code-label");
+const copyFriendCodeBtn = document.getElementById("copy-friend-code-btn");
+const addFriendForm = document.getElementById("add-friend-form");
+const friendCodeInput = document.getElementById("friend-code-input");
+const friendRequestsSection = document.getElementById("friend-requests-section");
+const friendRequestsList = document.getElementById("friend-requests-list");
 const contactsList = document.getElementById("contacts-list");
 
 const placeForm = document.getElementById("place-form");
@@ -569,6 +578,7 @@ const viewUserAvatar = document.getElementById("view-user-avatar");
 const viewUserName = document.getElementById("view-user-name");
 const viewUserStatus = document.getElementById("view-user-status");
 const viewUserBio = document.getElementById("view-user-bio");
+const removeFriendBtn = document.getElementById("remove-friend-btn");
 
 const groupSettingsModal = document.getElementById("group-settings-modal");
 const closeGroupSettingsBtn = document.getElementById("close-group-settings-btn");
@@ -599,6 +609,7 @@ const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
 const inviteForm = document.getElementById("invite-form");
 const inviteLabelInput = document.getElementById("invite-label");
+const inviteScopeSelect = document.getElementById("invite-scope-select");
 const invitesList = document.getElementById("invites-list");
 const adminUsersList = document.getElementById("admin-users-list");
 const driveConfigForm = document.getElementById("drive-config-form");
@@ -1148,7 +1159,7 @@ function randomBytesHex(byteLen = 16) {
     .join("");
 }
 
-function generateStrongInviteCode() {
+function generateStrongInviteCode(prefix = "AGAR") {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = new Uint8Array(8);
   if (window.crypto && window.crypto.getRandomValues) {
@@ -1160,7 +1171,7 @@ function generateStrongInviteCode() {
   for (let i = 0; i < 8; i++) {
     body += alphabet[bytes[i] % alphabet.length];
   }
-  return "AGAR-" + body;
+  return prefix + "-" + (prefix === "ARK" ? body.slice(0, 6) : body);
 }
 
 function constantTimeEqual(a, b) {
@@ -1468,7 +1479,7 @@ async function distributeGroupKeyToMembers(keyId) {
   try {
     const rawBytes = new Uint8Array(await window.crypto.subtle.exportKey("raw", aesKey));
     const entries = Object.entries(state.usersCache || {}).filter(
-      ([, u]) => u && u.active !== false && u.e2eePub
+      ([, u]) => u && u.active !== false && u.inMainGroup !== false && u.e2eePub
     );
     for (const [uid, u] of entries) {
       if (state.mainGroupKeysSnap && state.mainGroupKeysSnap[uid] && state.mainGroupKeysSnap[uid].keyId === keyId) {
@@ -1883,6 +1894,10 @@ function verifyAndEnter(sessionUser) {
         name: data.name,
         nickname: data.nickname || "",
         isAdmin: Boolean(data.isAdmin),
+        inMainGroup: data.inMainGroup !== false,
+        friends: data.friends || {},
+        friendsInit: Boolean(data.friendsInit),
+        friendCode: data.friendCode || "",
         avatarData: data.avatarData || "",
         bubbleColor: data.bubbleColor || "",
         bio: data.bio || "",
@@ -1923,6 +1938,10 @@ function waitForReactivation(sessionUser) {
         name: data.name,
         nickname: data.nickname || "",
         isAdmin: Boolean(data.isAdmin),
+        inMainGroup: data.inMainGroup !== false,
+        friends: data.friends || {},
+        friendsInit: Boolean(data.friendsInit),
+        friendCode: data.friendCode || "",
         avatarData: data.avatarData || "",
         bubbleColor: data.bubbleColor || "",
         bio: data.bio || "",
@@ -2001,7 +2020,22 @@ loginForm.addEventListener("submit", async (e) => {
         chatBgData,
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
-      state.user = { id: userId, name: username, nickname, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor, chatBgData };
+      state.user = {
+        id: userId,
+        name: username,
+        nickname,
+        isAdmin: true,
+        inMainGroup: existingAdmin ? existingAdmin.inMainGroup !== false : true,
+        friends: (existingAdmin && existingAdmin.friends) || {},
+        friendsInit: Boolean(existingAdmin && existingAdmin.friendsInit),
+        friendCode: (existingAdmin && existingAdmin.friendCode) || "",
+        avatarData,
+        bubbleColor,
+        bio,
+        statusEmoji,
+        bannerColor,
+        chatBgData
+      };
       state.pendingLoginSecret = code;
       localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
@@ -2045,6 +2079,10 @@ loginForm.addEventListener("submit", async (e) => {
         name: existingUser.name,
         nickname: existingUser.nickname || "",
         isAdmin: Boolean(existingUser.isAdmin),
+        inMainGroup: existingUser.inMainGroup !== false,
+        friends: existingUser.friends || {},
+        friendsInit: Boolean(existingUser.friendsInit),
+        friendCode: existingUser.friendCode || "",
         avatarData: sanitizeMediaSrc(existingUser.avatarData, "image"),
         bubbleColor: existingUser.bubbleColor || "",
         bio: existingUser.bio || "",
@@ -2144,6 +2182,12 @@ registerForm.addEventListener("submit", async (e) => {
     const passwordSalt = randomBytesHex(16);
     const passwordHash = await hashPasswordPBKDF2(password, passwordSalt);
     const avatarData = sanitizeMediaSrc(state.pendingRegAvatar, "image");
+    const isPersonalOnly = Boolean(invite.onlyPersonal);
+    const friendCode = generateStrongInviteCode("ARK");
+    const initialFriends = {};
+    if (invite.createdBy && allUsers[invite.createdBy]) {
+      initialFriends[invite.createdBy] = true;
+    }
 
     await state.db.ref("users/" + userId).set({
       name: username,
@@ -2151,6 +2195,10 @@ registerForm.addEventListener("submit", async (e) => {
       isAdmin: false,
       active: true,
       online: true,
+      inMainGroup: !isPersonalOnly,
+      friendsInit: isPersonalOnly,
+      friendCode,
+      friends: initialFriends,
       passwordSalt,
       passwordHash,
       hashAlgo: "pbkdf2-sha256-100k",
@@ -2158,11 +2206,19 @@ registerForm.addEventListener("submit", async (e) => {
       joinedAt: Date.now()
     });
 
+    if (invite.createdBy && allUsers[invite.createdBy]) {
+      await state.db.ref(`users/${invite.createdBy}/friends/${userId}`).set(true).catch(() => {});
+    }
+
     state.user = {
       id: userId,
       name: username,
       nickname: finalNickname,
       isAdmin: false,
+      inMainGroup: !isPersonalOnly,
+      friends: initialFriends,
+      friendsInit: isPersonalOnly,
+      friendCode,
       avatarData,
       bubbleColor: "",
       bio: "",
@@ -2376,22 +2432,27 @@ async function preloadInitialData() {
     }).catch(() => {})
   );
 
-  tasks.push(
-    state.db.ref("chats/main_group/messages").limitToLast(100).once("value").then((snap) => {
-      state.preloadedChats["main_group"] = snap.val() || {};
-      markRoomDelivered("main_group");
-    }).catch(() => {})
-  );
+  if (state.user.inMainGroup !== false) {
+    tasks.push(
+      state.db.ref("chats/main_group/messages").limitToLast(100).once("value").then((snap) => {
+        state.preloadedChats["main_group"] = snap.val() || {};
+        markRoomDelivered("main_group");
+      }).catch(() => {})
+    );
+  }
 
   tasks.push(
     state.db.ref("users").once("value").then(async (snap) => {
       const users = snap.val() || {};
       state.usersCache = users;
+      await ensureFriendSystemReady(users);
+      const myRecord = users[state.user.id] || {};
+      const myFriends = myRecord.friends || state.user.friends || {};
       const others = Object.entries(users).filter(
-        ([id, u]) => id !== state.user.id && u.active !== false
+        ([id, u]) => id !== state.user.id && u.active !== false && Boolean(myFriends[id])
       );
       if (loadingStatus) {
-        loadingStatus.textContent = `${others.length + 1} sohbet odası yükleniyor...`;
+        loadingStatus.textContent = `${others.length + (state.user.inMainGroup !== false ? 1 : 0)} sohbet odası yükleniyor...`;
       }
       await Promise.all(
         others.map(([otherId]) => {
@@ -2441,15 +2502,19 @@ async function enterMainApp() {
   const loginSecret = state.pendingLoginSecret || "";
   state.pendingLoginSecret = "";
   await ensureE2EEInitialized(loginSecret);
-  listenMainGroupKeys();
 
+  applyMainGroupVisibility();
   updateNotifyButton();
   setupPresence();
   listenDriveConfig();
   listenTurnConfig();
-  listenMainGroupInfo();
+  if (state.user.inMainGroup !== false) {
+    listenMainGroupKeys();
+    listenMainGroupInfo();
+    listenMainGroupPreview();
+  }
   listenUsers();
-  listenMainGroupPreview();
+  listenFriendRequests();
   listenPlaces();
   listenAiRecommendations();
   listenAnnouncements();
@@ -2669,6 +2734,19 @@ function watchOwnAccess() {
     state.user.statusEmoji = data.statusEmoji || "";
     state.user.bannerColor = data.bannerColor || "";
     state.user.chatBgData = data.chatBgData || "";
+    state.user.friends = data.friends || {};
+    state.user.friendsInit = Boolean(data.friendsInit);
+    state.user.friendCode = data.friendCode || state.user.friendCode || "";
+    const nextInGroup = data.inMainGroup !== false;
+    if (nextInGroup !== (state.user.inMainGroup !== false)) {
+      state.user.inMainGroup = nextInGroup;
+      applyMainGroupVisibility();
+    } else {
+      state.user.inMainGroup = nextInGroup;
+    }
+    if (myFriendCodeLabel && state.user.friendCode) {
+      myFriendCodeLabel.textContent = state.user.friendCode;
+    }
     if (data.uiPrefs && typeof data.uiPrefs === "object") {
       uiPrefs = { ...DEFAULT_UI_PREFS, ...data.uiPrefs };
       try { localStorage.setItem(UI_PREFS_KEY, JSON.stringify(uiPrefs)); } catch {}
@@ -2763,13 +2841,178 @@ bottomTabs.forEach((tab, index) => {
   });
 });
 
+function applyMainGroupVisibility() {
+  const allowed = Boolean(state.user && state.user.inMainGroup !== false);
+  if (mainGroupSectionLabel) mainGroupSectionLabel.classList.toggle("hidden", !allowed);
+  if (openMainGroupBtn) openMainGroupBtn.classList.toggle("hidden", !allowed);
+  if (!allowed && state.activeRoom && state.activeRoom.isGroup) {
+    closeActiveChatWithAnimation();
+  }
+}
+
+async function ensureFriendSystemReady(users) {
+  if (!state.user || !state.db || state.friendInitRunning) return;
+  const myRecord = users[state.user.id];
+  if (!myRecord) return;
+  const updates = {};
+
+  if (!myRecord.friendCode) {
+    const newCode = generateStrongInviteCode("ARK");
+    updates.friendCode = newCode;
+    state.user.friendCode = newCode;
+  } else {
+    state.user.friendCode = myRecord.friendCode;
+  }
+  if (myFriendCodeLabel) {
+    myFriendCodeLabel.textContent = state.user.friendCode || "-";
+  }
+
+  // v61 öncesi mevcut Ana Grup üyelerinin birbirini görmeye devam etmesi için tek seferlik arkadaş listesi başlatma
+  if (!myRecord.friendsInit && myRecord.inMainGroup !== false) {
+    const seedFriends = { ...(myRecord.friends || {}) };
+    Object.entries(users).forEach(([uid, u]) => {
+      if (uid !== state.user.id && u && u.active !== false && u.inMainGroup !== false) {
+        seedFriends[uid] = true;
+      }
+    });
+    updates.friends = seedFriends;
+    updates.friendsInit = true;
+    state.user.friends = seedFriends;
+    state.user.friendsInit = true;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    state.friendInitRunning = true;
+    try {
+      await state.db.ref(`users/${state.user.id}`).update(updates);
+    } finally {
+      state.friendInitRunning = false;
+    }
+  }
+}
+
+function listenFriendRequests() {
+  if (!state.db || !state.user) return;
+  state.db.ref(`friendRequests/${state.user.id}`).on("value", (snap) => {
+    const reqs = snap.val() || {};
+    const entries = Object.entries(reqs).filter(([, r]) => r && r.fromId);
+    if (!friendRequestsSection || !friendRequestsList) return;
+
+    if (entries.length === 0) {
+      friendRequestsSection.classList.add("hidden");
+      friendRequestsList.innerHTML = "";
+      return;
+    }
+
+    friendRequestsSection.classList.remove("hidden");
+    friendRequestsList.innerHTML = entries
+      .map(([reqKey, r]) => {
+        const sender = state.usersCache[r.fromId];
+        const disp = sender ? getDisplayName(sender) : (r.fromName || "Kullanıcı");
+        return `
+          <div class="friend-req-row">
+            <div>
+              <div class="place-title" style="font-size:13.5px;">${escapeHtml(disp)}</div>
+              <div class="user-sub">Arkadaşlık isteği gönderdi</div>
+            </div>
+            <div class="admin-row-actions">
+              <button type="button" class="btn-primary" style="margin-top:0;padding:6px 10px;font-size:12px;" data-accept-friend="${escapeHtml(reqKey)}" data-from-id="${escapeHtml(r.fromId)}">Kabul Et</button>
+              <button type="button" class="icon-btn danger" style="padding:6px 10px;font-size:12px;" data-reject-friend="${escapeHtml(reqKey)}">Reddet</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    friendRequestsList.querySelectorAll("[data-accept-friend]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const reqKey = btn.dataset.acceptFriend;
+        const fromId = btn.dataset.fromId;
+        if (!fromId || !state.user) return;
+        await state.db.ref(`users/${state.user.id}/friends/${fromId}`).set(true);
+        await state.db.ref(`users/${fromId}/friends/${state.user.id}`).set(true);
+        await state.db.ref(`friendRequests/${state.user.id}/${reqKey}`).remove();
+      });
+    });
+
+    friendRequestsList.querySelectorAll("[data-reject-friend]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.db.ref(`friendRequests/${state.user.id}/${btn.dataset.rejectFriend}`).remove();
+      });
+    });
+  });
+}
+
+if (toggleAddFriendBtn && addFriendBox) {
+  toggleAddFriendBtn.addEventListener("click", () => {
+    const opening = addFriendBox.classList.contains("hidden");
+    addFriendBox.classList.toggle("hidden", !opening);
+    if (opening && myFriendCodeLabel && state.user && state.user.friendCode) {
+      myFriendCodeLabel.textContent = state.user.friendCode;
+    }
+  });
+}
+
+if (copyFriendCodeBtn) {
+  copyFriendCodeBtn.addEventListener("click", () => {
+    const code = (state.user && state.user.friendCode) || (myFriendCodeLabel ? myFriendCodeLabel.textContent : "");
+    if (!code || code === "-") return;
+    navigator.clipboard?.writeText(code);
+    copyFriendCodeBtn.textContent = "Kopyalandı";
+    setTimeout(() => (copyFriendCodeBtn.textContent = "Kopyala"), 1200);
+  });
+}
+
+if (addFriendForm && friendCodeInput) {
+  addFriendForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.db || !state.user) return;
+    const rawCode = friendCodeInput.value.trim().toUpperCase();
+    if (!rawCode) return;
+
+    if (state.user.friendCode && rawCode === state.user.friendCode.toUpperCase()) {
+      alert("Kendi arkadaş kodunu ekleyemezsin.");
+      return;
+    }
+
+    const match = Object.entries(state.usersCache || {}).find(
+      ([uid, u]) =>
+        uid !== state.user.id &&
+        u &&
+        u.active !== false &&
+        String(u.friendCode || "").toUpperCase() === rawCode
+    );
+
+    if (!match) {
+      alert("Bu arkadaş koduna sahip aktif bir kullanıcı bulunamadı.");
+      return;
+    }
+
+    const [targetId, targetUser] = match;
+    const myFriends = state.user.friends || {};
+    if (myFriends[targetId]) {
+      alert(`${getDisplayName(targetUser)} zaten arkadaş listende!`);
+      return;
+    }
+
+    await state.db.ref(`friendRequests/${targetId}/${state.user.id}`).set({
+      fromId: state.user.id,
+      fromName: getDisplayName(state.user),
+      createdAt: Date.now()
+    });
+    friendCodeInput.value = "";
+    alert(`${getDisplayName(targetUser)} kullanıcısına arkadaşlık isteği gönderildi!`);
+  });
+}
+
 function renderContactsList() {
+  const myFriends = (state.user && state.user.friends) || {};
   const others = Object.entries(state.usersCache).filter(
-    ([id, u]) => id !== state.user.id && u.active !== false
+    ([id, u]) => id !== state.user.id && u.active !== false && Boolean(myFriends[id])
   );
 
   if (others.length === 0) {
-    contactsList.innerHTML = `<div class="empty-hint">Henüz başka yetkili kişi yok.</div>`;
+    contactsList.innerHTML = `<div class="empty-hint">Arkadaş listende henüz kimse yok. Yukarıdan "+ Arkadaş Ekle" ile arkadaş kodunu gir!</div>`;
     return;
   }
 
@@ -2829,12 +3072,25 @@ function listenUsers() {
     const users = snap.val() || {};
     state.usersCache = users;
 
+    const myNode = users[state.user.id];
+    if (myNode) {
+      state.user.friends = myNode.friends || {};
+      state.user.friendsInit = Boolean(myNode.friendsInit);
+      state.user.inMainGroup = myNode.inMainGroup !== false;
+      if (myNode.friendCode) state.user.friendCode = myNode.friendCode;
+    }
+    ensureFriendSystemReady(users);
+    applyMainGroupVisibility();
+
     renderContactsList();
 
     // Aktif özel sohbette karşı tarafın çevrimiçi durumunu güncelle
     if (state.activeRoom && !state.activeRoom.isGroup && state.activeRoom.otherId) {
       const other = users[state.activeRoom.otherId];
-      if (other) {
+      const myFriends = (state.user && state.user.friends) || {};
+      if (!other || other.active === false || !myFriends[state.activeRoom.otherId]) {
+        closeActiveChatWithAnimation();
+      } else if (other) {
         chatRoomSubtitle.textContent = other.online
           ? "Çevrimiçi"
           : other.lastSeen
@@ -2853,8 +3109,9 @@ function listenUsers() {
       distributeGroupKeyToMembers(state.e2eeActiveGroupKeyId);
     }
 
+    const myFriends = (state.user && state.user.friends) || {};
     const others = Object.entries(users).filter(
-      ([id, u]) => id !== state.user.id && u.active !== false
+      ([id, u]) => id !== state.user.id && u.active !== false && Boolean(myFriends[id])
     );
 
     const activeDmIds = new Set(others.map(([otherId]) => getDmRoomId(state.user.id, otherId)));
@@ -4983,12 +5240,13 @@ function openCustomizeModal() {
   }
   if (bgTargetRoomSelect && state.user) {
     const groupTitle = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
-    const options = [
-      `<option value="global">Tüm Sohbetler (Varsayılan)</option>`,
-      `<option value="main_group">${escapeHtml(groupTitle)} (Sadece Grup)</option>`
-    ];
+    const myFriends = state.user.friends || {};
+    const options = [`<option value="global">Tüm Sohbetler (Varsayılan)</option>`];
+    if (state.user.inMainGroup !== false) {
+      options.push(`<option value="main_group">${escapeHtml(groupTitle)} (Sadece Grup)</option>`);
+    }
     Object.entries(state.usersCache || {}).forEach(([uid, u]) => {
-      if (uid === state.user.id || !u || u.active === false) return;
+      if (uid === state.user.id || !u || u.active === false || !myFriends[uid]) return;
       const dmId = getDmRoomId(state.user.id, uid);
       options.push(`<option value="${escapeHtml(dmId)}">${escapeHtml(getDisplayName(u))} (Özel Sohbet)</option>`);
     });
@@ -5019,9 +5277,18 @@ function openCustomizeModal() {
   }
 }
 
+let viewedProfileUserId = "";
+
 function openUserProfileCard(uid) {
   const u = state.usersCache[uid];
-  if (!u || !userProfileModal) return;
+  if (!u || !userProfileModal || !state.user) return;
+  const isSelf = uid === state.user.id;
+  const myFriends = state.user.friends || {};
+  const isFriend = Boolean(myFriends[uid]);
+  const sharedGroup = state.user.inMainGroup !== false && u.inMainGroup !== false;
+  if (!isSelf && !isFriend && !sharedGroup) return;
+
+  viewedProfileUserId = uid;
   const banner = isValidHexColor(u.bannerColor) ? u.bannerColor : "#38bdf8";
   const dispName = getDisplayName(u);
   viewUserBanner.style.background = `linear-gradient(135deg, ${banner}, #1e293b)`;
@@ -5035,8 +5302,24 @@ function openUserProfileCard(uid) {
     : "Üye";
   viewUserStatus.textContent = `@${u.name || ""} • ${statusStr}`;
   viewUserBio.textContent = u.bio || "Durum yazısı eklenmemiş.";
+  if (removeFriendBtn) {
+    removeFriendBtn.classList.toggle("hidden", isSelf || !isFriend);
+  }
   userProfileModal.classList.remove("hidden");
   pushBackState("user-profile-modal");
+}
+
+if (removeFriendBtn) {
+  removeFriendBtn.addEventListener("click", async () => {
+    const uid = viewedProfileUserId;
+    if (!uid || !state.user || !state.db) return;
+    const u = state.usersCache[uid];
+    const name = u ? getDisplayName(u) : "Bu kişi";
+    if (!confirm(`${name} arkadaş listenden çıkarılsın mı?`)) return;
+    await state.db.ref(`users/${state.user.id}/friends/${uid}`).remove();
+    await state.db.ref(`users/${uid}/friends/${state.user.id}`).remove();
+    userProfileModal.classList.add("hidden");
+  });
 }
 
 if (closeUserProfileBtn) {
@@ -5048,7 +5331,7 @@ if (closeUserProfileBtn) {
 function renderGroupMembersList() {
   if (!groupMembersList) return;
   const members = Object.entries(state.usersCache || {})
-    .filter(([, u]) => u && u.active !== false)
+    .filter(([, u]) => u && u.active !== false && u.inMainGroup !== false)
     .sort(([, a], [, b]) => {
       if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
       return getDisplayName(a).localeCompare(getDisplayName(b), "tr");
@@ -5872,9 +6155,12 @@ inviteForm.addEventListener("submit", async (e) => {
   const label = inviteLabelInput.value.trim();
   if (!label) return;
 
-  const code = generateStrongInviteCode();
+  const onlyPersonal = inviteScopeSelect ? inviteScopeSelect.value === "personal" : false;
+  const code = generateStrongInviteCode("AGAR");
   await state.db.ref("invites/" + code).set({
     label,
+    onlyPersonal,
+    createdBy: state.user.id,
     active: true,
     createdAt: Date.now()
   });
@@ -5903,11 +6189,12 @@ function listenInvites() {
         const status = inv.active
           ? `<span class="badge-active">Kullanılabilir</span>`
           : `<span class="badge-revoked">Kullanıldı (${escapeHtml(inv.usedBy || "-")})</span>`;
+        const scopeLabel = inv.onlyPersonal ? "Sadece Arkadaş (Gizli)" : "Ana Grup";
         return `
           <div class="admin-row">
             <div>
               <div class="place-title">${escapeHtml(code)}</div>
-              <div class="user-sub">${escapeHtml(inv.label)} • ${status}</div>
+              <div class="user-sub">${escapeHtml(inv.label)} • ${scopeLabel} • ${status}</div>
             </div>
             <div class="admin-row-actions">
               <button class="icon-btn" data-copy="${escapeHtml(code)}">Kopyala</button>
@@ -5939,13 +6226,17 @@ function renderAdminUsers(users) {
   adminUsersList.innerHTML = entries
     .map(([id, u]) => {
       const isSelf = id === state.user.id;
+      const inGroup = u.inMainGroup !== false;
       const badge =
         u.active !== false
           ? `<span class="badge-active">Aktif</span>`
           : `<span class="badge-revoked">Engelli</span>`;
       const actionBtn = isSelf
         ? ""
-        : `<button class="icon-btn" data-toggle-admin="${escapeHtml(id)}" data-next-admin="${!u.isAdmin}">
+        : `<button class="icon-btn" data-toggle-maingroup="${escapeHtml(id)}" data-next-group="${!inGroup}">
+            ${inGroup ? "Gruptan Çıkar" : "Gruba Ekle"}
+          </button>
+          <button class="icon-btn" data-toggle-admin="${escapeHtml(id)}" data-next-admin="${!u.isAdmin}">
             ${u.isAdmin ? "Adminliği Al" : "Admin Yap"}
           </button>
           <button class="icon-btn ${u.active !== false ? "danger" : ""}" data-toggle-user="${escapeHtml(id)}" data-next="${u.active === false}">
@@ -5959,13 +6250,21 @@ function renderAdminUsers(users) {
         <div class="admin-row">
           <div>
             <div class="place-title">${escapeHtml(getDisplayName(u))} <span class="user-sub">(@${escapeHtml(u.name)})</span></div>
-            <div class="user-sub">${u.isAdmin ? "Admin" : "Üye"} • ${badge}</div>
+            <div class="user-sub">${u.isAdmin ? "Admin" : "Üye"} • ${inGroup ? "Ana Grup" : "Gizli/Özel"} • ${badge}</div>
           </div>
           <div class="admin-row-actions">${actionBtn}</div>
         </div>
       `;
     })
     .join("");
+
+  adminUsersList.querySelectorAll("[data-toggle-maingroup]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.toggleMaingroup;
+      const nextGroup = btn.dataset.nextGroup === "true";
+      state.db.ref("users/" + uid + "/inMainGroup").set(nextGroup);
+    });
+  });
 
   adminUsersList.querySelectorAll("[data-toggle-user]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -5998,9 +6297,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v60)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v61)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "v61",
+    title: "Kişisel Arkadaş Sistemi & Gizli Davetler",
+    desc: "Artık herkesin kendine özel Arkadaş Listesi var! '+ Arkadaş Ekle' bölümünden benzersiz Arkadaş Kodunu (ARK-...) paylaşarak veya kod girerek arkadaşlık isteği gönderebilirsin. Ayrıca Yönetici davet kodu üretirken 'Sadece Senin Arkadaşın (Gizli)' seçerse o kişi Ana Grup'ta ve diğer arkadaşlarının listesinde kesinlikle görünmez."
+  },
   {
     v: "v60",
     title: "Büyük Özelleştirme, Tepkiler & Gizlilik Güncellemesi",
