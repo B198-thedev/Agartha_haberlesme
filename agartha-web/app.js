@@ -160,6 +160,9 @@ const driveConfigForm = document.getElementById("drive-config-form");
 const driveUrlInput = document.getElementById("drive-url-input");
 const driveSecretInput = document.getElementById("drive-secret-input");
 
+const MIC_ICON_HTML =
+  '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg>';
+
 // Yardımcılar
 function isConfigured() {
   return (
@@ -1072,13 +1075,13 @@ function listenUsers() {
             `${msg.senderName || u.name} (Özel)`,
             msg.text ||
               (msg.imageUrl || msg.imageData
-                ? "📷 Fotoğraf gönderdi"
+                ? "Fotoğraf gönderdi"
                 : msg.audioUrl || msg.audioData
-                ? "🎤 Sesli mesaj"
+                ? "Sesli mesaj"
                 : msg.location
                 ? msg.location.live
-                  ? "🟢 Canlı konum başlattı"
-                  : "📍 Konum paylaştı"
+                  ? "Canlı konum başlattı"
+                  : "Konum paylaştı"
                 : ""),
             msgSnap.key
           );
@@ -1103,13 +1106,13 @@ function listenMainGroupPreview() {
       const previewText =
         msg.text ||
         (msg.imageUrl || msg.imageData
-          ? "📷 Fotoğraf"
+          ? "Fotoğraf"
           : msg.audioUrl || msg.audioData
-          ? "🎤 Sesli mesaj"
+          ? "Sesli mesaj"
           : msg.location
           ? msg.location.live
-            ? "🟢 Canlı Konum"
-            : "📍 Konum"
+            ? "Canlı Konum"
+            : "Konum"
           : "");
       mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
@@ -1221,9 +1224,9 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           const mapsUrl = `https://www.google.com/maps?q=${m.location.lat},${m.location.lng}`;
           const titleLabel = m.location.live
             ? m.location.active
-              ? "🟢 Canlı Konum (Aktif)"
-              : "📍 Canlı Konum (Sona erdi)"
-            : "📍 Anlık Konum";
+              ? '<span class="live-status-text"><span class="live-pulse-dot"></span>Canlı Konum (Aktif)</span>'
+              : "Canlı Konum (Sona erdi)"
+            : "Anlık Konum";
           const updatedInfo = m.location.updatedAt ? ` • ${formatTime(m.location.updatedAt)}` : "";
           locHtml = `
             <div class="loc-card">
@@ -1358,7 +1361,7 @@ function stopActiveRecording(discard = false) {
     state.mediaRecorder = null;
   }
   micBtn.classList.remove("mic-recording");
-  micBtn.textContent = "🎤";
+  micBtn.innerHTML = MIC_ICON_HTML;
 }
 
 function clearPendingPhoto() {
@@ -1569,12 +1572,12 @@ if (sendStaticLocBtn) {
           timestamp: now
         });
         sendStaticLocBtn.disabled = false;
-        sendStaticLocBtn.textContent = "📍 Anlık Konum Gönder";
+        sendStaticLocBtn.textContent = "Anlık Konum Gönder";
         locationModal.classList.add("hidden");
       },
       (err) => {
         sendStaticLocBtn.disabled = false;
-        sendStaticLocBtn.textContent = "📍 Anlık Konum Gönder";
+        sendStaticLocBtn.textContent = "Anlık Konum Gönder";
         alert("Konum alınamadı: " + (err.message || "İzin verilmedi"));
       },
       { enableHighAccuracy: true, timeout: 12000 }
@@ -1636,12 +1639,12 @@ if (startLiveLocBtn) {
 
         if (liveLocBar) liveLocBar.classList.remove("hidden");
         startLiveLocBtn.disabled = false;
-        startLiveLocBtn.textContent = "🟢 Canlı Konum Başlat";
+        startLiveLocBtn.textContent = "Canlı Konum Başlat";
         locationModal.classList.add("hidden");
       },
       (err) => {
         startLiveLocBtn.disabled = false;
-        startLiveLocBtn.textContent = "🟢 Canlı Konum Başlat";
+        startLiveLocBtn.textContent = "Canlı Konum Başlat";
         alert("Canlı konum başlatılamadı: " + (err.message || "İzin verilmedi"));
       },
       { enableHighAccuracy: true, timeout: 12000 }
@@ -1706,13 +1709,13 @@ micBtn.addEventListener("click", async () => {
     recorder.start(250);
     state.recordingSeconds = 0;
     micBtn.classList.add("mic-recording");
-    micBtn.textContent = "⏹ 00:00";
+    micBtn.textContent = "00:00";
 
     state.recordingTimer = setInterval(() => {
       state.recordingSeconds += 1;
       const m = String(Math.floor(state.recordingSeconds / 60)).padStart(2, "0");
       const s = String(state.recordingSeconds % 60).padStart(2, "0");
-      micBtn.textContent = `⏹ ${m}:${s}`;
+      micBtn.textContent = `${m}:${s}`;
       if (state.recordingSeconds >= 60) {
         stopActiveRecording(false);
       }
@@ -2013,8 +2016,8 @@ quickPlaceBtn.addEventListener("click", async () => {
 
   await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
     senderId: state.user.id,
-    senderName: state.user.name,
-    text: `📍 Mekan paylaştı: ${name.trim()}${area.trim() ? " (" + area.trim() + ")" : ""}`,
+    senderName: getDisplayName(state.user),
+    text: `Mekan paylaştı: ${name.trim()}${area.trim() ? " (" + area.trim() + ")" : ""}`,
     timestamp: now
   });
 });
@@ -2066,7 +2069,7 @@ function listenPlaces() {
         <div class="place-card">
           <div class="place-header">
             <div>
-              <div class="place-title">📍 ${escapeHtml(p.name)}</div>
+              <div class="place-title">${escapeHtml(p.name)}</div>
               <div class="place-meta">${cat}${escapeHtml(p.area)} • ${escapeHtml(p.addedByName || "")}</div>
             </div>
             ${delBtn}
@@ -2101,7 +2104,7 @@ function listenAiRecommendations() {
       .map(
         (r) => `
         <div class="ai-card">
-          <div class="place-title">✨ ${escapeHtml(r.title || r.name)}</div>
+          <div class="place-title">${escapeHtml(r.title || r.name)}</div>
           <div class="place-meta">${escapeHtml(r.area || "Öneri")}</div>
           ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
         </div>
