@@ -1,4 +1,4 @@
-const CACHE_NAME = "agartha-v51";
+const CACHE_NAME = "agartha-v52";
 const ASSETS = [
   "./",
   "./index.html",
@@ -36,8 +36,10 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request, { cache: "no-cache" })
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        if (response && response.ok && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       })
       .catch(() => caches.match(event.request))

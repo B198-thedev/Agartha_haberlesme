@@ -7,12 +7,20 @@ function showUpdateBanner(msg) {
   if (updateBanner) updateBanner.classList.remove("hidden");
 }
 
+function hideUpdateBanner() {
+  if (updateBanner) updateBanner.classList.add("hidden");
+}
+
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  const hadController = Boolean(navigator.serviceWorker.controller);
+  let hadController = Boolean(navigator.serviceWorker.controller);
   let refreshing = false;
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!hadController || refreshing) return;
+    if (!hadController) {
+      hadController = true;
+      return;
+    }
+    if (refreshing) return;
     refreshing = true;
     showUpdateBanner("Uygulama güncellendi, yenileniyor...");
     setTimeout(() => location.reload(), 900);
@@ -34,6 +42,8 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
         newWorker.addEventListener("statechange", () => {
           if (newWorker.state === "installed" && hadController) {
             showUpdateBanner("Uygulama güncellendi, yenileniyor...");
+          } else if (newWorker.state === "redundant" && !refreshing) {
+            hideUpdateBanner();
           }
         });
       });
@@ -791,21 +801,28 @@ function escapeRegExp(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function highlightRawSegment(segment, query) {
+  const re = new RegExp(`(${escapeRegExp(query)})`, "gi");
+  const pieces = segment.split(re);
+  return pieces
+    .map((p, idx) => (idx % 2 === 1 ? `<mark class="search-hit">${escapeHtml(p)}</mark>` : escapeHtml(p)))
+    .join("");
+}
+
 function formatMessageTextWithSearch(str, query) {
   const raw = String(str || "");
   if (!query) return linkifyText(raw);
 
-  const re = new RegExp(`(${escapeRegExp(query)})`, "gi");
   const urlSplitRe = /(https?:\/\/[^\s]+)/g;
   return raw
     .split(urlSplitRe)
     .map((part) => {
       if (/^https?:\/\/[^\s]+$/.test(part)) {
         const safeUrl = escapeHtml(part);
-        const label = safeUrl.replace(re, '<mark class="search-hit">$1</mark>');
+        const label = highlightRawSegment(part, query);
         return `<a class="msg-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
       }
-      return escapeHtml(part).replace(re, '<mark class="search-hit">$1</mark>');
+      return highlightRawSegment(part, query);
     })
     .join("");
 }
@@ -861,6 +878,11 @@ function closeActiveChatWithAnimation() {
 }
 
 window.addEventListener("popstate", () => {
+  // 0. Aktif/gelen sesli arama ekranı açıksa arkadaki sohbeti kapatma
+  if (callModal && !callModal.classList.contains("hidden")) {
+    pushBackState("call-modal");
+    return;
+  }
   // 1. Önce açık bir modal varsa onu kapat
   if (imageModal && !imageModal.classList.contains("hidden")) {
     imageModal.classList.add("hidden");
@@ -1165,13 +1187,20 @@ function init() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (loadingView) showView(loadingView);
-        verifyAndEnter(parsed);
+        if (parsed && parsed.id) {
+          if (loadingView) showView(loadingView);
+          verifyAndEnter(parsed);
+        } else {
+          localStorage.removeItem(SESSION_KEY);
+          showView(authView);
+        }
       } catch {
         localStorage.removeItem(SESSION_KEY);
+        showView(authView);
       }
     }
   } catch (err) {
+    showView(authView);
     showError("Başlatma hatası: " + (err.message || err));
   }
 }
@@ -1209,22 +1238,30 @@ function verifyAndEnter(sessionUser) {
       enterMainApp();
     })
     .catch(() => {
+      showView(authView);
       showError("Sunucuya bağlanılamadı.");
     });
 }
 
 function waitForReactivation(sessionUser) {
+  if (state.reactivationRef) {
+    state.reactivationRef.off();
+    state.reactivationRef = null;
+  }
   const ref = state.db.ref("users/" + sessionUser.id);
+  state.reactivationRef = ref;
   ref.on("value", (snap) => {
     const data = snap.val();
     if (!data) {
       ref.off();
+      if (state.reactivationRef === ref) state.reactivationRef = null;
       localStorage.removeItem(SESSION_KEY);
       showError("Hesabınız yönetici tarafından silindi.");
       return;
     }
     if (data.active !== false) {
       ref.off();
+      if (state.reactivationRef === ref) state.reactivationRef = null;
       clearError();
       state.user = {
         id: sessionUser.id,
@@ -1275,6 +1312,11 @@ loginForm.addEventListener("submit", async (e) => {
       const userId = "admin_" + (normalizeTurkish(username) || "root");
       const existingAdminSnap = await state.db.ref("users/" + userId).once("value");
       const existingAdmin = existingAdminSnap.val();
+      if (existingAdmin && existingAdmin.active === false) {
+        showError("Erişiminiz askıya alındı. Yönetici yetkiyi açtığında otomatik giriş yapılacaktır.");
+        waitForReactivation({ id: userId, name: username, isAdmin: true });
+        return;
+      }
       const avatarData = (existingAdmin && existingAdmin.avatarData) || "";
       const nickname = (existingAdmin && existingAdmin.nickname) || "";
       const bubbleColor = (existingAdmin && existingAdmin.bubbleColor) || "";
@@ -1282,11 +1324,11 @@ loginForm.addEventListener("submit", async (e) => {
       const statusEmoji = (existingAdmin && existingAdmin.statusEmoji) || "";
       const bannerColor = (existingAdmin && existingAdmin.bannerColor) || "";
       const chatBgData = (existingAdmin && existingAdmin.chatBgData) || "";
-      await state.db.ref("users/" + userId).set({
+      await state.db.ref("users/" + userId).update({
         name: username,
         nickname,
         isAdmin: true,
-        active: existingAdmin ? existingAdmin.active !== false : true,
+        active: true,
         online: true,
         avatarData,
         bubbleColor,
@@ -1453,11 +1495,12 @@ function updateHeaderIdentity() {
   applyChatBackground(state.user.chatBgData || "");
 }
 
-function markRoomDelivered(roomId) {
+function markRoomDelivered(roomId, msgTs = 0) {
   if (!state.db || !state.user || !roomId) return;
+  const targetTs = Math.max(msgTs || 0, Date.now());
   state.db
     .ref(`chats/${roomId}/deliveredBy/${state.user.id}`)
-    .set(Date.now())
+    .set(targetTs)
     .catch(() => {});
 }
 
@@ -1525,6 +1568,10 @@ async function preloadInitialData() {
 }
 
 async function enterMainApp() {
+  if (state.reactivationRef) {
+    state.reactivationRef.off();
+    state.reactivationRef = null;
+  }
   if (loadingView) {
     if (loadingStatus) loadingStatus.textContent = "Mesajlar yükleniyor, lütfen bekleyin...";
     showView(loadingView);
@@ -1727,10 +1774,13 @@ function watchOwnAccess() {
     updateHeaderIdentity();
     if (nextAdmin !== state.user.isAdmin) {
       state.user.isAdmin = nextAdmin;
-      localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
-      currentUserLabel.textContent = nextAdmin
-        ? `${state.user.name} (Admin)`
-        : state.user.name;
+      try {
+        localStorage.setItem(
+          SESSION_KEY,
+          JSON.stringify({ id: state.user.id, name: state.user.name, isAdmin: nextAdmin })
+        );
+      } catch {}
+      updateHeaderIdentity();
       if (nextAdmin) {
         openAdminBtn.classList.remove("hidden");
         renderAdminUsers(state.usersCache);
@@ -1742,12 +1792,17 @@ function watchOwnAccess() {
   });
 }
 
-function logout() {
+async function logout() {
   if (state.db && state.user) {
-    state.db.ref("users/" + state.user.id).update({
-      online: false,
-      lastSeen: Date.now()
-    }).catch(() => {});
+    try {
+      await Promise.race([
+        state.db.ref("users/" + state.user.id).update({
+          online: false,
+          lastSeen: Date.now()
+        }),
+        new Promise((r) => setTimeout(r, 1200))
+      ]);
+    } catch {}
   }
   localStorage.removeItem(SESSION_KEY);
   location.reload();
@@ -1892,6 +1947,14 @@ function listenUsers() {
       ([id, u]) => id !== state.user.id && u.active !== false
     );
 
+    const activeDmIds = new Set(others.map(([otherId]) => getDmRoomId(state.user.id, otherId)));
+    Object.keys(state.dmListeners).forEach((dmId) => {
+      if (!activeDmIds.has(dmId)) {
+        try { state.dmListeners[dmId].off(); } catch {}
+        delete state.dmListeners[dmId];
+      }
+    });
+
     others.forEach(([otherId, u]) => {
       const dmId = getDmRoomId(state.user.id, otherId);
       if (state.dmListeners[dmId]) return;
@@ -1901,13 +1964,12 @@ function listenUsers() {
         const msg = msgSnap.val();
         if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
         if (msg.senderId === state.user.id) return;
-        markRoomDelivered(dmId);
+        markRoomDelivered(dmId, msg.timestamp);
         const isViewingThis = state.activeRoom && state.activeRoom.id === dmId;
-        if (!isViewingThis) {
+        const isVisibleViewing = isViewingThis && document.visibilityState === "visible";
+        if (!isVisibleViewing) {
           state.unreadRooms.add(dmId);
           renderContactsList();
-        }
-        if (!(isViewingThis && document.visibilityState === "visible")) {
           showIncomingNotification(
             `${msg.senderName || u.name} (Özel)`,
             msg.text ||
@@ -1931,6 +1993,7 @@ function listenUsers() {
 }
 
 function listenMainGroupPreview() {
+  let lastSeenGroupKey = null;
   state.db
     .ref("chats/main_group/messages")
     .limitToLast(1)
@@ -1956,13 +2019,15 @@ function listenMainGroupPreview() {
       mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
 
-      if ((msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
-        markRoomDelivered("main_group");
+      const isNewGroupMsg = key !== lastSeenGroupKey && !state.notifiedMsgKeys.has(key);
+      lastSeenGroupKey = key;
+
+      if (isNewGroupMsg && (msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
+        markRoomDelivered("main_group", msg.timestamp);
         const isViewingGroup = state.activeRoom && state.activeRoom.id === "main_group";
-        if (!isViewingGroup) {
+        const isVisibleViewing = isViewingGroup && document.visibilityState === "visible";
+        if (!isVisibleViewing) {
           mainGroupBadge.classList.remove("hidden");
-        }
-        if (!(isViewingGroup && document.visibilityState === "visible")) {
           showIncomingNotification("Ana Grup", `${msg.senderName}: ${previewText}`, key);
         }
       }
@@ -2102,6 +2167,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     const [lastKey, lastMsg] = lastEntry;
     if (
       isLiveUpdate &&
+      document.visibilityState === "visible" &&
       state.lastRenderedMsgKey &&
       lastKey !== state.lastRenderedMsgKey &&
       lastMsg &&
@@ -2371,6 +2437,9 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           await new Promise((r) => setTimeout(r, 180));
         }
         const targetMsg = data[msgKey];
+        if (state.liveLocRoomId === roomId && state.liveLocMsgKey === msgKey) {
+          stopLiveLocation(true);
+        }
         const fileIds = extractDriveFileIds(targetMsg);
         if (fileIds.length > 0) {
           await Promise.all(fileIds.map((fid) => deleteFromGoogleDrive(fid)));
@@ -2769,18 +2838,58 @@ async function startOutgoingVoiceCall(peerId, peerName) {
   const peerUser = state.usersCache[peerId];
   const peerAvatar = (peerUser && peerUser.avatarData) || "./icon-192.png";
   const callId = `call_${state.user.id}_${peerId}_${Date.now()}`;
+  const callRef = state.db.ref(`calls/${callId}`);
+  const incomingRef = state.db.ref(`incomingCalls/${peerId}`);
+  const dmRoomId = getDmRoomId(state.user.id, peerId);
+
+  // Çift tıklamayı önlemek için state.activeCall'ı hemen kilitle
+  const callObj = {
+    callId,
+    role: "caller",
+    peerId,
+    peerName,
+    pc: null,
+    localStream: null,
+    muted: false,
+    timerId: null,
+    timeoutId: null,
+    disconnectTimeoutId: null,
+    hasTurn: false,
+    connectedAt: 0,
+    callRef,
+    incomingRef,
+    logRef: null,
+    iceRef: callRef.child("calleeIce"),
+    pendingIce: []
+  };
+  state.activeCall = callObj;
+
+  callPeerAvatar.src = peerAvatar;
+  callPeerName.textContent = peerName;
+  callStatusText.textContent = "Mikrofon hazırlanıyor...";
+  callTimerEl.textContent = "00:00";
+  callIncomingControls.classList.add("hidden");
+  callActiveControls.classList.remove("hidden");
+  if (callMuteBtn) callMuteBtn.textContent = "Mikrofonu Kapat";
+  callModal.classList.remove("hidden");
 
   try {
     const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (state.activeCall !== callObj) {
+      localStream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    callObj.localStream = localStream;
+
     const { config: rtcConfig, hasTurn } = await getRtcConfig();
+    if (state.activeCall !== callObj) return;
+    callObj.hasTurn = hasTurn;
+
     const pc = new RTCPeerConnection(rtcConfig);
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+    callObj.pc = pc;
 
-    const callRef = state.db.ref(`calls/${callId}`);
-    const incomingRef = state.db.ref(`incomingCalls/${peerId}`);
-    const dmRoomId = getDmRoomId(state.user.id, peerId);
     const now = Date.now();
-
     const logMsgRef = await state.db.ref(`chats/${dmRoomId}/messages`).push({
       senderId: state.user.id,
       senderName: getDisplayName(state.user),
@@ -2792,39 +2901,18 @@ async function startOutgoingVoiceCall(peerId, peerName) {
       },
       timestamp: now
     });
-    const logRef = logMsgRef.child("callLog");
+    callObj.logRef = logMsgRef.child("callLog");
+    if (state.activeCall !== callObj) {
+      callObj.logRef.update({ state: "missed", duration: "" }).catch(() => {});
+      return;
+    }
 
-    state.activeCall = {
-      callId,
-      role: "caller",
-      peerId,
-      peerName,
-      pc,
-      localStream,
-      muted: false,
-      timerId: null,
-      timeoutId: null,
-      disconnectTimeoutId: null,
-      hasTurn,
-      connectedAt: 0,
-      callRef,
-      incomingRef,
-      logRef,
-      iceRef: callRef.child("calleeIce"),
-      pendingIce: []
-    };
-
-    callPeerAvatar.src = peerAvatar;
-    callPeerName.textContent = peerName;
     callStatusText.textContent = "Aranıyor...";
-    callTimerEl.textContent = "00:00";
-    callIncomingControls.classList.add("hidden");
-    callActiveControls.classList.remove("hidden");
-    if (callMuteBtn) callMuteBtn.textContent = "Mikrofonu Kapat";
-    callModal.classList.remove("hidden");
     startRingtone("outgoing");
 
     const offer = await pc.createOffer();
+    if (state.activeCall !== callObj) return;
+
     await callRef.set({
       callerId: state.user.id,
       calleeId: peerId,
@@ -2837,6 +2925,7 @@ async function startOutgoingVoiceCall(peerId, peerName) {
     // ICE dinleyicisini ve yerel tanımı callRef.set sonrasına koyarak callerIce adaylarının silinmesini önle
     wirePeerConnectionEvents(pc, callRef, "callerIce");
     await pc.setLocalDescription(offer);
+    if (state.activeCall !== callObj) return;
 
     await incomingRef.set({
       callId,
@@ -2847,30 +2936,34 @@ async function startOutgoingVoiceCall(peerId, peerName) {
     });
     incomingRef.onDisconnect().remove();
 
-    state.activeCall.timeoutId = setTimeout(() => {
-      if (state.activeCall && state.activeCall.callId === callId && !state.activeCall.timerId) {
+    callObj.timeoutId = setTimeout(() => {
+      if (state.activeCall === callObj && !callObj.timerId) {
         endCurrentCall(true, "Cevap verilmedi");
       }
     }, 45000);
 
     callRef.child("answer").on("value", async (snap) => {
       const answer = snap.val();
-      if (!answer || !state.activeCall || state.activeCall.callId !== callId) return;
+      if (!answer || state.activeCall !== callObj) return;
       if (pc.currentRemoteDescription) return;
       stopRingtone();
-      clearTimeout(state.activeCall.timeoutId);
+      clearTimeout(callObj.timeoutId);
       callStatusText.textContent = "Bağlanıyor...";
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      flushPendingIceCandidates(pc, state.activeCall.pendingIce);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        if (state.activeCall === callObj) {
+          flushPendingIceCandidates(pc, callObj.pendingIce);
+        }
+      } catch {}
     });
 
     callRef.child("calleeIce").on("child_added", async (snap) => {
       const cand = snap.val();
-      if (!cand || !state.activeCall || state.activeCall.callId !== callId) return;
+      if (!cand || state.activeCall !== callObj) return;
       if (pc.remoteDescription) {
         pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       } else {
-        state.activeCall.pendingIce.push(cand);
+        callObj.pendingIce.push(cand);
       }
     });
 
@@ -2890,7 +2983,8 @@ async function startOutgoingVoiceCall(peerId, peerName) {
 
 async function acceptIncomingCall() {
   const call = state.activeCall;
-  if (!call || call.role !== "callee") return;
+  if (!call || call.role !== "callee" || call.accepting) return;
+  call.accepting = true;
 
   stopRingtone();
   callIncomingControls.classList.add("hidden");
@@ -2900,19 +2994,26 @@ async function acceptIncomingCall() {
 
   try {
     const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (state.activeCall !== call) {
+      localStream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    call.localStream = localStream;
+
     const { config: rtcConfig, hasTurn } = await getRtcConfig();
+    if (state.activeCall !== call) return;
+    call.hasTurn = hasTurn;
+
     const pc = new RTCPeerConnection(rtcConfig);
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-
     call.pc = pc;
-    call.hasTurn = hasTurn;
-    call.localStream = localStream;
     call.iceRef = call.callRef.child("callerIce");
 
     wirePeerConnectionEvents(pc, call.callRef, "calleeIce");
     call.callRef.onDisconnect().update({ status: "ended" });
 
     const offerSnap = await call.callRef.child("offer").once("value");
+    if (state.activeCall !== call) return;
     const offer = offerSnap.val();
     if (!offer) {
       endCurrentCall(true, "Arama bulunamadı");
@@ -2920,18 +3021,21 @@ async function acceptIncomingCall() {
     }
 
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    if (state.activeCall !== call) return;
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    if (state.activeCall !== call) return;
 
     await call.callRef.update({
       status: "accepted",
       answer: { type: answer.type, sdp: answer.sdp }
     });
     await state.db.ref(`incomingCalls/${state.user.id}`).remove();
+    if (state.activeCall !== call) return;
 
     call.callRef.child("callerIce").on("child_added", (snap) => {
       const cand = snap.val();
-      if (!cand || !state.activeCall) return;
+      if (!cand || state.activeCall !== call) return;
       if (pc.remoteDescription) {
         pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       } else {
@@ -3051,6 +3155,7 @@ function endCurrentCall(notifyRemote = true, reasonText = "") {
     call.callRef.child("answer").off();
     call.callRef.child("callerIce").off();
     call.callRef.child("calleeIce").off();
+    call.callRef.onDisconnect().cancel().catch(() => {});
     if (notifyRemote) {
       call.callRef.update({ status: "ended" }).catch(() => {});
     }
@@ -3069,6 +3174,7 @@ function endCurrentCall(notifyRemote = true, reasonText = "") {
   }
 
   if (call.role === "caller" && call.incomingRef) {
+    call.incomingRef.onDisconnect().cancel().catch(() => {});
     call.incomingRef.remove().catch(() => {});
   } else if (call.role === "callee" && state.db && state.user) {
     state.db.ref(`incomingCalls/${state.user.id}`).remove().catch(() => {});
@@ -3220,6 +3326,9 @@ deleteChatBtn.addEventListener("click", async () => {
   if (!confirm(`${label} kalıcı olarak silinsin mi?`)) return;
 
   const roomId = state.activeRoom.id;
+  if (state.liveLocRoomId === roomId) {
+    stopLiveLocation(true);
+  }
   cleanupActiveRoomListeners();
   state.activeRoom = null;
 
@@ -3250,6 +3359,7 @@ sendBtn.addEventListener("touchend", (e) => {
 messageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.activeRoom) return;
+  const targetRoomId = state.activeRoom.id;
   const text = messageInput.value.trim();
   const file = state.pendingPhotoFile;
   const audioBlob = state.pendingAudioBlob;
@@ -3266,7 +3376,7 @@ messageForm.addEventListener("submit", async (e) => {
   clearReplyTarget();
   messageInput.focus({ preventScroll: true });
   clearTimeout(state.typingTimeout);
-  state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
+  state.db.ref(`chats/${targetRoomId}/typing/${state.user.id}`).remove();
 
   sendBtn.classList.remove("sending");
   void sendBtn.offsetWidth;
@@ -3281,7 +3391,7 @@ messageForm.addEventListener("submit", async (e) => {
       timestamp: Date.now()
     };
     if (replyTo) msgObj.replyTo = replyTo;
-    await state.db.ref(`chats/${state.activeRoom.id}/messages`).push(msgObj);
+    await state.db.ref(`chats/${targetRoomId}/messages`).push(msgObj);
     return;
   }
 
@@ -3326,7 +3436,7 @@ messageForm.addEventListener("submit", async (e) => {
       }
     }
 
-    await state.db.ref(`chats/${state.activeRoom.id}/messages`).push(payload);
+    await state.db.ref(`chats/${targetRoomId}/messages`).push(payload);
   } catch (err) {
     alert("Medya gönderilemedi: " + (err.message || "Hata"));
   } finally {
@@ -3360,16 +3470,17 @@ cancelPhotoBtn.addEventListener("click", clearPendingPhoto);
 cancelAudioBtn.addEventListener("click", clearPendingAudio);
 
 // Konum & Canlı Konum Paylaşımı
-function stopLiveLocation() {
+function stopLiveLocation(skipRemoteUpdate = false) {
   if (state.liveLocWatchId !== null && navigator.geolocation) {
     navigator.geolocation.clearWatch(state.liveLocWatchId);
     state.liveLocWatchId = null;
   }
   if (state.liveLocRoomId && state.liveLocMsgKey && state.db) {
-    state.db
-      .ref(`chats/${state.liveLocRoomId}/messages/${state.liveLocMsgKey}/location`)
-      .update({ active: false, updatedAt: Date.now() })
-      .catch(() => {});
+    const locRef = state.db.ref(`chats/${state.liveLocRoomId}/messages/${state.liveLocMsgKey}/location`);
+    locRef.onDisconnect().cancel().catch(() => {});
+    if (!skipRemoteUpdate) {
+      locRef.update({ active: false, updatedAt: Date.now() }).catch(() => {});
+    }
   }
   state.liveLocRoomId = null;
   state.liveLocMsgKey = null;
@@ -3391,7 +3502,7 @@ if (closeLocBtn && locationModal) {
 }
 
 if (stopLiveLocBtn) {
-  stopLiveLocBtn.addEventListener("click", stopLiveLocation);
+  stopLiveLocBtn.addEventListener("click", () => stopLiveLocation(false));
 }
 
 if (sendStaticLocBtn) {
@@ -3401,27 +3512,33 @@ if (sendStaticLocBtn) {
       alert("Bu tarayıcı konum paylaşımını desteklemiyor.");
       return;
     }
+    const targetRoomId = state.activeRoom.id;
     sendStaticLocBtn.disabled = true;
     sendStaticLocBtn.textContent = "Konum alınıyor...";
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const now = Date.now();
-        await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
-          senderId: state.user.id,
-          senderName: getDisplayName(state.user),
-          text: "",
-          location: {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            live: false,
-            active: false,
-            updatedAt: now
-          },
-          timestamp: now
-        });
-        sendStaticLocBtn.disabled = false;
-        sendStaticLocBtn.textContent = "Anlık Konum Gönder";
-        locationModal.classList.add("hidden");
+        try {
+          const now = Date.now();
+          await state.db.ref(`chats/${targetRoomId}/messages`).push({
+            senderId: state.user.id,
+            senderName: getDisplayName(state.user),
+            text: "",
+            location: {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              live: false,
+              active: false,
+              updatedAt: now
+            },
+            timestamp: now
+          });
+          locationModal.classList.add("hidden");
+        } catch (err) {
+          alert("Konum gönderilemedi: " + (err.message || "Hata"));
+        } finally {
+          sendStaticLocBtn.disabled = false;
+          sendStaticLocBtn.textContent = "Anlık Konum Gönder";
+        }
       },
       (err) => {
         sendStaticLocBtn.disabled = false;
@@ -3440,55 +3557,60 @@ if (startLiveLocBtn) {
       alert("Bu tarayıcı konum paylaşımını desteklemiyor.");
       return;
     }
-    stopLiveLocation();
+    stopLiveLocation(false);
     startLiveLocBtn.disabled = true;
     startLiveLocBtn.textContent = "Başlatılıyor...";
 
     const roomId = state.activeRoom.id;
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const now = Date.now();
-        const msgRef = await state.db.ref(`chats/${roomId}/messages`).push({
-          senderId: state.user.id,
-          senderName: getDisplayName(state.user),
-          text: "",
-          location: {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            live: true,
-            active: true,
-            updatedAt: now
-          },
-          timestamp: now
-        });
-
-        state.liveLocRoomId = roomId;
-        state.liveLocMsgKey = msgRef.key;
-        state.lastLocUpdateAt = now;
-
-        const locNodeRef = state.db.ref(`chats/${roomId}/messages/${msgRef.key}/location`);
-        locNodeRef.onDisconnect().update({ active: false });
-
-        state.liveLocWatchId = navigator.geolocation.watchPosition(
-          (nextPos) => {
-            const ts = Date.now();
-            if (ts - state.lastLocUpdateAt < 3000) return;
-            state.lastLocUpdateAt = ts;
-            locNodeRef.update({
-              lat: nextPos.coords.latitude,
-              lng: nextPos.coords.longitude,
+        try {
+          const now = Date.now();
+          const msgRef = await state.db.ref(`chats/${roomId}/messages`).push({
+            senderId: state.user.id,
+            senderName: getDisplayName(state.user),
+            text: "",
+            location: {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              live: true,
               active: true,
-              updatedAt: ts
-            });
-          },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
-        );
+              updatedAt: now
+            },
+            timestamp: now
+          });
 
-        if (liveLocBar) liveLocBar.classList.remove("hidden");
-        startLiveLocBtn.disabled = false;
-        startLiveLocBtn.textContent = "Canlı Konum Başlat";
-        locationModal.classList.add("hidden");
+          state.liveLocRoomId = roomId;
+          state.liveLocMsgKey = msgRef.key;
+          state.lastLocUpdateAt = now;
+
+          const locNodeRef = state.db.ref(`chats/${roomId}/messages/${msgRef.key}/location`);
+          locNodeRef.onDisconnect().update({ active: false });
+
+          state.liveLocWatchId = navigator.geolocation.watchPosition(
+            (nextPos) => {
+              const ts = Date.now();
+              if (ts - state.lastLocUpdateAt < 3000) return;
+              state.lastLocUpdateAt = ts;
+              locNodeRef.update({
+                lat: nextPos.coords.latitude,
+                lng: nextPos.coords.longitude,
+                active: true,
+                updatedAt: ts
+              });
+            },
+            () => {},
+            { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+          );
+
+          if (liveLocBar) liveLocBar.classList.remove("hidden");
+          locationModal.classList.add("hidden");
+        } catch (err) {
+          alert("Canlı konum başlatılamadı: " + (err.message || "Hata"));
+        } finally {
+          startLiveLocBtn.disabled = false;
+          startLiveLocBtn.textContent = "Canlı Konum Başlat";
+        }
       },
       (err) => {
         startLiveLocBtn.disabled = false;

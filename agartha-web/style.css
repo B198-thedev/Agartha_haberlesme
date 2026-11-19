@@ -59,7 +59,16 @@ html, body {
 }
 
 /* AUTH & LOADING */
-#auth-view,
+#auth-view {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px;
+}
+
+#auth-view .auth-card {
+  margin: auto 0;
+}
+
 #loading-view {
   justify-content: center;
   padding: 24px;
@@ -724,6 +733,10 @@ input:-webkit-autofill:focus {
   z-index: 50;
 }
 
+#call-modal {
+  z-index: 80;
+}
+
 .modal-card {
   width: 100%;
   max-width: 480px;
@@ -1082,8 +1095,10 @@ input:-webkit-autofill:focus {
 }
 
 #chat-view > .top-bar,
+#chat-view > .chat-search-bar,
 #chat-view > .messages-container,
 #chat-view > .typing-indicator,
+#chat-view > .reply-preview-bar,
 #chat-view > .photo-preview-bar,
 #chat-view > .live-loc-bar,
 #chat-view > .message-input-bar {
@@ -1914,7 +1929,7 @@ html.theme-rainbow #app {
   box-shadow: 0 0 28px rgba(236, 72, 153, 0.35), inset 0 0 18px rgba(56, 189, 248, 0.16);
 }
 
-html.theme-rainbow .msg-bubble.me {
+html.theme-rainbow .msg-bubble.me:not([style*="background"]) {
   background: linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4);
   background-size: 200% 200%;
   animation: gradientShift 3s ease infinite;
