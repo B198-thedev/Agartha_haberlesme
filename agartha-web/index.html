@@ -221,7 +221,7 @@
         <button id="loc-btn" type="button" class="icon-btn media-btn" title="Konum Gönder" aria-label="Konum Gönder">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.6-6-10a6 6 0 1 1 12 0c0 4.4-6 10-6 10Z"/><circle cx="12" cy="11" r="2.2"/></svg>
         </button>
-        <input id="message-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000" />
+        <textarea id="message-input" rows="1" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000"></textarea>
         <button type="submit" class="send-btn">Gönder</button>
       </form>
     </section>
@@ -253,11 +253,20 @@
           <button id="close-settings-btn" class="icon-btn">Kapat</button>
         </div>
         <div class="modal-body">
+          <div class="section-label">Hesap &amp; Görünüm</div>
           <div class="settings-list">
             <button id="open-profile-btn" type="button" class="settings-item">
               <span>Profil</span>
-              <span class="user-sub">Fotoğraf, takma ad, renkler</span>
+              <span class="user-sub">Fotoğraf, takma ad, durum</span>
             </button>
+            <button id="open-customize-btn" type="button" class="settings-item">
+              <span>Özelleştirme</span>
+              <span class="user-sub">Tema, baloncuk rengi, arka plan</span>
+            </button>
+          </div>
+
+          <div class="section-label">Uygulama &amp; Yönetim</div>
+          <div class="settings-list">
             <button id="notify-btn" type="button" class="settings-item">
               <span>Bildirimler</span>
               <span id="notify-status-label" class="user-sub">Kapalı</span>
@@ -271,9 +280,21 @@
               <span class="user-sub">Oturumu kapat</span>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
 
-          <div class="section-label">Uygulama Renk Teması</div>
+    <!-- ÖZELLEŞTİRME MODALI -->
+    <div id="customize-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Özelleştirme</h2>
+          <button id="close-customize-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
           <div class="card">
+            <h3>Uygulama Renk Teması</h3>
+            <p class="muted">Tüm uygulamanın görünümünü değiştir.</p>
             <div id="theme-grid" class="theme-grid"></div>
             <div class="color-picker-row" style="margin-top: 12px;">
               <input id="custom-theme-input" type="color" value="#38bdf8" title="Vurgu Rengi" />
@@ -282,15 +303,50 @@
             </div>
             <button id="random-theme-btn" type="button" class="btn-primary" style="width:100%; margin-top:10px;">Rastgele Çılgın Renk Üret</button>
           </div>
+
+          <div class="card">
+            <h3>Sohbet Baloncuğu Rengi (Custom)</h3>
+            <p class="muted">Renk paletinden seç veya özel hex kodu yaz; tüm sohbetlerde bu renkle görünürsün.</p>
+            <div class="color-picker-row">
+              <input id="profile-color-input" type="color" value="#1d4ed8" />
+              <input id="profile-color-hex" type="text" maxlength="7" placeholder="#1d4ed8" style="width:104px; text-transform:uppercase;" />
+              <div id="profile-color-preview" class="msg-bubble me" style="margin:0; flex:1; text-align:center;">Örnek mesaj</div>
+            </div>
+            <div class="color-presets" id="color-presets">
+              <button type="button" class="color-swatch" data-color="#1d4ed8" style="background:#1d4ed8" title="Mavi"></button>
+              <button type="button" class="color-swatch" data-color="#7c3aed" style="background:#7c3aed" title="Mor"></button>
+              <button type="button" class="color-swatch" data-color="#db2777" style="background:#db2777" title="Pembe"></button>
+              <button type="button" class="color-swatch" data-color="#dc2626" style="background:#dc2626" title="Kırmızı"></button>
+              <button type="button" class="color-swatch" data-color="#ea580c" style="background:#ea580c" title="Turuncu"></button>
+              <button type="button" class="color-swatch" data-color="#16a34a" style="background:#16a34a" title="Yeşil"></button>
+              <button type="button" class="color-swatch" data-color="#0d9488" style="background:#0d9488" title="Turkuaz"></button>
+              <button type="button" class="color-swatch" data-color="#eab308" style="background:#eab308" title="Sarı"></button>
+            </div>
+            <div class="top-bar-actions" style="margin-top: 10px;">
+              <button id="save-color-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Rengi Kaydet</button>
+              <button id="reset-color-btn" type="button" class="icon-btn">Varsayılan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Sohbet Arka Planı (%45 Bulanık)</h3>
+            <p class="muted">Seçtiğin görsel sadece senin sohbet ekranlarında bulanık arka plan olarak görünür.</p>
+            <div id="profile-bg-preview" class="bg-preview-box hidden"></div>
+            <input id="profile-bg-input" type="file" accept="image/*" class="hidden" />
+            <div class="top-bar-actions">
+              <button id="profile-bg-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Arka Plan Seç</button>
+              <button id="reset-bg-btn" type="button" class="icon-btn danger">Kaldır</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- PROFİL ÖZELLEŞTİRME MODALI -->
+    <!-- PROFİL MODALI -->
     <div id="profile-modal" class="modal hidden">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Profil Özelleştirme</h2>
+          <h2>Profil</h2>
           <button id="close-profile-btn" class="icon-btn">Kapat</button>
         </div>
         <div class="modal-body">
@@ -328,41 +384,6 @@
                 <input id="profile-banner-input" type="color" value="#38bdf8" />
                 <button id="save-profile-details-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Profili Kaydet</button>
               </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Sohbet Baloncuğu Rengi (Custom)</h3>
-            <p class="muted">Renk paletinden seç veya özel hex kodu yaz; tüm sohbetlerde bu renkle görünürsün.</p>
-            <div class="color-picker-row">
-              <input id="profile-color-input" type="color" value="#1d4ed8" />
-              <input id="profile-color-hex" type="text" maxlength="7" placeholder="#1d4ed8" style="width:104px; text-transform:uppercase;" />
-              <div id="profile-color-preview" class="msg-bubble me" style="margin:0; flex:1; text-align:center;">Örnek mesaj</div>
-            </div>
-            <div class="color-presets" id="color-presets">
-              <button type="button" class="color-swatch" data-color="#1d4ed8" style="background:#1d4ed8" title="Mavi"></button>
-              <button type="button" class="color-swatch" data-color="#7c3aed" style="background:#7c3aed" title="Mor"></button>
-              <button type="button" class="color-swatch" data-color="#db2777" style="background:#db2777" title="Pembe"></button>
-              <button type="button" class="color-swatch" data-color="#dc2626" style="background:#dc2626" title="Kırmızı"></button>
-              <button type="button" class="color-swatch" data-color="#ea580c" style="background:#ea580c" title="Turuncu"></button>
-              <button type="button" class="color-swatch" data-color="#16a34a" style="background:#16a34a" title="Yeşil"></button>
-              <button type="button" class="color-swatch" data-color="#0d9488" style="background:#0d9488" title="Turkuaz"></button>
-              <button type="button" class="color-swatch" data-color="#eab308" style="background:#eab308" title="Sarı"></button>
-            </div>
-            <div class="top-bar-actions" style="margin-top: 10px;">
-              <button id="save-color-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Rengi Kaydet</button>
-              <button id="reset-color-btn" type="button" class="icon-btn">Varsayılan</button>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Sohbet Arka Planı (%45 Bulanık)</h3>
-            <p class="muted">Seçtiğin görsel sadece senin sohbet ekranlarında bulanık arka plan olarak görünür.</p>
-            <div id="profile-bg-preview" class="bg-preview-box hidden"></div>
-            <input id="profile-bg-input" type="file" accept="image/*" class="hidden" />
-            <div class="top-bar-actions">
-              <button id="profile-bg-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Arka Plan Seç</button>
-              <button id="reset-bg-btn" type="button" class="icon-btn danger">Kaldır</button>
             </div>
           </div>
         </div>

@@ -597,6 +597,7 @@ input:-webkit-autofill:focus {
 
 .message-input-bar {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   background: var(--surface);
@@ -604,20 +605,47 @@ input:-webkit-autofill:focus {
   flex-shrink: 0;
 }
 
-.message-input-bar input {
+.message-input-bar input,
+.message-input-bar textarea {
   flex: 1;
+  min-width: 0;
   border-radius: 20px;
-  padding: 10px 16px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+  outline: none;
+  resize: none;
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.message-input-bar textarea:focus {
+  border-color: var(--accent);
+}
+
+.message-input-bar .media-btn {
+  height: 40px;
+}
+
+.msg-text {
+  white-space: pre-wrap;
 }
 
 .send-btn {
   border: none;
   border-radius: 20px;
+  height: 40px;
   padding: 0 18px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: var(--on-accent);
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* MODAL */

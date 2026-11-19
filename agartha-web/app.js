@@ -338,6 +338,9 @@ const openSettingsBtn = document.getElementById("open-settings-btn");
 const settingsModal = document.getElementById("settings-modal");
 const closeSettingsBtn = document.getElementById("close-settings-btn");
 const openProfileBtn = document.getElementById("open-profile-btn");
+const openCustomizeBtn = document.getElementById("open-customize-btn");
+const customizeModal = document.getElementById("customize-modal");
+const closeCustomizeBtn = document.getElementById("close-customize-btn");
 const headerAvatar = document.getElementById("header-avatar");
 const currentUserLabel = document.getElementById("current-user-label");
 const notifyBtn = document.getElementById("notify-btn");
@@ -662,6 +665,10 @@ window.addEventListener("popstate", () => {
   }
   if (profileModal && !profileModal.classList.contains("hidden")) {
     profileModal.classList.add("hidden");
+    return;
+  }
+  if (customizeModal && !customizeModal.classList.contains("hidden")) {
+    customizeModal.classList.add("hidden");
     return;
   }
   if (adminModal && !adminModal.classList.contains("hidden")) {
@@ -1713,7 +1720,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             </div>
           `;
         }
-        const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
+        const textHtml = m.text ? `<div class="msg-text">${linkifyText(m.text)}</div>` : "";
         const senderRingStyle =
           senderUser && isValidHexColor(senderUser.bannerColor)
             ? ` style="border-color:${senderUser.bannerColor};border-width:2px;cursor:pointer;"`
@@ -1815,6 +1822,22 @@ function cleanupActiveRoomListeners() {
   clearPendingPhoto();
   stopActiveRecording(true);
   clearPendingAudio();
+  messageInput.value = "";
+  resizeMessageInput();
+  updateMicVisibility();
+}
+
+function resizeMessageInput() {
+  if (!messageInput) return;
+  messageInput.style.height = "auto";
+  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+}
+
+function updateMicVisibility() {
+  if (!micBtn || !messageInput) return;
+  const isRecording = state.mediaRecorder && state.mediaRecorder.state === "recording";
+  const hasText = messageInput.value.trim().length > 0;
+  micBtn.classList.toggle("hidden", hasText && !isRecording);
 }
 
 function clearPendingAudio() {
@@ -1859,6 +1882,8 @@ function clearPendingPhoto() {
 }
 
 messageInput.addEventListener("input", () => {
+  resizeMessageInput();
+  updateMicVisibility();
   if (!state.activeRoom || !state.db || !state.user) return;
   const myTypingRef = state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`);
   if (messageInput.value.trim()) {
@@ -1870,6 +1895,18 @@ messageInput.addEventListener("input", () => {
     }, 2500);
   } else {
     myTypingRef.remove();
+  }
+});
+
+messageInput.addEventListener("keydown", (e) => {
+  const isDesktop = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
+  if (e.key === "Enter" && !e.shiftKey && isDesktop) {
+    e.preventDefault();
+    if (typeof messageForm.requestSubmit === "function") {
+      messageForm.requestSubmit();
+    } else {
+      messageForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }
   }
 });
 
@@ -1897,6 +1934,21 @@ deleteChatBtn.addEventListener("click", async () => {
   showView(mainView);
 });
 
+sendBtn.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+});
+
+sendBtn.addEventListener("touchend", (e) => {
+  if (sendBtn.disabled) return;
+  e.preventDefault();
+  messageInput.focus({ preventScroll: true });
+  if (typeof messageForm.requestSubmit === "function") {
+    messageForm.requestSubmit();
+  } else {
+    messageForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  }
+});
+
 messageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.activeRoom) return;
@@ -1904,9 +1956,15 @@ messageForm.addEventListener("submit", async (e) => {
   const file = state.pendingPhotoFile;
   const audioBlob = state.pendingAudioBlob;
   const audioMime = state.pendingAudioMime;
-  if (!text && !file && !audioBlob) return;
+  if (!text && !file && !audioBlob) {
+    messageInput.focus({ preventScroll: true });
+    return;
+  }
 
   messageInput.value = "";
+  resizeMessageInput();
+  updateMicVisibility();
+  messageInput.focus({ preventScroll: true });
   clearTimeout(state.typingTimeout);
   state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
 
@@ -2267,7 +2325,11 @@ function openProfileModal() {
       : "#38bdf8";
   }
   updateProfilePreviewCard();
+  profileModal.classList.remove("hidden");
+  pushBackState("profile-modal");
+}
 
+function openCustomizeModal() {
   if (profileColorInput && profileColorPreview) {
     const currentHex = isValidHexColor(state.user.bubbleColor)
       ? state.user.bubbleColor
@@ -2285,8 +2347,10 @@ function openProfileModal() {
       profileBgPreview.classList.add("hidden");
     }
   }
-  profileModal.classList.remove("hidden");
-  pushBackState("profile-modal");
+  if (customizeModal) {
+    customizeModal.classList.remove("hidden");
+    pushBackState("customize-modal");
+  }
 }
 
 function openUserProfileCard(uid) {
@@ -2421,6 +2485,27 @@ if (openProfileBtn) {
   });
 }
 
+if (openCustomizeBtn) {
+  openCustomizeBtn.addEventListener("click", () => {
+    if (settingsModal) settingsModal.classList.add("hidden");
+    openCustomizeModal();
+  });
+}
+
+if (closeCustomizeBtn && customizeModal) {
+  closeCustomizeBtn.addEventListener("click", () => {
+    customizeModal.classList.add("hidden");
+  });
+}
+
+if (customizeModal) {
+  customizeModal.addEventListener("click", (e) => {
+    if (e.target === customizeModal) {
+      customizeModal.classList.add("hidden");
+    }
+  });
+}
+
 if (profileColorInput) {
   profileColorInput.addEventListener("input", () => {
     if (profileColorHex) profileColorHex.value = profileColorInput.value;
@@ -2459,7 +2544,7 @@ if (saveColorBtn) {
     if (!isValidHexColor(color)) return;
     await state.db.ref("users/" + state.user.id + "/bubbleColor").set(color);
     state.user.bubbleColor = color;
-    profileModal.classList.add("hidden");
+    if (customizeModal) customizeModal.classList.add("hidden");
   });
 }
 
@@ -2471,7 +2556,7 @@ if (resetColorBtn) {
     if (profileColorInput) profileColorInput.value = "#1d4ed8";
     if (profileColorHex) profileColorHex.value = "#1d4ed8";
     updateColorPreview("");
-    profileModal.classList.add("hidden");
+    if (customizeModal) customizeModal.classList.add("hidden");
   });
 }
 
