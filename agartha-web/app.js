@@ -546,6 +546,21 @@ const profileBgPreview = document.getElementById("profile-bg-preview");
 const profileBgInput = document.getElementById("profile-bg-input");
 const profileBgBtn = document.getElementById("profile-bg-btn");
 const resetBgBtn = document.getElementById("reset-bg-btn");
+const bgTargetRoomSelect = document.getElementById("bg-target-room");
+const bgPatternSelect = document.getElementById("bg-pattern-select");
+const bgBlurRange = document.getElementById("bg-blur-range");
+const bgBlurValue = document.getElementById("bg-blur-value");
+const bgBrightRange = document.getElementById("bg-bright-range");
+const bgBrightValue = document.getElementById("bg-bright-value");
+const prefBubbleStyleSelect = document.getElementById("pref-bubble-style");
+const prefFontSizeSelect = document.getElementById("pref-font-size");
+const prefFontFamilySelect = document.getElementById("pref-font-family");
+const prefDensitySelect = document.getElementById("pref-density");
+const prefAnimModeSelect = document.getElementById("pref-anim-mode");
+const prefHapticToggle = document.getElementById("pref-haptic-toggle");
+const prefReactionPresetSelect = document.getElementById("pref-reaction-preset");
+const prefReactionCustomInput = document.getElementById("pref-reaction-custom");
+const hideReadToggle = document.getElementById("hide-read-toggle");
 
 const userProfileModal = document.getElementById("user-profile-modal");
 const closeUserProfileBtn = document.getElementById("close-user-profile-btn");
@@ -1788,6 +1803,7 @@ async function deleteFromGoogleDrive(fileId) {
 // Başlatma
 async function init() {
   loadSavedTheme();
+  applyUiPrefs();
   if (soundStyleSelect) {
     soundStyleSelect.value = state.soundStyle;
     soundStyleSelect.addEventListener("change", () => {
@@ -2161,15 +2177,159 @@ registerForm.addEventListener("submit", async (e) => {
   }
 });
 
-function applyChatBackground(bgData) {
+const UI_PREFS_KEY = "agartha_ui_prefs";
+const DEFAULT_UI_PREFS = {
+  bubbleStyle: "rounded",
+  fontSize: "normal",
+  fontFamily: "modern",
+  density: "normal",
+  animMode: "full",
+  haptic: true,
+  bgBlur: 9,
+  bgBrightness: 65,
+  bgPattern: "none",
+  reactionPreset: "classic",
+  reactionCustom: "❤️ 😂 👍 🔥 😮",
+  hideReadReceipts: false
+};
+const REACTION_PRESETS = {
+  classic: ["❤️", "😂", "👍", "🔥", "😮"],
+  fun: ["🤣", "💀", "😭", "🤡", "🎉"],
+  cool: ["🔥", "⚡", "🚀", "👑", "💯"]
+};
+
+function loadUiPrefs() {
+  try {
+    const raw = localStorage.getItem(UI_PREFS_KEY);
+    return raw ? { ...DEFAULT_UI_PREFS, ...JSON.parse(raw) } : { ...DEFAULT_UI_PREFS };
+  } catch {
+    return { ...DEFAULT_UI_PREFS };
+  }
+}
+
+let uiPrefs = loadUiPrefs();
+
+function saveUiPrefs(nextPartial = {}) {
+  uiPrefs = { ...uiPrefs, ...nextPartial };
+  try {
+    localStorage.setItem(UI_PREFS_KEY, JSON.stringify(uiPrefs));
+  } catch {}
+  applyUiPrefs();
+  if (state.db && state.user) {
+    state.db.ref(`users/${state.user.id}/uiPrefs`).set(uiPrefs).catch(() => {});
+  }
+}
+
+function applyUiPrefs() {
+  const root = document.documentElement;
+  root.classList.remove("bubble-rounded", "bubble-pill", "bubble-sharp", "bubble-glass");
+  root.classList.add("bubble-" + (uiPrefs.bubbleStyle || "rounded"));
+
+  root.classList.remove("font-small", "font-normal", "font-large");
+  root.classList.add("font-" + (uiPrefs.fontSize || "normal"));
+
+  root.classList.remove("ff-modern", "ff-rounded", "ff-serif", "ff-mono");
+  root.classList.add("ff-" + (uiPrefs.fontFamily || "modern"));
+
+  root.classList.toggle("density-compact", uiPrefs.density === "compact");
+
+  root.classList.remove("anim-fast", "anim-off");
+  if (uiPrefs.animMode === "fast") root.classList.add("anim-fast");
+  else if (uiPrefs.animMode === "off") root.classList.add("anim-off");
+
+  root.style.setProperty("--chat-bg-blur", `${Number(uiPrefs.bgBlur ?? 9)}px`);
+  root.style.setProperty("--chat-bg-bright", `${Number(uiPrefs.bgBrightness ?? 65) / 100}`);
+
+  if (hideReadToggle) hideReadToggle.checked = Boolean(uiPrefs.hideReadReceipts);
+
+  const activeRoomId = state.activeRoom ? state.activeRoom.id : "global";
+  applyActiveRoomBackground(activeRoomId);
+}
+
+function triggerHaptic(pattern = 15) {
+  if (!uiPrefs.haptic) return;
+  if (navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch {}
+  }
+}
+
+function getActiveReactionEmojis() {
+  if (uiPrefs.reactionPreset === "custom") {
+    const custom = String(uiPrefs.reactionCustom || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 6);
+    if (custom.length > 0) return custom;
+  }
+  return REACTION_PRESETS[uiPrefs.reactionPreset] || REACTION_PRESETS.classic;
+}
+
+function emojiToKey(emoji) {
+  return "u_" + Array.from(String(emoji || "")).map((c) => c.codePointAt(0).toString(16)).join("-");
+}
+
+function keyToEmoji(key) {
+  const s = String(key || "");
+  if (!s.startsWith("u_")) return s;
+  try {
+    return s
+      .slice(2)
+      .split("-")
+      .map((hex) => String.fromCodePoint(parseInt(hex, 16)))
+      .join("");
+  } catch {
+    return s;
+  }
+}
+
+function getRoomBgStore() {
+  if (!state.user) return {};
+  try {
+    const raw = localStorage.getItem("agartha_room_bgs_" + state.user.id);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setRoomBgStore(store) {
+  if (!state.user) return;
+  try {
+    localStorage.setItem("agartha_room_bgs_" + state.user.id, JSON.stringify(store));
+  } catch {}
+}
+
+function applyChatBackground(bgData, pattern = uiPrefs.bgPattern || "none") {
   if (!chatBgLayer) return;
   const safeBg = sanitizeChatBgData(bgData);
+  chatBgLayer.classList.remove(
+    "bg-pattern-aurora",
+    "bg-pattern-stars",
+    "bg-pattern-grid",
+    "bg-pattern-waves"
+  );
   if (safeBg) {
     chatBgLayer.style.backgroundImage = `url("${safeBg}")`;
+    chatBgLayer.classList.remove("hidden");
+  } else if (pattern && pattern !== "none") {
+    chatBgLayer.style.backgroundImage = "";
+    chatBgLayer.classList.add("bg-pattern-" + pattern);
     chatBgLayer.classList.remove("hidden");
   } else {
     chatBgLayer.style.backgroundImage = "";
     chatBgLayer.classList.add("hidden");
+  }
+}
+
+function applyActiveRoomBackground(roomId = "global") {
+  if (!state.user) return;
+  const store = getRoomBgStore();
+  const roomCfg = roomId && roomId !== "global" ? store[roomId] : null;
+  if (roomCfg && (roomCfg.imageData || (roomCfg.pattern && roomCfg.pattern !== "none"))) {
+    applyChatBackground(roomCfg.imageData || "", roomCfg.pattern || "none");
+  } else {
+    applyChatBackground(state.user.chatBgData || "", uiPrefs.bgPattern || "none");
   }
 }
 
@@ -2183,7 +2343,7 @@ function updateHeaderIdentity() {
   headerAvatar.style.border = isValidHexColor(state.user.bannerColor)
     ? `2px solid ${state.user.bannerColor}`
     : "";
-  applyChatBackground(state.user.chatBgData || "");
+  applyActiveRoomBackground(state.activeRoom ? state.activeRoom.id : "global");
 }
 
 function markRoomDelivered(roomId, msgTs = 0) {
@@ -2451,9 +2611,7 @@ async function showIncomingNotification(title, body, uniqueKey) {
   playMessageSound("receive");
   syncAppBadge();
 
-  if (navigator.vibrate) {
-    navigator.vibrate([120, 60, 120]);
-  }
+  triggerHaptic([120, 60, 120]);
 
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
@@ -2511,6 +2669,11 @@ function watchOwnAccess() {
     state.user.statusEmoji = data.statusEmoji || "";
     state.user.bannerColor = data.bannerColor || "";
     state.user.chatBgData = data.chatBgData || "";
+    if (data.uiPrefs && typeof data.uiPrefs === "object") {
+      uiPrefs = { ...DEFAULT_UI_PREFS, ...data.uiPrefs };
+      try { localStorage.setItem(UI_PREFS_KEY, JSON.stringify(uiPrefs)); } catch {}
+      applyUiPrefs();
+    }
     updateHeaderIdentity();
     if (nextAdmin !== state.user.isAdmin) {
       state.user.isAdmin = nextAdmin;
@@ -2856,6 +3019,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
   messagesContainer.innerHTML = "";
   typingIndicator.classList.add("hidden");
+  applyActiveRoomBackground(roomId);
   showView(chatView);
   pushBackState("chat");
 
@@ -2902,6 +3066,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   }
 
   function markRoomAsRead(latestTs) {
+    if (uiPrefs.hideReadReceipts) return;
     if (!state.activeRoom || state.activeRoom.id !== roomId) return;
     if (document.visibilityState !== "visible") return;
     const targetTs = Math.max(latestTs || 0, Date.now());
@@ -2990,6 +3155,23 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             </div>`
           : "";
         const replyBtnHtml = `<button class="msg-reply-btn" data-reply-msg="${escapeHtml(msgKey)}" title="Yanıtla">Yanıtla</button>`;
+        const reactBtnHtml = `<button class="msg-react-btn" data-react-open="${escapeHtml(msgKey)}" title="Tepki ekle" aria-label="Tepki ekle"><svg class="ui-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>`;
+        let reactionsHtml = "";
+        if (m.reactions && typeof m.reactions === "object") {
+          const pills = Object.entries(m.reactions)
+            .map(([eKey, usersMap]) => {
+              const uids = usersMap && typeof usersMap === "object" ? Object.keys(usersMap).filter((u) => usersMap[u]) : [];
+              if (uids.length === 0) return "";
+              const emojiChar = keyToEmoji(eKey);
+              const isMine = uids.includes(state.user.id);
+              return `<button type="button" class="reaction-pill${isMine ? " mine" : ""}" data-react-toggle="${escapeHtml(msgKey)}" data-emoji-key="${escapeHtml(eKey)}">${escapeHtml(emojiChar)} <span>${uids.length}</span></button>`;
+            })
+            .filter(Boolean)
+            .join("");
+          if (pills) {
+            reactionsHtml = `<div class="msg-reactions">${pills}</div>`;
+          }
+        }
         const delHtml = canDelete
           ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
           : "";
@@ -3102,11 +3284,13 @@ function openChatRoom(roomId, title, isGroup, otherId) {
               ${callLogHtml}
               ${textHtml}
               <div class="msg-footer">
+                ${reactBtnHtml}
                 ${replyBtnHtml}
                 ${delHtml}
                 <span class="msg-time">${formatTime(m.timestamp)}</span>
                 ${tickHtml}
               </div>
+              ${reactionsHtml}
             </div>
           </div>
         `;
@@ -3133,6 +3317,54 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
     messagesContainer.querySelectorAll("[data-view-user]").forEach((el) => {
       el.addEventListener("click", () => openUserProfileCard(el.dataset.viewUser));
+    });
+
+    const toggleMessageReaction = (msgKey, emojiKey) => {
+      if (!state.db || !state.user || !msgKey || !emojiKey) return;
+      const rRef = state.db.ref(`chats/${roomId}/messages/${msgKey}/reactions/${emojiKey}/${state.user.id}`);
+      const curUsers = data[msgKey] && data[msgKey].reactions && data[msgKey].reactions[emojiKey];
+      const alreadyMine = curUsers && Boolean(curUsers[state.user.id]);
+      triggerHaptic(12);
+      if (alreadyMine) {
+        rRef.remove().catch(() => {});
+      } else {
+        rRef.set(true).catch(() => {});
+      }
+    };
+
+    messagesContainer.querySelectorAll("[data-react-toggle]").forEach((pill) => {
+      pill.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleMessageReaction(pill.dataset.reactToggle, pill.dataset.emojiKey);
+      });
+    });
+
+    messagesContainer.querySelectorAll("[data-react-open]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const msgKey = btn.dataset.reactOpen;
+        const bubble = btn.closest(".msg-bubble");
+        if (!bubble || !msgKey) return;
+        const existingPop = bubble.querySelector(".reaction-picker-pop");
+        messagesContainer.querySelectorAll(".reaction-picker-pop").forEach((p) => p.remove());
+        if (existingPop) return;
+
+        const pop = document.createElement("div");
+        pop.className = "reaction-picker-pop";
+        const emojis = getActiveReactionEmojis();
+        pop.innerHTML = emojis
+          .map((em) => `<button type="button" class="reaction-pick-emoji" data-pick-emoji="${escapeHtml(em)}">${escapeHtml(em)}</button>`)
+          .join("");
+        pop.querySelectorAll("[data-pick-emoji]").forEach((pickBtn) => {
+          pickBtn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            const em = pickBtn.dataset.pickEmoji;
+            pop.remove();
+            toggleMessageReaction(msgKey, emojiToKey(em));
+          });
+        });
+        bubble.appendChild(pop);
+      });
     });
 
     messagesContainer.querySelectorAll("[data-reply-msg]").forEach((btn) => {
@@ -3202,7 +3434,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
           if (!thresholdTriggered && Math.abs(currentDx) >= 48) {
             thresholdTriggered = true;
-            if (navigator.vibrate) navigator.vibrate(15);
+            triggerHaptic(15);
           }
         },
         { passive: true }
@@ -3571,8 +3803,8 @@ async function getRtcConfig() {
 function startRingtone(kind = "incoming") {
   stopRingtone();
   const ringOnce = () => {
-    if (kind === "incoming" && navigator.vibrate) {
-      navigator.vibrate([260, 140, 260]);
+    if (kind === "incoming") {
+      triggerHaptic([260, 140, 260]);
     }
     if (state.soundStyle === "off") return;
     const ctx = ensureAudioContext();
@@ -4092,6 +4324,9 @@ if (attachPlusBtn) {
 }
 
 document.addEventListener("click", (e) => {
+  if (!e.target.closest(".reaction-picker-pop") && !e.target.closest("[data-react-open]")) {
+    document.querySelectorAll(".reaction-picker-pop").forEach((p) => p.remove());
+  }
   if (!attachMenu || !attachMenu.classList.contains("open")) return;
   if (e.target.closest("#attach-menu") || e.target.closest("#attach-plus-btn")) return;
   closeAttachMenu();
@@ -4711,6 +4946,32 @@ function openProfileModal() {
   pushBackState("profile-modal");
 }
 
+function refreshCustomizeBgControls() {
+  if (!bgTargetRoomSelect) return;
+  const target = bgTargetRoomSelect.value || "global";
+  const store = getRoomBgStore();
+  let imgData = "";
+  let pattern = "none";
+  if (target === "global") {
+    imgData = state.user ? state.user.chatBgData || "" : "";
+    pattern = uiPrefs.bgPattern || "none";
+  } else if (store[target]) {
+    imgData = store[target].imageData || "";
+    pattern = store[target].pattern || "none";
+  }
+  if (bgPatternSelect) bgPatternSelect.value = pattern;
+  if (profileBgPreview) {
+    const safePreviewBg = sanitizeChatBgData(imgData);
+    if (safePreviewBg) {
+      profileBgPreview.style.backgroundImage = `url("${safePreviewBg}")`;
+      profileBgPreview.classList.remove("hidden");
+    } else {
+      profileBgPreview.style.backgroundImage = "";
+      profileBgPreview.classList.add("hidden");
+    }
+  }
+}
+
 function openCustomizeModal() {
   if (profileColorInput && profileColorPreview) {
     const currentHex = isValidHexColor(state.user.bubbleColor)
@@ -4720,16 +4981,38 @@ function openCustomizeModal() {
     if (profileColorHex) profileColorHex.value = currentHex;
     updateColorPreview(state.user.bubbleColor || "");
   }
-  if (profileBgPreview) {
-    const safePreviewBg = sanitizeChatBgData(state.user.chatBgData);
-    if (safePreviewBg) {
-      profileBgPreview.style.backgroundImage = `url("${safePreviewBg}")`;
-      profileBgPreview.classList.remove("hidden");
-    } else {
-      profileBgPreview.style.backgroundImage = "";
-      profileBgPreview.classList.add("hidden");
-    }
+  if (bgTargetRoomSelect && state.user) {
+    const groupTitle = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
+    const options = [
+      `<option value="global">Tüm Sohbetler (Varsayılan)</option>`,
+      `<option value="main_group">${escapeHtml(groupTitle)} (Sadece Grup)</option>`
+    ];
+    Object.entries(state.usersCache || {}).forEach(([uid, u]) => {
+      if (uid === state.user.id || !u || u.active === false) return;
+      const dmId = getDmRoomId(state.user.id, uid);
+      options.push(`<option value="${escapeHtml(dmId)}">${escapeHtml(getDisplayName(u))} (Özel Sohbet)</option>`);
+    });
+    bgTargetRoomSelect.innerHTML = options.join("");
+    bgTargetRoomSelect.value = state.activeRoom ? state.activeRoom.id : "global";
   }
+  refreshCustomizeBgControls();
+
+  if (bgBlurRange) bgBlurRange.value = String(uiPrefs.bgBlur ?? 9);
+  if (bgBlurValue) bgBlurValue.textContent = `${uiPrefs.bgBlur ?? 9}px`;
+  if (bgBrightRange) bgBrightRange.value = String(uiPrefs.bgBrightness ?? 65);
+  if (bgBrightValue) bgBrightValue.textContent = `${uiPrefs.bgBrightness ?? 65}%`;
+  if (prefBubbleStyleSelect) prefBubbleStyleSelect.value = uiPrefs.bubbleStyle || "rounded";
+  if (prefFontSizeSelect) prefFontSizeSelect.value = uiPrefs.fontSize || "normal";
+  if (prefFontFamilySelect) prefFontFamilySelect.value = uiPrefs.fontFamily || "modern";
+  if (prefDensitySelect) prefDensitySelect.value = uiPrefs.density || "normal";
+  if (prefAnimModeSelect) prefAnimModeSelect.value = uiPrefs.animMode || "full";
+  if (prefHapticToggle) prefHapticToggle.checked = uiPrefs.haptic !== false;
+  if (prefReactionPresetSelect) prefReactionPresetSelect.value = uiPrefs.reactionPreset || "classic";
+  if (prefReactionCustomInput) {
+    prefReactionCustomInput.value = uiPrefs.reactionCustom || "❤️ 😂 👍 🔥 😮";
+    prefReactionCustomInput.classList.toggle("hidden", uiPrefs.reactionPreset !== "custom");
+  }
+
   if (customizeModal) {
     customizeModal.classList.remove("hidden");
     pushBackState("customize-modal");
@@ -5089,28 +5372,102 @@ if (resetColorBtn) {
   });
 }
 
+if (bgTargetRoomSelect) {
+  bgTargetRoomSelect.addEventListener("change", refreshCustomizeBgControls);
+}
+
+if (bgPatternSelect) {
+  bgPatternSelect.addEventListener("change", () => {
+    if (!state.user) return;
+    const target = bgTargetRoomSelect ? bgTargetRoomSelect.value : "global";
+    const pattern = bgPatternSelect.value || "none";
+    if (target === "global") {
+      saveUiPrefs({ bgPattern: pattern });
+    } else {
+      const store = getRoomBgStore();
+      store[target] = { ...(store[target] || {}), pattern };
+      setRoomBgStore(store);
+      applyActiveRoomBackground(state.activeRoom ? state.activeRoom.id : "global");
+    }
+  });
+}
+
+if (bgBlurRange) {
+  bgBlurRange.addEventListener("input", () => {
+    const val = Number(bgBlurRange.value);
+    if (bgBlurValue) bgBlurValue.textContent = `${val}px`;
+    saveUiPrefs({ bgBlur: val });
+  });
+}
+
+if (bgBrightRange) {
+  bgBrightRange.addEventListener("input", () => {
+    const val = Number(bgBrightRange.value);
+    if (bgBrightValue) bgBrightValue.textContent = `${val}%`;
+    saveUiPrefs({ bgBrightness: val });
+  });
+}
+
+if (prefBubbleStyleSelect) {
+  prefBubbleStyleSelect.addEventListener("change", () => saveUiPrefs({ bubbleStyle: prefBubbleStyleSelect.value }));
+}
+if (prefFontSizeSelect) {
+  prefFontSizeSelect.addEventListener("change", () => saveUiPrefs({ fontSize: prefFontSizeSelect.value }));
+}
+if (prefFontFamilySelect) {
+  prefFontFamilySelect.addEventListener("change", () => saveUiPrefs({ fontFamily: prefFontFamilySelect.value }));
+}
+if (prefDensitySelect) {
+  prefDensitySelect.addEventListener("change", () => saveUiPrefs({ density: prefDensitySelect.value }));
+}
+if (prefAnimModeSelect) {
+  prefAnimModeSelect.addEventListener("change", () => saveUiPrefs({ animMode: prefAnimModeSelect.value }));
+}
+if (prefHapticToggle) {
+  prefHapticToggle.addEventListener("change", () => saveUiPrefs({ haptic: prefHapticToggle.checked }));
+}
+if (prefReactionPresetSelect) {
+  prefReactionPresetSelect.addEventListener("change", () => {
+    const val = prefReactionPresetSelect.value;
+    if (prefReactionCustomInput) prefReactionCustomInput.classList.toggle("hidden", val !== "custom");
+    saveUiPrefs({ reactionPreset: val });
+  });
+}
+if (prefReactionCustomInput) {
+  prefReactionCustomInput.addEventListener("change", () => {
+    saveUiPrefs({ reactionCustom: prefReactionCustomInput.value.trim() || "❤️ 😂 👍 🔥 😮" });
+  });
+}
+if (hideReadToggle) {
+  hideReadToggle.addEventListener("change", () => saveUiPrefs({ hideReadReceipts: hideReadToggle.checked }));
+}
+
 if (profileBgBtn && profileBgInput) {
   profileBgBtn.addEventListener("click", () => profileBgInput.click());
   profileBgInput.addEventListener("change", async () => {
     const file = profileBgInput.files && profileBgInput.files[0];
     profileBgInput.value = "";
     if (!file || !state.user) return;
+    const target = bgTargetRoomSelect ? bgTargetRoomSelect.value : "global";
     profileBgBtn.disabled = true;
     profileBgBtn.textContent = "Kaydediliyor...";
     try {
       const chatBgData = await compressImageToBase64(file, 720, 0.7);
-      await state.db.ref("users/" + state.user.id + "/chatBgData").set(chatBgData);
-      state.user.chatBgData = chatBgData;
-      applyChatBackground(chatBgData);
-      if (profileBgPreview) {
-        profileBgPreview.style.backgroundImage = `url("${chatBgData}")`;
-        profileBgPreview.classList.remove("hidden");
+      if (target === "global") {
+        await state.db.ref("users/" + state.user.id + "/chatBgData").set(chatBgData);
+        state.user.chatBgData = chatBgData;
+      } else {
+        const store = getRoomBgStore();
+        store[target] = { ...(store[target] || {}), imageData: chatBgData };
+        setRoomBgStore(store);
       }
+      applyActiveRoomBackground(state.activeRoom ? state.activeRoom.id : "global");
+      refreshCustomizeBgControls();
     } catch {
       alert("Arka plan yüklenemedi.");
     } finally {
       profileBgBtn.disabled = false;
-      profileBgBtn.textContent = "Arka Plan Seç";
+      profileBgBtn.textContent = "Fotoğraf Seç";
     }
   });
 }
@@ -5118,13 +5475,18 @@ if (profileBgBtn && profileBgInput) {
 if (resetBgBtn) {
   resetBgBtn.addEventListener("click", async () => {
     if (!state.user) return;
-    await state.db.ref("users/" + state.user.id + "/chatBgData").remove();
-    state.user.chatBgData = "";
-    applyChatBackground("");
-    if (profileBgPreview) {
-      profileBgPreview.style.backgroundImage = "";
-      profileBgPreview.classList.add("hidden");
+    const target = bgTargetRoomSelect ? bgTargetRoomSelect.value : "global";
+    if (target === "global") {
+      await state.db.ref("users/" + state.user.id + "/chatBgData").remove();
+      state.user.chatBgData = "";
+      saveUiPrefs({ bgPattern: "none" });
+    } else {
+      const store = getRoomBgStore();
+      delete store[target];
+      setRoomBgStore(store);
     }
+    applyActiveRoomBackground(state.activeRoom ? state.activeRoom.id : "global");
+    refreshCustomizeBgControls();
   });
 }
 
@@ -5636,9 +5998,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v59)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v60)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "v60",
+    title: "Büyük Özelleştirme, Tepkiler & Gizlilik Güncellemesi",
+    desc: "Artık neler yapabilirsiniz: 1) Ayarlar > Özelleştirme'den baloncuk tarzını (Yuvarlak, Kapsül, Köşeli, Buzlu Cam), yazı boyutunu (Küçük/Normal/Büyük), yazı tipini (Modern/Yuvarlak/Serif/Mono) ve Kompakt/Ferah görünümü değiştirebilirsiniz. 2) Her sohbete özel arka plan veya hazır desenler (Aurora, Yıldızlar, Cyber Izgara, Dalga) seçip bulanıklık ve parlaklığı kaydırıcıyla ayarlayabilirsiniz. 3) Mesajlara gülen yüz ikonuyla tepki (❤️ 😂 🔥 👍 😮) bırakabilir ve kendi tepki paketinizi seçebilirsiniz. 4) Animasyon hızını ve dokunsal titreşimi (Haptic) kontrol edebilirsiniz. 5) Ayarlar > Gizlilik altından Okundu Bilgisini (Mavi Tik) kapatabilirsiniz."
+  },
   { v: "v59", title: "Duyurular Sayfası & Sürüm Geçmişi", desc: "Karşılama ekranına Duyurular kartı, Yönetici duyuru paylaşımı ve v1'den bugüne tüm sürüm notları eklendi." },
   { v: "v58", title: "Animasyonlu + Menüsü & Yeni Alt Bar", desc: "Mesaj barı yenilendi: Mikrofon, Fotoğraf/Video ve + tuşu düzenlendi; + içinden animasyonlu Konum menüsü eklendi." },
   { v: "v57", title: "Uçtan Uca Şifreleme (E2EE) & Secured By HydrOS", desc: "ECDH P-256 + AES-GCM-256 ile mesajlar uçtan uca şifrelendi; yükleme ekranına Secured By HydrOS rozeti eklendi." },

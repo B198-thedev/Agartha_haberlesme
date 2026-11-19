@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (v59)
+          Duyurular &amp; Sürüm Geçmişi (v60)
         </button>
       </div>
     </section>
@@ -146,9 +146,9 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">v59</span>
+                <span id="home-announcement-version" class="exp-badge">v60</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">v59: Duyurular sayfası ve v1–v59 tüm sürüm geçmişi eklendi.</div>
+              <div id="home-announcement-summary" class="chat-preview">v60: Baloncuk tarzları, yazı boyutu/font, hazır desenler, sohbete özel arka plan, mesaj tepkileri ve okundu gizliliği eklendi!</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
@@ -374,6 +374,17 @@
             </button>
           </div>
 
+          <div class="section-label">Gizlilik</div>
+          <div class="settings-list">
+            <label class="settings-item" style="cursor:pointer;">
+              <div>
+                <div>Okundu Bilgisini Gizle</div>
+                <div class="user-sub">Mavi tik yerine gri iletildi görünür</div>
+              </div>
+              <input id="hide-read-toggle" type="checkbox" class="toggle-switch" />
+            </label>
+          </div>
+
           <div class="section-label">Uygulama &amp; Yönetim</div>
           <div class="settings-list">
             <button id="notify-btn" type="button" class="settings-item">
@@ -395,7 +406,7 @@
             </div>
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – v59 tüm güncellemeler</span>
+              <span class="user-sub">v1 – v60 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yetkiler</span>
@@ -416,7 +427,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">v59</span>
+            <span id="announcements-modal-ver" class="exp-badge">v60</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -435,7 +446,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v59)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v60)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -487,13 +498,105 @@
           </div>
 
           <div class="card">
-            <h3>Sohbet Arka Planı (%45 Bulanık)</h3>
-            <p class="muted">Seçtiğin görsel sadece senin sohbet ekranlarında bulanık arka plan olarak görünür.</p>
+            <h3>Sohbet Arka Planı &amp; Desenler</h3>
+            <p class="muted">Varsayılan veya belirli bir sohbete özel arka plan, bulanıklık ve desen seç.</p>
+            <div class="stack-form" style="margin-bottom:10px;">
+              <select id="bg-target-room" class="settings-select" style="width:100%;" aria-label="Arka plan uygulanacak sohbet">
+                <option value="global">Tüm Sohbetler (Varsayılan)</option>
+              </select>
+              <select id="bg-pattern-select" class="settings-select" style="width:100%;" aria-label="Hazır duvar kağıdı deseni">
+                <option value="none">Hazır Desen: Yok</option>
+                <option value="aurora">Hazır Desen: Aurora Işıkları</option>
+                <option value="stars">Hazır Desen: Yıldızlı Gece</option>
+                <option value="grid">Hazır Desen: Cyber Izgara</option>
+                <option value="waves">Hazır Desen: Dalgalı Doku</option>
+              </select>
+            </div>
             <div id="profile-bg-preview" class="bg-preview-box hidden"></div>
             <input id="profile-bg-input" type="file" accept="image/*" class="hidden" />
             <div class="top-bar-actions">
-              <button id="profile-bg-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Arka Plan Seç</button>
+              <button id="profile-bg-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Fotoğraf Seç</button>
               <button id="reset-bg-btn" type="button" class="icon-btn danger">Kaldır</button>
+            </div>
+            <div class="crop-controls" style="margin-top:12px;">
+              <label class="crop-zoom-label" for="bg-blur-range">
+                <span>Bulanıklık</span>
+                <span id="bg-blur-value">9px</span>
+              </label>
+              <input id="bg-blur-range" type="range" min="0" max="24" step="1" value="9" />
+              <label class="crop-zoom-label" for="bg-bright-range" style="margin-top:6px;">
+                <span>Parlaklık</span>
+                <span id="bg-bright-value">65%</span>
+              </label>
+              <input id="bg-bright-range" type="range" min="30" max="100" step="5" value="65" />
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Görünüm, Tipografi &amp; Baloncuk Tarzı</h3>
+            <p class="muted">Balon şeklini, yazı boyutunu, fontunu ve mesaj yoğunluğunu seç.</p>
+            <div class="stack-form">
+              <div class="pref-row">
+                <span>Baloncuk Tarzı</span>
+                <select id="pref-bubble-style" class="settings-select">
+                  <option value="rounded">Yuvarlak (Varsayılan)</option>
+                  <option value="pill">Kapsül (Çok Yuvarlak)</option>
+                  <option value="sharp">Köşeli (Minimal)</option>
+                  <option value="glass">Buzlu Cam (Glass)</option>
+                </select>
+              </div>
+              <div class="pref-row">
+                <span>Yazı Boyutu</span>
+                <select id="pref-font-size" class="settings-select">
+                  <option value="small">Küçük</option>
+                  <option value="normal">Normal</option>
+                  <option value="large">Büyük</option>
+                </select>
+              </div>
+              <div class="pref-row">
+                <span>Yazı Tipi</span>
+                <select id="pref-font-family" class="settings-select">
+                  <option value="modern">Modern (Varsayılan)</option>
+                  <option value="rounded">Yuvarlak</option>
+                  <option value="serif">Klasik (Serif)</option>
+                  <option value="mono">Terminal (Mono)</option>
+                </select>
+              </div>
+              <div class="pref-row">
+                <span>Mesaj Yoğunluğu</span>
+                <select id="pref-density" class="settings-select">
+                  <option value="normal">Ferah (Varsayılan)</option>
+                  <option value="compact">Kompakt (Daha fazla mesaj)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Etkileşim, Animasyon &amp; Tepki Emojileri</h3>
+            <div class="stack-form">
+              <div class="pref-row">
+                <span>Animasyon Hızı</span>
+                <select id="pref-anim-mode" class="settings-select">
+                  <option value="full">Tam Animasyonlu</option>
+                  <option value="fast">Hızlı</option>
+                  <option value="off">Kapalı (Sade)</option>
+                </select>
+              </div>
+              <label class="pref-row" style="cursor:pointer;">
+                <span>Dokunsal Titreşim (Haptic)</span>
+                <input id="pref-haptic-toggle" type="checkbox" class="toggle-switch" checked />
+              </label>
+              <div class="pref-row">
+                <span>Tepki Paketi</span>
+                <select id="pref-reaction-preset" class="settings-select">
+                  <option value="classic">Klasik (❤️ 😂 👍 🔥 😮)</option>
+                  <option value="fun">Eğlenceli (🤣 💀 😭 🤡 🎉)</option>
+                  <option value="cool">Cool (🔥 ⚡ 🚀 👑 💯)</option>
+                  <option value="custom">Özel (Kendin yaz)</option>
+                </select>
+              </div>
+              <input id="pref-reaction-custom" type="text" maxlength="40" class="hidden" placeholder="Boşlukla 5 emoji yaz (Örn. ❤️ 🔥 👏 😎 🙏)" />
             </div>
           </div>
         </div>
