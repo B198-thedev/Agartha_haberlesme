@@ -133,10 +133,10 @@
         <div id="tab-chats" class="tab-pane active" role="tabpanel" aria-labelledby="nav-chats" tabindex="0">
           <div class="section-label">Ortak Alan</div>
           <button id="open-main-group-btn" class="chat-item group-card">
-            <div class="avatar group-avatar">#</div>
+            <div id="main-group-avatar" class="avatar group-avatar">#</div>
             <div class="chat-item-body">
               <div class="chat-item-top">
-                <span class="chat-name">Ana Grup <span id="main-group-badge" class="unread-dot hidden"></span></span>
+                <span class="chat-name"><span id="main-group-title">Ana Grup</span> <span id="main-group-badge" class="unread-dot hidden"></span></span>
                 <span id="main-group-time" class="chat-time"></span>
               </div>
               <div id="main-group-preview" class="chat-preview">Herkesin ortak sohbet odası</div>
@@ -209,6 +209,9 @@
         <div class="top-bar-actions chat-header-actions">
           <button id="voice-call-btn" class="icon-btn media-btn hidden" title="Sesli Arama (Deneysel)" aria-label="Sesli Arama (Deneysel)">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+          </button>
+          <button id="group-settings-btn" class="icon-btn media-btn hidden" title="Grup Ayarları" aria-label="Grup Ayarları">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </button>
           <button id="chat-search-btn" class="icon-btn media-btn" title="Sohbette Mesaj Ara" aria-label="Sohbette Mesaj Ara">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -477,6 +480,41 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRUP AYARLARI MODALI (ANA GRUP) -->
+    <div id="group-settings-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Grup Ayarları</h2>
+          <button id="close-group-settings-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <div class="card">
+            <div class="avatar-picker">
+              <img id="group-avatar-preview" src="./icon-192.png" alt="Grup Fotoğrafı" class="group-avatar-preview" />
+              <div id="group-settings-subtitle" class="user-sub">Ana Grup</div>
+              <input id="group-avatar-input" type="file" accept="image/*" class="hidden" />
+              <div class="top-bar-actions" style="justify-content:center;">
+                <button id="group-avatar-btn" type="button" class="icon-btn">Grup Fotoğrafını Değiştir</button>
+                <button id="group-avatar-remove-btn" type="button" class="icon-btn danger hidden">Kaldır</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Grup Bilgileri</h3>
+            <div class="stack-form">
+              <input id="group-name-input" type="text" maxlength="32" placeholder="Grup Adı (Örn. Ana Grup)" />
+              <input id="group-desc-input" type="text" maxlength="80" placeholder="Grup Açıklaması (Örn. Tüm yetkili arkadaşlar)" />
+              <button id="save-group-info-btn" type="button" class="btn-primary">Grup Bilgilerini Kaydet</button>
+            </div>
+          </div>
+
+          <div class="section-label" id="group-members-label">Grup Üyeleri</div>
+          <div id="group-members-list" class="list-stack"></div>
         </div>
       </div>
     </div>

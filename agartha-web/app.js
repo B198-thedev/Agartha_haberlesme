@@ -353,6 +353,7 @@ const state = {
   presenceSetup: false,
   driveConfig: { url: "", secret: "" },
   turnConfig: { apiUrl: "" },
+  mainGroupInfo: { name: "Ana Grup", description: "Tüm yetkili arkadaşlar", avatarData: "" },
   pendingRegAvatar: "",
   pendingPhotoFile: null,
   pendingPhotoUrl: "",
@@ -431,6 +432,8 @@ const applyCustomThemeBtn = document.getElementById("apply-custom-theme-btn");
 const randomThemeBtn = document.getElementById("random-theme-btn");
 
 const openMainGroupBtn = document.getElementById("open-main-group-btn");
+const mainGroupAvatar = document.getElementById("main-group-avatar");
+const mainGroupTitle = document.getElementById("main-group-title");
 const mainGroupBadge = document.getElementById("main-group-badge");
 const mainGroupPreview = document.getElementById("main-group-preview");
 const mainGroupTime = document.getElementById("main-group-time");
@@ -454,6 +457,7 @@ const chatSearchPrev = document.getElementById("chat-search-prev");
 const chatSearchNext = document.getElementById("chat-search-next");
 const chatSearchClose = document.getElementById("chat-search-close");
 const voiceCallBtn = document.getElementById("voice-call-btn");
+const groupSettingsBtn = document.getElementById("group-settings-btn");
 const chatRoomHeaderInfo = document.getElementById("chat-room-header-info");
 const chatRoomAvatar = document.getElementById("chat-room-avatar");
 const chatRoomTitle = document.getElementById("chat-room-title");
@@ -541,6 +545,19 @@ const viewUserAvatar = document.getElementById("view-user-avatar");
 const viewUserName = document.getElementById("view-user-name");
 const viewUserStatus = document.getElementById("view-user-status");
 const viewUserBio = document.getElementById("view-user-bio");
+
+const groupSettingsModal = document.getElementById("group-settings-modal");
+const closeGroupSettingsBtn = document.getElementById("close-group-settings-btn");
+const groupAvatarPreview = document.getElementById("group-avatar-preview");
+const groupSettingsSubtitle = document.getElementById("group-settings-subtitle");
+const groupAvatarInput = document.getElementById("group-avatar-input");
+const groupAvatarBtn = document.getElementById("group-avatar-btn");
+const groupAvatarRemoveBtn = document.getElementById("group-avatar-remove-btn");
+const groupNameInput = document.getElementById("group-name-input");
+const groupDescInput = document.getElementById("group-desc-input");
+const saveGroupInfoBtn = document.getElementById("save-group-info-btn");
+const groupMembersLabel = document.getElementById("group-members-label");
+const groupMembersList = document.getElementById("group-members-list");
 
 const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
@@ -901,6 +918,10 @@ window.addEventListener("popstate", () => {
   }
   if (userProfileModal && !userProfileModal.classList.contains("hidden")) {
     userProfileModal.classList.add("hidden");
+    return;
+  }
+  if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
+    groupSettingsModal.classList.add("hidden");
     return;
   }
   if (profileModal && !profileModal.classList.contains("hidden")) {
@@ -1623,6 +1644,7 @@ async function enterMainApp() {
   setupPresence();
   listenDriveConfig();
   listenTurnConfig();
+  listenMainGroupInfo();
   listenUsers();
   listenMainGroupPreview();
   listenPlaces();
@@ -1648,6 +1670,48 @@ function listenTurnConfig() {
     state.turnConfig = {
       apiUrl: String(val.apiUrl || "").trim()
     };
+  });
+}
+
+function applyMainGroupInfoUI() {
+  const info = state.mainGroupInfo || {};
+  const gName = info.name || "Ana Grup";
+  const gDesc = info.description || "Tüm yetkili arkadaşlar";
+  const gAvatar = info.avatarData || "";
+
+  if (mainGroupTitle) mainGroupTitle.textContent = gName;
+  if (mainGroupAvatar) {
+    if (gAvatar) {
+      mainGroupAvatar.innerHTML = `<img src="${escapeHtml(gAvatar)}" alt="Grup" />`;
+    } else {
+      mainGroupAvatar.textContent = "#";
+    }
+  }
+  if (state.activeRoom && state.activeRoom.isGroup) {
+    state.activeRoom.title = gName;
+    if (chatRoomTitle) chatRoomTitle.textContent = gName;
+    if (chatRoomSubtitle) chatRoomSubtitle.textContent = gDesc;
+    if (chatRoomAvatar) {
+      chatRoomAvatar.src = gAvatar || "./icon-192.png";
+      chatRoomAvatar.classList.remove("hidden");
+    }
+  }
+  if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
+    if (groupAvatarPreview) groupAvatarPreview.src = gAvatar || "./icon-192.png";
+    if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar);
+    if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = gDesc;
+  }
+}
+
+function listenMainGroupInfo() {
+  state.db.ref("config/mainGroup").on("value", (snap) => {
+    const val = snap.val() || {};
+    state.mainGroupInfo = {
+      name: String(val.name || "").trim() || "Ana Grup",
+      description: String(val.description || "").trim() || "Tüm yetkili arkadaşlar",
+      avatarData: String(val.avatarData || "")
+    };
+    applyMainGroupInfoUI();
   });
 }
 
@@ -1974,6 +2038,9 @@ function listenUsers() {
     if (state.user.isAdmin) {
       renderAdminUsers(users);
     }
+    if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
+      renderGroupMembersList();
+    }
 
     const others = Object.entries(users).filter(
       ([id, u]) => id !== state.user.id && u.active !== false
@@ -2073,7 +2140,8 @@ function listenMainGroupPreview() {
 openMainGroupBtn.addEventListener("click", () => {
   mainGroupBadge.classList.add("hidden");
   syncAppBadge();
-  openChatRoom("main_group", "Ana Grup", true, null);
+  const gName = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
+  openChatRoom("main_group", gName, true, null);
 });
 
 // Sohbet Odası
@@ -2090,9 +2158,11 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   state.lastRenderedMsgKey = null;
   chatRoomTitle.textContent = title;
   if (isGroup) {
-    chatRoomAvatar.src = "./icon-192.png";
+    const info = state.mainGroupInfo || {};
+    chatRoomTitle.textContent = info.name || title || "Ana Grup";
+    chatRoomAvatar.src = info.avatarData || "./icon-192.png";
     chatRoomAvatar.classList.remove("hidden");
-    chatRoomSubtitle.textContent = "Tüm yetkili arkadaşlar";
+    chatRoomSubtitle.textContent = info.description || "Tüm yetkili arkadaşlar";
   } else {
     const other = otherId ? state.usersCache[otherId] : null;
     if (other && other.avatarData) {
@@ -2110,6 +2180,9 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
   if (quickPlaceBtn) {
     quickPlaceBtn.classList.toggle("hidden", !isGroup);
+  }
+  if (groupSettingsBtn) {
+    groupSettingsBtn.classList.toggle("hidden", !isGroup);
   }
   if (voiceCallBtn) {
     voiceCallBtn.classList.toggle("hidden", isGroup || !otherId);
@@ -3911,10 +3984,134 @@ if (closeUserProfileBtn) {
   });
 }
 
+function renderGroupMembersList() {
+  if (!groupMembersList) return;
+  const members = Object.entries(state.usersCache || {})
+    .filter(([, u]) => u && u.active !== false)
+    .sort(([, a], [, b]) => {
+      if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
+      return getDisplayName(a).localeCompare(getDisplayName(b), "tr");
+    });
+
+  if (groupMembersLabel) {
+    groupMembersLabel.textContent = `Grup Üyeleri (${members.length})`;
+  }
+
+  if (members.length === 0) {
+    groupMembersList.innerHTML = `<div class="empty-hint">Aktif üye bulunamadı.</div>`;
+    return;
+  }
+
+  groupMembersList.innerHTML = members
+    .map(([uid, u]) => {
+      const disp = getDisplayName(u);
+      const isSelf = state.user && uid === state.user.id;
+      const emojiPrefix = u.statusEmoji ? `${escapeHtml(u.statusEmoji)} ` : "";
+      const avatarHtml = u.avatarData
+        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="" />`
+        : `<div class="avatar">${escapeHtml(disp.charAt(0).toUpperCase())}</div>`;
+      const statusText = u.online
+        ? "Çevrimiçi"
+        : u.lastSeen
+        ? `Son görülme ${formatTime(u.lastSeen)}`
+        : "Üye";
+      const adminBadge = u.isAdmin ? `<span class="group-member-badge">Yönetici</span>` : "";
+      const selfBadge = isSelf ? `<span class="group-member-badge self">Sen</span>` : "";
+      return `
+        <button type="button" class="group-member-row" data-member-id="${escapeHtml(uid)}">
+          ${avatarHtml}
+          <div class="group-member-info">
+            <div class="group-member-name">${emojiPrefix}${escapeHtml(disp)}${adminBadge}${selfBadge}</div>
+            <div class="user-sub">@${escapeHtml(u.name || "")} • ${statusText}</div>
+          </div>
+          ${u.online ? '<span class="online-dot" title="Çevrimiçi"></span>' : ""}
+        </button>
+      `;
+    })
+    .join("");
+
+  groupMembersList.querySelectorAll("[data-member-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.memberId;
+      if (uid) openUserProfileCard(uid);
+    });
+  });
+}
+
+function openGroupSettingsModal() {
+  if (!groupSettingsModal) return;
+  const info = state.mainGroupInfo || {};
+  const gName = info.name || "Ana Grup";
+  const gDesc = info.description || "Tüm yetkili arkadaşlar";
+  const gAvatar = info.avatarData || "";
+
+  if (groupAvatarPreview) groupAvatarPreview.src = gAvatar || "./icon-192.png";
+  if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar);
+  if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = gDesc;
+  if (groupNameInput) groupNameInput.value = gName;
+  if (groupDescInput) groupDescInput.value = gDesc;
+
+  renderGroupMembersList();
+  groupSettingsModal.classList.remove("hidden");
+  pushBackState("group-settings-modal");
+}
+
+if (groupSettingsBtn) {
+  groupSettingsBtn.addEventListener("click", openGroupSettingsModal);
+}
+
+if (closeGroupSettingsBtn && groupSettingsModal) {
+  closeGroupSettingsBtn.addEventListener("click", () => {
+    groupSettingsModal.classList.add("hidden");
+  });
+}
+
+if (groupAvatarBtn && groupAvatarInput) {
+  groupAvatarBtn.addEventListener("click", () => groupAvatarInput.click());
+  groupAvatarInput.addEventListener("change", async () => {
+    const file = groupAvatarInput.files && groupAvatarInput.files[0];
+    groupAvatarInput.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await compressImageToBase64(file, 256, 0.8);
+      await state.db.ref("config/mainGroup").update({ avatarData: dataUrl });
+      state.mainGroupInfo.avatarData = dataUrl;
+      applyMainGroupInfoUI();
+    } catch {
+      alert("Grup fotoğrafı yüklenemedi.");
+    }
+  });
+}
+
+if (groupAvatarRemoveBtn) {
+  groupAvatarRemoveBtn.addEventListener("click", async () => {
+    if (!confirm("Grup fotoğrafı kaldırılsın mı?")) return;
+    await state.db.ref("config/mainGroup").update({ avatarData: "" });
+    state.mainGroupInfo.avatarData = "";
+    applyMainGroupInfoUI();
+  });
+}
+
+if (saveGroupInfoBtn) {
+  saveGroupInfoBtn.addEventListener("click", async () => {
+    const name = (groupNameInput && groupNameInput.value.trim().slice(0, 32)) || "Ana Grup";
+    const description =
+      (groupDescInput && groupDescInput.value.trim().slice(0, 80)) || "Tüm yetkili arkadaşlar";
+    await state.db.ref("config/mainGroup").update({ name, description });
+    state.mainGroupInfo.name = name;
+    state.mainGroupInfo.description = description;
+    applyMainGroupInfoUI();
+    alert("Grup bilgileri kaydedildi!");
+  });
+}
+
 if (chatRoomHeaderInfo) {
   chatRoomHeaderInfo.addEventListener("click", (e) => {
     if (e.target.closest("#chat-back-btn")) return;
-    if (state.activeRoom && !state.activeRoom.isGroup && state.activeRoom.otherId) {
+    if (!state.activeRoom) return;
+    if (state.activeRoom.isGroup) {
+      openGroupSettingsModal();
+    } else if (state.activeRoom.otherId) {
       openUserProfileCard(state.activeRoom.otherId);
     }
   });
