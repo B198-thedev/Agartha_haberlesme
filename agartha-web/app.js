@@ -4,6 +4,160 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 }
 
 const SESSION_KEY = "agartha_session_v1";
+const THEME_STORAGE_KEY = "agartha_theme_v1";
+
+const APP_THEMES = {
+  midnight: {
+    name: "Gece Mavisi",
+    bg: "#0b1120",
+    surface: "#111827",
+    surface2: "#1e293b",
+    border: "#263348",
+    text: "#f8fafc",
+    muted: "#94a3b8",
+    navText: "#acbbce",
+    accent: "#38bdf8",
+    accent2: "#6366f1",
+    onAccent: "#ffffff",
+    bubbleMe: "#1d4ed8",
+    bubbleOther: "#1e293b"
+  },
+  purple: {
+    name: "Siber Mor",
+    bg: "#120826",
+    surface: "#1b0d38",
+    surface2: "#2a1654",
+    border: "#3f2378",
+    text: "#faf5ff",
+    muted: "#c4b5fd",
+    navText: "#d8b4fe",
+    accent: "#c084fc",
+    accent2: "#7c3aed",
+    onAccent: "#ffffff",
+    bubbleMe: "#7c3aed",
+    bubbleOther: "#2a1654"
+  },
+  neonLime: {
+    name: "Cırtlak Yeşil",
+    bg: "#061309",
+    surface: "#0b1f10",
+    surface2: "#13331b",
+    border: "#1f542c",
+    text: "#f0fdf4",
+    muted: "#86efac",
+    navText: "#bbf7d0",
+    accent: "#39ff14",
+    accent2: "#10b981",
+    onAccent: "#052e16",
+    bubbleMe: "#15803d",
+    bubbleOther: "#13331b"
+  },
+  crimson: {
+    name: "Kızıl Alev",
+    bg: "#18080c",
+    surface: "#250c12",
+    surface2: "#3b131d",
+    border: "#5c1d2d",
+    text: "#fff1f2",
+    muted: "#fda4af",
+    navText: "#fecdd3",
+    accent: "#fb7185",
+    accent2: "#e11d48",
+    onAccent: "#ffffff",
+    bubbleMe: "#be123c",
+    bubbleOther: "#3b131d"
+  },
+  magenta: {
+    name: "Neon Pembe",
+    bg: "#190717",
+    surface: "#280b25",
+    surface2: "#3f133b",
+    border: "#631e5c",
+    text: "#fdf2f8",
+    muted: "#f9a8d4",
+    navText: "#fbcfe8",
+    accent: "#f472b6",
+    accent2: "#db2777",
+    onAccent: "#ffffff",
+    bubbleMe: "#db2777",
+    bubbleOther: "#3f133b"
+  },
+  sunset: {
+    name: "Turuncu Alev",
+    bg: "#180e06",
+    surface: "#26160a",
+    surface2: "#3c2210",
+    border: "#5e3619",
+    text: "#fff7ed",
+    muted: "#fdba74",
+    navText: "#fed7aa",
+    accent: "#fb923c",
+    accent2: "#ea580c",
+    onAccent: "#ffffff",
+    bubbleMe: "#c2410c",
+    bubbleOther: "#3c2210"
+  },
+  gold: {
+    name: "Altın Sarı",
+    bg: "#151105",
+    surface: "#221b08",
+    surface2: "#362b0d",
+    border: "#544314",
+    text: "#fefce8",
+    muted: "#fde047",
+    navText: "#fef08a",
+    accent: "#facc15",
+    accent2: "#d97706",
+    onAccent: "#1c1917",
+    bubbleMe: "#a16207",
+    bubbleOther: "#362b0d"
+  },
+  ocean: {
+    name: "Turkuaz",
+    bg: "#051618",
+    surface: "#092326",
+    surface2: "#10383d",
+    border: "#19565e",
+    text: "#f0fdfa",
+    muted: "#5eead4",
+    navText: "#99f6e4",
+    accent: "#2dd4bf",
+    accent2: "#0891b2",
+    onAccent: "#042f2e",
+    bubbleMe: "#0f766e",
+    bubbleOther: "#10383d"
+  },
+  amoled: {
+    name: "Saf Siyah (AMOLED)",
+    bg: "#000000",
+    surface: "#0a0a0a",
+    surface2: "#171717",
+    border: "#262626",
+    text: "#fafafa",
+    muted: "#a3a3a3",
+    navText: "#d4d4d4",
+    accent: "#38bdf8",
+    accent2: "#818cf8",
+    onAccent: "#ffffff",
+    bubbleMe: "#2563eb",
+    bubbleOther: "#171717"
+  },
+  light: {
+    name: "Aydınlık",
+    bg: "#f1f5f9",
+    surface: "#ffffff",
+    surface2: "#e2e8f0",
+    border: "#cbd5e1",
+    text: "#0f172a",
+    muted: "#475569",
+    navText: "#475569",
+    accent: "#2563eb",
+    accent2: "#4f46e5",
+    onAccent: "#ffffff",
+    bubbleMe: "#2563eb",
+    bubbleOther: "#e2e8f0"
+  }
+};
 
 const state = {
   db: null,
@@ -70,6 +224,9 @@ const notifyBtn = document.getElementById("notify-btn");
 const notifyStatusLabel = document.getElementById("notify-status-label");
 const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
+const themeGrid = document.getElementById("theme-grid");
+const customThemeInput = document.getElementById("custom-theme-input");
+const applyCustomThemeBtn = document.getElementById("apply-custom-theme-btn");
 
 const openMainGroupBtn = document.getElementById("open-main-group-btn");
 const mainGroupBadge = document.getElementById("main-group-badge");
@@ -201,6 +358,86 @@ function getContrastTextColor(hex) {
   const b = parseInt(hex.slice(5, 7), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.62 ? "#0f172a" : "#f8fafc";
+}
+
+function applyAppTheme(themeId, customHex = "") {
+  const root = document.documentElement;
+  let t = APP_THEMES[themeId] || APP_THEMES.midnight;
+
+  if (themeId === "custom" && isValidHexColor(customHex)) {
+    t = {
+      ...APP_THEMES.amoled,
+      name: "Özel",
+      accent: customHex,
+      accent2: customHex,
+      onAccent: getContrastTextColor(customHex),
+      bubbleMe: customHex
+    };
+  }
+
+  root.style.setProperty("--bg", t.bg);
+  root.style.setProperty("--surface", t.surface);
+  root.style.setProperty("--surface-2", t.surface2);
+  root.style.setProperty("--border", t.border);
+  root.style.setProperty("--text", t.text);
+  root.style.setProperty("--muted", t.muted);
+  root.style.setProperty("--nav-text", t.navText);
+  root.style.setProperty("--accent", t.accent);
+  root.style.setProperty("--accent-2", t.accent2);
+  root.style.setProperty("--on-accent", t.onAccent);
+  root.style.setProperty("--bubble-me", t.bubbleMe);
+  root.style.setProperty("--bubble-other", t.bubbleOther);
+
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.setAttribute("content", t.surface);
+
+  localStorage.setItem(
+    THEME_STORAGE_KEY,
+    JSON.stringify({ id: themeId, customHex })
+  );
+  renderThemeGrid(themeId);
+}
+
+function loadSavedTheme() {
+  try {
+    const raw = localStorage.getItem(THEME_STORAGE_KEY);
+    if (!raw) {
+      renderThemeGrid("midnight");
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    applyAppTheme(parsed.id || "midnight", parsed.customHex || "");
+    if (customThemeInput && isValidHexColor(parsed.customHex)) {
+      customThemeInput.value = parsed.customHex;
+    }
+  } catch {
+    renderThemeGrid("midnight");
+  }
+}
+
+function renderThemeGrid(activeId) {
+  if (!themeGrid) return;
+  themeGrid.innerHTML = Object.entries(APP_THEMES)
+    .map(([id, t]) => {
+      const isActive = id === activeId ? " active" : "";
+      return `
+        <button type="button" class="theme-chip${isActive}" data-theme-id="${id}">
+          <span class="theme-dot" style="background: linear-gradient(135deg, ${t.accent}, ${t.bg});"></span>
+          <span>${t.name}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  themeGrid.querySelectorAll("[data-theme-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tid = btn.dataset.themeId;
+      applyAppTheme(tid);
+      if (state.db && state.user) {
+        state.db.ref("users/" + state.user.id + "/appTheme").set({ id: tid, customHex: "" });
+      }
+    });
+  });
 }
 
 function linkifyText(str) {
@@ -522,6 +759,7 @@ async function deleteFromGoogleDrive(fileId) {
 
 // Başlatma
 function init() {
+  loadSavedTheme();
   try {
     if (typeof firebase === "undefined") {
       showError("Firebase kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.");
@@ -852,6 +1090,16 @@ function enterMainApp() {
   listenPlaces();
   listenAiRecommendations();
   watchOwnAccess();
+
+  state.db.ref("users/" + state.user.id + "/appTheme").once("value").then((snap) => {
+    const val = snap.val();
+    if (val && val.id) {
+      applyAppTheme(val.id, val.customHex || "");
+      if (customThemeInput && isValidHexColor(val.customHex)) {
+        customThemeInput.value = val.customHex;
+      }
+    }
+  }).catch(() => {});
 }
 
 function listenDriveConfig() {
@@ -1982,6 +2230,17 @@ if (settingsModal) {
   settingsModal.addEventListener("click", (e) => {
     if (e.target === settingsModal) {
       settingsModal.classList.add("hidden");
+    }
+  });
+}
+
+if (applyCustomThemeBtn && customThemeInput) {
+  applyCustomThemeBtn.addEventListener("click", () => {
+    const hex = customThemeInput.value;
+    if (!isValidHexColor(hex)) return;
+    applyAppTheme("custom", hex);
+    if (state.db && state.user) {
+      state.db.ref("users/" + state.user.id + "/appTheme").set({ id: "custom", customHex: hex });
     }
   });
 }

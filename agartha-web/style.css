@@ -5,8 +5,10 @@
   --border: #263348;
   --text: #f8fafc;
   --muted: #94a3b8;
+  --nav-text: #acbbce;
   --accent: #38bdf8;
   --accent-2: #6366f1;
+  --on-accent: #ffffff;
   --danger: #ef4444;
   --success: #22c55e;
   --bubble-me: #1d4ed8;
@@ -183,7 +185,7 @@ input:-webkit-autofill:focus {
   border: none;
   border-radius: 12px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
@@ -326,7 +328,7 @@ input:-webkit-autofill:focus {
 
 .group-avatar {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .chat-item-body {
@@ -485,7 +487,7 @@ input:-webkit-autofill:focus {
   min-height: 64px;
   background: transparent;
   border: 0;
-  color: #acbbce;
+  color: var(--nav-text);
   padding: 10px 4px 8px;
   border-radius: 8px;
   font: inherit;
@@ -613,7 +615,7 @@ input:-webkit-autofill:focus {
   border-radius: 20px;
   padding: 0 18px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1487,5 +1489,44 @@ input:-webkit-autofill:focus {
     background: var(--surface-2);
     border-color: var(--accent);
   }
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.theme-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 140ms ease, border-color 180ms ease;
+}
+
+.theme-chip:active {
+  transform: scale(0.97);
+}
+
+.theme-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.theme-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
