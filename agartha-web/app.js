@@ -2575,8 +2575,25 @@ if (chatSearchClose) {
 const RTC_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" }
-  ]
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:openrelay.metered.ca:80" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    }
+  ],
+  iceCandidatePoolSize: 4
 };
 
 function startRingtone(kind = "incoming") {
@@ -2642,6 +2659,7 @@ function showIncomingCallPrompt(incoming) {
     muted: false,
     timerId: null,
     timeoutId: null,
+    disconnectTimeoutId: null,
     callRef: state.db.ref(`calls/${incoming.callId}`),
     iceRef: null,
     pendingIce: []
@@ -2711,6 +2729,7 @@ async function startOutgoingVoiceCall(peerId, peerName) {
       muted: false,
       timerId: null,
       timeoutId: null,
+      disconnectTimeoutId: null,
       connectedAt: 0,
       callRef,
       incomingRef,
@@ -2729,11 +2748,7 @@ async function startOutgoingVoiceCall(peerId, peerName) {
     callModal.classList.remove("hidden");
     startRingtone("outgoing");
 
-    wirePeerConnectionEvents(pc, callRef, "callerIce");
-
     const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
     await callRef.set({
       callerId: state.user.id,
       calleeId: peerId,
@@ -2742,6 +2757,10 @@ async function startOutgoingVoiceCall(peerId, peerName) {
       createdAt: Date.now()
     });
     callRef.onDisconnect().update({ status: "ended" });
+
+    // ICE dinleyicisini ve yerel tanımı callRef.set sonrasına koyarak callerIce adaylarının silinmesini önle
+    wirePeerConnectionEvents(pc, callRef, "callerIce");
+    await pc.setLocalDescription(offer);
 
     await incomingRef.set({
       callId,
@@ -2856,8 +2875,8 @@ function wirePeerConnectionEvents(pc, callRef, localIceChild) {
   };
 
   pc.ontrack = (e) => {
-    if (remoteCallAudio && e.streams && e.streams[0]) {
-      remoteCallAudio.srcObject = e.streams[0];
+    if (remoteCallAudio) {
+      remoteCallAudio.srcObject = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
       remoteCallAudio.play().catch(() => {});
     }
   };
@@ -2865,14 +2884,29 @@ function wirePeerConnectionEvents(pc, callRef, localIceChild) {
   pc.onconnectionstatechange = () => {
     const st = pc.connectionState;
     if (st === "connected" && state.activeCall) {
+      clearTimeout(state.activeCall.disconnectTimeoutId);
+      state.activeCall.disconnectTimeoutId = null;
       stopRingtone();
       callStatusText.textContent = "Bağlandı (P2P Ses)";
-      state.activeCall.connectedAt = Date.now();
-      if (state.activeCall.logRef) {
-        state.activeCall.logRef.update({ state: "connected" }).catch(() => {});
+      if (!state.activeCall.connectedAt) {
+        state.activeCall.connectedAt = Date.now();
+        if (state.activeCall.logRef) {
+          state.activeCall.logRef.update({ state: "connected" }).catch(() => {});
+        }
       }
       startCallTimer();
-    } else if (st === "failed" || st === "disconnected" || st === "closed") {
+    } else if (st === "disconnected" && state.activeCall) {
+      if (callStatusText) callStatusText.textContent = "Bağlantı zayıf, yeniden bağlanılıyor...";
+      if (typeof pc.restartIce === "function") {
+        try { pc.restartIce(); } catch {}
+      }
+      clearTimeout(state.activeCall.disconnectTimeoutId);
+      state.activeCall.disconnectTimeoutId = setTimeout(() => {
+        if (state.activeCall && state.activeCall.pc === pc && pc.connectionState !== "connected") {
+          endCurrentCall(true, "Bağlantı kesildi");
+        }
+      }, 6000);
+    } else if (st === "failed" || st === "closed") {
       if (state.activeCall) {
         endCurrentCall(true, st === "failed" ? "Ağ bağlantısı kurulamadı" : "Bağlantı kesildi");
       }
@@ -2909,6 +2943,7 @@ function endCurrentCall(notifyRemote = true, reasonText = "") {
   stopRingtone();
   clearInterval(call.timerId);
   clearTimeout(call.timeoutId);
+  clearTimeout(call.disconnectTimeoutId);
 
   if (call.localStream) {
     call.localStream.getTracks().forEach((t) => t.stop());
