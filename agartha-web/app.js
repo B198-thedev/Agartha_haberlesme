@@ -1,6 +1,51 @@
-// Service Worker (PWA) kaydı — sadece http/https üzerinde çalışır
+// Service Worker (PWA) kaydı & Otomatik Güncelleme Bildirimi
+const updateBanner = document.getElementById("update-banner");
+const updateBannerText = document.getElementById("update-banner-text");
+
+function showUpdateBanner(msg) {
+  if (updateBannerText && msg) updateBannerText.textContent = msg;
+  if (updateBanner) updateBanner.classList.remove("hidden");
+}
+
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let refreshing = false;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || refreshing) return;
+    refreshing = true;
+    showUpdateBanner("Uygulama güncellendi, yenileniyor...");
+    setTimeout(() => location.reload(), 900);
+  });
+
+  navigator.serviceWorker
+    .register("./sw.js", { updateViaCache: "none" })
+    .then((reg) => {
+      if (reg.waiting && hadController) {
+        showUpdateBanner("Uygulama güncelleniyor, lütfen bekleyin...");
+      }
+
+      reg.addEventListener("updatefound", () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        if (hadController) {
+          showUpdateBanner("Uygulama güncelleniyor, lütfen bekleyin...");
+        }
+        newWorker.addEventListener("statechange", () => {
+          if (newWorker.state === "installed" && hadController) {
+            showUpdateBanner("Uygulama güncellendi, yenileniyor...");
+          }
+        });
+      });
+
+      setInterval(() => reg.update().catch(() => {}), 60000);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          reg.update().catch(() => {});
+        }
+      });
+    })
+    .catch(() => {});
 }
 
 const SESSION_KEY = "agartha_session_v1";
@@ -1739,6 +1784,10 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       : other?.lastSeen
       ? `Son görülme ${formatTime(other.lastSeen)}`
       : "Özel sohbet";
+  }
+
+  if (quickPlaceBtn) {
+    quickPlaceBtn.classList.toggle("hidden", !isGroup);
   }
 
   if (!isGroup || state.user.isAdmin) {

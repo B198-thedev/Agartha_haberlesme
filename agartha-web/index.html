@@ -14,6 +14,10 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <div id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
+    <span class="loading-spinner update-spinner" aria-hidden="true"></span>
+    <span id="update-banner-text">Uygulama güncelleniyor, lütfen bekleyin...</span>
+  </div>
   <div id="app">
     <!-- YÜKLEME EKRANI -->
     <section id="loading-view" class="view">
@@ -191,21 +195,23 @@
     <!-- SOHBET ODASI EKRANI -->
     <section id="chat-view" class="view">
       <div id="chat-bg-layer" class="chat-bg-layer hidden"></div>
-      <header class="top-bar">
-        <div class="top-bar-left" id="chat-room-header-info" style="cursor:pointer;">
-          <button id="chat-back-btn" class="icon-btn">&larr; Geri</button>
+      <header class="top-bar chat-top-bar">
+        <div class="top-bar-left chat-header-left" id="chat-room-header-info" style="cursor:pointer;">
+          <button id="chat-back-btn" class="icon-btn media-btn" title="Geri" aria-label="Geri">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
           <img id="chat-room-avatar" src="./icon-192.png" alt="" class="mini-logo round-avatar hidden" />
-          <div>
+          <div class="chat-header-meta">
             <div id="chat-room-title" class="app-title">Sohbet</div>
             <div id="chat-room-subtitle" class="user-sub"></div>
           </div>
         </div>
-        <div class="top-bar-actions">
+        <div class="top-bar-actions chat-header-actions">
           <button id="chat-search-btn" class="icon-btn media-btn" title="Sohbette Mesaj Ara" aria-label="Sohbette Mesaj Ara">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
           </button>
-          <button id="quick-place-btn" class="icon-btn" title="Bu sohbette mekan paylaş">+ Mekan</button>
-          <button id="delete-chat-btn" class="icon-btn danger hidden" title="Özel konuşmayı sil">Sil</button>
+          <button id="quick-place-btn" class="icon-btn hidden" title="Bu sohbette mekan paylaş">+ Mekan</button>
+          <button id="delete-chat-btn" class="icon-btn danger hidden" title="Konuşmayı sil">Sil</button>
         </div>
       </header>
 
