@@ -331,6 +331,7 @@ const state = {
   activeRoom: null, // { id, title, isGroup, otherId }
   chatRef: null,
   readByRef: null,
+  deliveredByRef: null,
   typingRef: null,
   invitesRef: null,
   typingTimeout: null,
@@ -363,6 +364,7 @@ const state = {
   chatSearchIndex: -1,
   replyTo: null,
   roomReadBy: {},
+  roomDeliveredBy: {},
   lastRenderedMsgKey: null,
   soundStyle: localStorage.getItem(SOUND_STORAGE_KEY) || "chime",
   audioCtx: null
@@ -1431,6 +1433,14 @@ function updateHeaderIdentity() {
   applyChatBackground(state.user.chatBgData || "");
 }
 
+function markRoomDelivered(roomId) {
+  if (!state.db || !state.user || !roomId) return;
+  state.db
+    .ref(`chats/${roomId}/deliveredBy/${state.user.id}`)
+    .set(Date.now())
+    .catch(() => {});
+}
+
 async function preloadInitialData() {
   if (loadingStatus) {
     loadingStatus.textContent = "Kişiler ve mesajlar indiriliyor...";
@@ -1455,6 +1465,7 @@ async function preloadInitialData() {
   tasks.push(
     state.db.ref("chats/main_group/messages").limitToLast(100).once("value").then((snap) => {
       state.preloadedChats["main_group"] = snap.val() || {};
+      markRoomDelivered("main_group");
     }).catch(() => {})
   );
 
@@ -1477,6 +1488,7 @@ async function preloadInitialData() {
             .once("value")
             .then((dmSnap) => {
               state.preloadedChats[dmId] = dmSnap.val() || {};
+              markRoomDelivered(dmId);
             })
             .catch(() => {});
         })
@@ -1810,6 +1822,7 @@ function listenUsers() {
         const msg = msgSnap.val();
         if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
         if (msg.senderId === state.user.id) return;
+        markRoomDelivered(dmId);
         const isViewingThis = state.activeRoom && state.activeRoom.id === dmId;
         if (!isViewingThis) {
           state.unreadRooms.add(dmId);
@@ -1863,6 +1876,7 @@ function listenMainGroupPreview() {
       mainGroupTime.textContent = formatTime(msg.timestamp);
 
       if ((msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
+        markRoomDelivered("main_group");
         const isViewingGroup = state.activeRoom && state.activeRoom.id === "main_group";
         if (!isViewingGroup) {
           mainGroupBadge.classList.remove("hidden");
@@ -1888,6 +1902,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
   state.activeRoom = { id: roomId, title, isGroup, otherId };
   state.roomReadBy = {};
+  state.roomDeliveredBy = {};
   state.lastRenderedMsgKey = null;
   chatRoomTitle.textContent = title;
   if (isGroup) {
@@ -1925,17 +1940,45 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   pushBackState("chat");
 
   function getMessageReadState(msg) {
-    if (!state.activeRoom) return { isRead: false, count: 0 };
+    if (!state.activeRoom) return { status: "sent", isRead: false, isDelivered: false, count: 0 };
     const ts = msg.timestamp || 0;
     if (!state.activeRoom.isGroup && state.activeRoom.otherId) {
-      const otherTs = state.roomReadBy[state.activeRoom.otherId] || 0;
-      const isRead = otherTs >= ts;
-      return { isRead, count: isRead ? 1 : 0 };
+      const otherReadTs = state.roomReadBy[state.activeRoom.otherId] || 0;
+      const otherDelTs = state.roomDeliveredBy[state.activeRoom.otherId] || 0;
+      const isRead = otherReadTs >= ts;
+      const isDelivered = isRead || otherDelTs >= ts;
+      const status = isRead ? "read" : isDelivered ? "delivered" : "sent";
+      return { status, isRead, isDelivered, count: isRead ? 1 : 0 };
     }
-    const count = Object.entries(state.roomReadBy).filter(
+    const readCount = Object.entries(state.roomReadBy).filter(
       ([uid, readTs]) => uid !== state.user.id && (readTs || 0) >= ts
     ).length;
-    return { isRead: count > 0, count };
+    const delCount = Object.entries(state.roomDeliveredBy).filter(
+      ([uid, delTs]) => uid !== state.user.id && (delTs || 0) >= ts
+    ).length;
+    const isRead = readCount > 0;
+    const isDelivered = isRead || delCount > 0;
+    const status = isRead ? "read" : isDelivered ? "delivered" : "sent";
+    return { status, isRead, isDelivered, count: readCount };
+  }
+
+  function buildTickMarkup(rState) {
+    const svg = rState.status === "sent" ? SINGLE_CHECK_SVG : DOUBLE_CHECK_SVG;
+    const cls =
+      rState.status === "read"
+        ? "msg-tick read"
+        : rState.status === "delivered"
+        ? "msg-tick delivered"
+        : "msg-tick";
+    const titleText =
+      rState.status === "read"
+        ? isGroup
+          ? `${rState.count} kişi gördü`
+          : "Görüldü"
+        : rState.status === "delivered"
+        ? "İletildi"
+        : "Gönderildi";
+    return { svg, cls, titleText };
   }
 
   function markRoomAsRead(latestTs) {
@@ -2015,14 +2058,8 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         let tickHtml = "";
         if (isMe) {
           const rState = getMessageReadState(m);
-          const readTitle = isGroup
-            ? rState.count > 0
-              ? `${rState.count} kişi gördü`
-              : "Gönderildi"
-            : rState.isRead
-            ? "Görüldü"
-            : "Gönderildi";
-          tickHtml = `<span class="msg-tick ${rState.isRead ? "read" : ""}" data-msg-ts="${m.timestamp || 0}" title="${readTitle}">${rState.isRead ? DOUBLE_CHECK_SVG : SINGLE_CHECK_SVG}</span>`;
+          const tk = buildTickMarkup(rState);
+          tickHtml = `<span class="${tk.cls}" data-msg-ts="${m.timestamp || 0}" title="${tk.titleText}">${tk.svg}</span>`;
         }
         const fullImgSrc = m.imageUrl || m.imageData;
         const thumbImgSrc =
@@ -2243,15 +2280,10 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     messagesContainer.querySelectorAll(".msg-tick").forEach((tickEl) => {
       const ts = Number(tickEl.dataset.msgTs || 0);
       const rState = getMessageReadState({ timestamp: ts });
-      tickEl.classList.toggle("read", rState.isRead);
-      tickEl.innerHTML = rState.isRead ? DOUBLE_CHECK_SVG : SINGLE_CHECK_SVG;
-      tickEl.title = isGroup
-        ? rState.count > 0
-          ? `${rState.count} kişi gördü`
-          : "Gönderildi"
-        : rState.isRead
-        ? "Görüldü"
-        : "Gönderildi";
+      const tk = buildTickMarkup(rState);
+      tickEl.className = tk.cls;
+      tickEl.innerHTML = tk.svg;
+      tickEl.title = tk.titleText;
     });
   }
 
@@ -2264,6 +2296,12 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   if (state.preloadedChats[roomId]) {
     renderRoomMessages(state.preloadedChats[roomId], false);
   }
+
+  state.deliveredByRef = state.db.ref(`chats/${roomId}/deliveredBy`);
+  state.deliveredByRef.on("value", (snap) => {
+    state.roomDeliveredBy = snap.val() || {};
+    refreshReadTicks();
+  });
 
   state.readByRef = state.db.ref(`chats/${roomId}/readBy`);
   state.readByRef.on("value", (snap) => {
@@ -2301,6 +2339,10 @@ function cleanupActiveRoomListeners() {
   if (state.readByRef) {
     state.readByRef.off();
     state.readByRef = null;
+  }
+  if (state.deliveredByRef) {
+    state.deliveredByRef.off();
+    state.deliveredByRef = null;
   }
   if (state.typingRef) {
     state.typingRef.off();
