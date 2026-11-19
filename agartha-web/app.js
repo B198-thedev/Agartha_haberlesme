@@ -1287,6 +1287,11 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       btn.addEventListener("click", async () => {
         if (!confirm("Bu mesaj silinsin mi?")) return;
         const msgKey = btn.dataset.delMsg;
+        const rowEl = btn.closest(".msg-row");
+        if (rowEl) {
+          rowEl.classList.add("deleting");
+          await new Promise((r) => setTimeout(r, 180));
+        }
         const targetMsg = data[msgKey];
         const fileIds = extractDriveFileIds(targetMsg);
         if (fileIds.length > 0) {
@@ -1308,7 +1313,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       .map(([, name]) => name);
 
     if (typers.length > 0) {
-      typingIndicator.textContent = `${typers.join(", ")} yazıyor...`;
+      typingIndicator.innerHTML = `${escapeHtml(typers.join(", "))} yazıyor<span class="typing-dots"><span></span><span></span><span></span></span>`;
       typingIndicator.classList.remove("hidden");
     } else {
       typingIndicator.classList.add("hidden");
@@ -1393,7 +1398,11 @@ messageInput.addEventListener("input", () => {
 chatBackBtn.addEventListener("click", () => {
   cleanupActiveRoomListeners();
   state.activeRoom = null;
-  showView(mainView);
+  chatView.classList.add("leaving");
+  setTimeout(() => {
+    chatView.classList.remove("leaving");
+    showView(mainView);
+  }, 180);
 });
 
 deleteChatBtn.addEventListener("click", async () => {
@@ -1428,6 +1437,10 @@ messageForm.addEventListener("submit", async (e) => {
   messageInput.value = "";
   clearTimeout(state.typingTimeout);
   state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
+
+  sendBtn.classList.remove("sending");
+  void sendBtn.offsetWidth;
+  sendBtn.classList.add("sending");
 
   if (!file && !audioBlob) {
     await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
