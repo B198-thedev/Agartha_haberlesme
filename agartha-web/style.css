@@ -57,10 +57,44 @@ html, body {
   display: none !important;
 }
 
-/* AUTH */
-#auth-view {
+/* AUTH & LOADING */
+#auth-view,
+#loading-view {
   justify-content: center;
   padding: 24px;
+}
+
+.loading-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 34px 22px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-card h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+
+.loading-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spinLoader 0.8s linear infinite;
+  margin-top: 6px;
+}
+
+@keyframes spinLoader {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-card {

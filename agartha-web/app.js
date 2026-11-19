@@ -309,10 +309,13 @@ const state = {
   liveLocWatchId: null,
   liveLocRoomId: null,
   liveLocMsgKey: null,
-  lastLocUpdateAt: 0
+  lastLocUpdateAt: 0,
+  preloadedChats: {}
 };
 
 // DOM Elemanları
+const loadingView = document.getElementById("loading-view");
+const loadingStatus = document.getElementById("loading-status");
 const authView = document.getElementById("auth-view");
 const mainView = document.getElementById("main-view");
 const chatView = document.getElementById("chat-view");
@@ -625,8 +628,8 @@ function normalizeTurkish(str) {
 }
 
 function showView(viewEl) {
-  [authView, mainView, chatView].forEach((v) => v.classList.remove("active"));
-  viewEl.classList.add("active");
+  [loadingView, authView, mainView, chatView].forEach((v) => v && v.classList.remove("active"));
+  if (viewEl) viewEl.classList.add("active");
 }
 
 function pushBackState(tag) {
@@ -939,6 +942,7 @@ function init() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        if (loadingView) showView(loadingView);
         verifyAndEnter(parsed);
       } catch {
         localStorage.removeItem(SESSION_KEY);
@@ -1226,7 +1230,73 @@ function updateHeaderIdentity() {
   applyChatBackground(state.user.chatBgData || "");
 }
 
-function enterMainApp() {
+async function preloadInitialData() {
+  if (loadingStatus) {
+    loadingStatus.textContent = "Kişiler ve mesajlar indiriliyor...";
+  }
+  const tasks = [];
+
+  tasks.push(
+    state.db.ref("users/" + state.user.id + "/appTheme").once("value").then((snap) => {
+      const val = snap.val();
+      if (val && val.id) {
+        applyAppTheme(val.id, val.customHex || "", val.customBgHex || "");
+        if (customThemeInput && isValidHexColor(val.customHex)) {
+          customThemeInput.value = val.customHex;
+        }
+        if (customBgInput && isValidHexColor(val.customBgHex)) {
+          customBgInput.value = val.customBgHex;
+        }
+      }
+    }).catch(() => {})
+  );
+
+  tasks.push(
+    state.db.ref("chats/main_group/messages").limitToLast(100).once("value").then((snap) => {
+      state.preloadedChats["main_group"] = snap.val() || {};
+    }).catch(() => {})
+  );
+
+  tasks.push(
+    state.db.ref("users").once("value").then(async (snap) => {
+      const users = snap.val() || {};
+      state.usersCache = users;
+      const others = Object.entries(users).filter(
+        ([id, u]) => id !== state.user.id && u.active !== false
+      );
+      if (loadingStatus) {
+        loadingStatus.textContent = `${others.length + 1} sohbet odası yükleniyor...`;
+      }
+      await Promise.all(
+        others.map(([otherId]) => {
+          const dmId = getDmRoomId(state.user.id, otherId);
+          return state.db
+            .ref(`chats/${dmId}/messages`)
+            .limitToLast(100)
+            .once("value")
+            .then((dmSnap) => {
+              state.preloadedChats[dmId] = dmSnap.val() || {};
+            })
+            .catch(() => {});
+        })
+      );
+    }).catch(() => {})
+  );
+
+  tasks.push(state.db.ref("places").limitToLast(50).once("value").catch(() => {}));
+  tasks.push(state.db.ref("recommendations").limitToLast(30).once("value").catch(() => {}));
+  tasks.push(state.db.ref("config/drive").once("value").catch(() => {}));
+
+  const timeout = new Promise((resolve) => setTimeout(resolve, 8000));
+  await Promise.race([Promise.allSettled(tasks), timeout]);
+}
+
+async function enterMainApp() {
+  if (loadingView) {
+    if (loadingStatus) loadingStatus.textContent = "Mesajlar yükleniyor, lütfen bekleyin...";
+    showView(loadingView);
+  }
+
   updateHeaderIdentity();
 
   if (state.user.isAdmin) {
@@ -1235,7 +1305,8 @@ function enterMainApp() {
     openAdminBtn.classList.add("hidden");
   }
 
-  showView(mainView);
+  await preloadInitialData();
+
   updateNotifyButton();
   setupPresence();
   listenDriveConfig();
@@ -1244,19 +1315,7 @@ function enterMainApp() {
   listenPlaces();
   listenAiRecommendations();
   watchOwnAccess();
-
-  state.db.ref("users/" + state.user.id + "/appTheme").once("value").then((snap) => {
-    const val = snap.val();
-    if (val && val.id) {
-      applyAppTheme(val.id, val.customHex || "", val.customBgHex || "");
-      if (customThemeInput && isValidHexColor(val.customHex)) {
-        customThemeInput.value = val.customHex;
-      }
-      if (customBgInput && isValidHexColor(val.customBgHex)) {
-        customBgInput.value = val.customBgHex;
-      }
-    }
-  }).catch(() => {});
+  showView(mainView);
 }
 
 function listenDriveConfig() {
@@ -1656,9 +1715,8 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   showView(chatView);
   pushBackState("chat");
 
-  state.chatRef = state.db.ref(`chats/${roomId}/messages`).limitToLast(100);
-  state.chatRef.on("value", (snap) => {
-    const data = snap.val() || {};
+  function renderRoomMessages(data) {
+    state.preloadedChats[roomId] = data;
     const entries = Object.entries(data).sort(
       (a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0)
     );
@@ -1721,14 +1779,10 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           `;
         }
         const textHtml = m.text ? `<div class="msg-text">${linkifyText(m.text)}</div>` : "";
-        const senderRingStyle =
-          senderUser && isValidHexColor(senderUser.bannerColor)
-            ? ` style="border-color:${senderUser.bannerColor};border-width:2px;cursor:pointer;"`
-            : ` style="cursor:pointer;"`;
         const senderAvatarHtml = !isMe
           ? senderUser && senderUser.avatarData
-            ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderUser.avatarData)}" alt=""${senderRingStyle} />`
-            : `<div class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}"${senderRingStyle}>${escapeHtml((m.senderName || "?").charAt(0).toUpperCase())}</div>`
+            ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderUser.avatarData)}" alt=""${senderRingStyle(senderUser)} />`
+            : `<div class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}"${senderRingStyle(senderUser)}>${escapeHtml(liveSenderName.charAt(0).toUpperCase())}</div>`
           : "";
         return `
           <div class="msg-row ${isMe ? "me" : "other"}">
@@ -1787,6 +1841,21 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     });
 
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  function senderRingStyle(senderUser) {
+    return senderUser && isValidHexColor(senderUser.bannerColor)
+      ? ` style="border-color:${senderUser.bannerColor};border-width:2px;cursor:pointer;"`
+      : ` style="cursor:pointer;"`;
+  }
+
+  if (state.preloadedChats[roomId]) {
+    renderRoomMessages(state.preloadedChats[roomId]);
+  }
+
+  state.chatRef = state.db.ref(`chats/${roomId}/messages`).limitToLast(100);
+  state.chatRef.on("value", (snap) => {
+    renderRoomMessages(snap.val() || {});
   });
 
   // Yazıyor... (Typing) dinleyicisi
