@@ -603,6 +603,16 @@ function ensureAudioContext() {
 
 document.addEventListener("pointerdown", () => ensureAudioContext(), { once: true, passive: true });
 
+function syncStandaloneClass() {
+  const isStandalone = Boolean(
+    window.navigator.standalone ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+  );
+  document.documentElement.classList.toggle("is-standalone", isStandalone);
+}
+
+syncStandaloneClass();
+
 const NON_KEYBOARD_INPUT_TYPES = new Set([
   "button",
   "checkbox",
@@ -652,8 +662,10 @@ function clearVisualViewportOverrides() {
   rootStyle.removeProperty("--app-offset-top");
 }
 
+let maxClosedViewportHeight = 0;
+
 // Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle;
-// klavye kapandığında iOS standalone PWA'da visualViewport gecikmesine takılmadan 100% yüksekliğe dön.
+// klavye kapandığında iOS standalone PWA'da visualViewport gecikmesine takılmadan 100lvh/100dvh yüksekliğe dön.
 function syncVisualViewportHeight() {
   const vv = window.visualViewport;
   if (!vv) {
@@ -666,10 +678,14 @@ function syncVisualViewportHeight() {
     window.innerHeight || 0,
     document.documentElement ? document.documentElement.clientHeight : 0
   );
-  const keyboardShrink = layoutHeight - vv.height;
   const editableFocused = isEditableElement(document.activeElement);
+  if (!editableFocused && vv.height > maxClosedViewportHeight) {
+    maxClosedViewportHeight = vv.height;
+  }
+  const referenceHeight = Math.max(layoutHeight, maxClosedViewportHeight);
+  const keyboardShrink = referenceHeight - vv.height;
 
-  if (editableFocused && keyboardShrink > 110) {
+  if (editableFocused && keyboardShrink > 140) {
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty("--app-height", `${Math.round(vv.height)}px`);
     rootStyle.setProperty(
@@ -715,7 +731,10 @@ document.addEventListener("focusout", () => {
 });
 
 window.addEventListener("resize", scheduleViewportReset);
-window.addEventListener("orientationchange", scheduleViewportReset);
+window.addEventListener("orientationchange", () => {
+  maxClosedViewportHeight = 0;
+  scheduleViewportReset();
+});
 window.addEventListener("pageshow", scheduleViewportReset);
 
 function playTone(ctx, freq, startOffset, duration, type = "sine", gainPeak = 0.08) {
