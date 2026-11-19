@@ -3538,10 +3538,17 @@ function resizeMessageInput() {
 }
 
 function updateMicVisibility() {
-  if (!micBtn || !messageInput) return;
-  const isRecording = state.mediaRecorder && state.mediaRecorder.state === "recording";
+  if (micBtn) micBtn.classList.remove("hidden");
+  if (!sendBtn || !messageInput) return;
+  if (sendBtn.disabled) {
+    sendBtn.classList.remove("hidden");
+    return;
+  }
   const hasText = messageInput.value.trim().length > 0;
-  micBtn.classList.toggle("hidden", hasText && !isRecording);
+  const hasAttachment = Boolean(
+    state.pendingPhotoFile || state.pendingVideoFile || state.pendingAudioBlob
+  );
+  sendBtn.classList.toggle("hidden", !(hasText || hasAttachment));
 }
 
 function clearPendingAudio() {
@@ -3554,6 +3561,7 @@ function clearPendingAudio() {
   }
   audioPreviewPlayer.src = "";
   audioPreviewBar.classList.add("hidden");
+  updateMicVisibility();
 }
 
 function stopActiveRecording(discard = false) {
@@ -3583,6 +3591,7 @@ function clearPendingPhoto() {
   photoPreviewImg.src = "";
   photoPreviewName.textContent = "";
   photoPreviewBar.classList.add("hidden");
+  updateMicVisibility();
 }
 
 function clearPendingVideo() {
@@ -3598,6 +3607,7 @@ function clearPendingVideo() {
   }
   if (videoPreviewName) videoPreviewName.textContent = "";
   if (videoPreviewBar) videoPreviewBar.classList.add("hidden");
+  updateMicVisibility();
 }
 
 messageInput.addEventListener("focus", () => {
@@ -3784,6 +3794,7 @@ messageForm.addEventListener("submit", async (e) => {
     photoBtn.disabled = false;
     micBtn.disabled = false;
     if (plusBtn) plusBtn.disabled = false;
+    updateMicVisibility();
   }
 });
 
@@ -3812,6 +3823,7 @@ photoInput.addEventListener("change", () => {
     const mb = (file.size / (1024 * 1024)).toFixed(1);
     if (videoPreviewName) videoPreviewName.textContent = `${file.name || "Video"} (${mb} MB)`;
     if (videoPreviewBar) videoPreviewBar.classList.remove("hidden");
+    updateMicVisibility();
     messageInput.focus();
     return;
   }
@@ -3823,6 +3835,7 @@ photoInput.addEventListener("change", () => {
   photoPreviewImg.src = state.pendingPhotoUrl;
   photoPreviewName.textContent = file.name || "Seçilen fotoğraf";
   photoPreviewBar.classList.remove("hidden");
+  updateMicVisibility();
   messageInput.focus();
 });
 
@@ -4066,6 +4079,7 @@ micBtn.addEventListener("click", async () => {
       audioPreviewPlayer.src = state.pendingAudioPreviewUrl;
       audioPreviewPlayer.load();
       audioPreviewBar.classList.remove("hidden");
+      updateMicVisibility();
     };
 
     recorder.start(250);
