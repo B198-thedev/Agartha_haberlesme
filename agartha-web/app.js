@@ -3540,15 +3540,14 @@ function resizeMessageInput() {
 function updateMicVisibility() {
   if (micBtn) micBtn.classList.remove("hidden");
   if (!sendBtn || !messageInput) return;
-  if (sendBtn.disabled) {
-    sendBtn.classList.remove("hidden");
-    return;
-  }
   const hasText = messageInput.value.trim().length > 0;
   const hasAttachment = Boolean(
     state.pendingPhotoFile || state.pendingVideoFile || state.pendingAudioBlob
   );
-  sendBtn.classList.toggle("hidden", !(hasText || hasAttachment));
+  const canSend = sendBtn.disabled || hasText || hasAttachment;
+  sendBtn.classList.toggle("send-btn-hidden", !canSend);
+  sendBtn.setAttribute("aria-hidden", canSend ? "false" : "true");
+  sendBtn.tabIndex = canSend ? 0 : -1;
 }
 
 function clearPendingAudio() {

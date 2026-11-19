@@ -893,6 +893,38 @@ html.is-standalone.is-auth-surface .status-bar-cap {
   }
 }
 
+.msg-text {
+  white-space: pre-wrap;
+}
+
+.send-btn {
+  border: none;
+  border-radius: 20px;
+  height: 40px;
+  max-width: 140px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  transform-origin: right center;
+}
+
+.send-btn.send-btn-hidden {
+  max-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: -6px;
+  opacity: 0;
+  transform: translateX(8px) scale(0.8);
+  pointer-events: none;
+}
+
 @media (max-width: 420px) {
   .message-input-bar {
     gap: 6px;
@@ -911,22 +943,11 @@ html.is-standalone.is-auth-surface .status-bar-cap {
     padding: 0 14px;
     font-size: 14px;
   }
-}
-
-.msg-text {
-  white-space: pre-wrap;
-}
-
-.send-btn {
-  border: none;
-  border-radius: 20px;
-  height: 40px;
-  padding: 0 18px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--on-accent);
-  font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
+  .send-btn.send-btn-hidden {
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: -5px;
+  }
 }
 
 /* MODAL */
@@ -2012,12 +2033,21 @@ html.is-standalone .modal {
 
 .btn-primary,
 .icon-btn,
-.send-btn,
 .chat-item,
 .auth-tab,
 .color-swatch,
 .emoji-btn {
   transition: transform 140ms ease, background-color 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+
+.send-btn {
+  transition:
+    max-width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease;
 }
 
 .btn-primary:active,
