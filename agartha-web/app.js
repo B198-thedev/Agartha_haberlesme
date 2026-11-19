@@ -559,6 +559,16 @@ const saveGroupInfoBtn = document.getElementById("save-group-info-btn");
 const groupMembersLabel = document.getElementById("group-members-label");
 const groupMembersList = document.getElementById("group-members-list");
 
+const avatarCropModal = document.getElementById("avatar-crop-modal");
+const cropModalTitle = document.getElementById("crop-modal-title");
+const closeCropBtn = document.getElementById("close-crop-btn");
+const cropCanvas = document.getElementById("crop-canvas");
+const cropZoomRange = document.getElementById("crop-zoom-range");
+const cropZoomValue = document.getElementById("crop-zoom-value");
+const cropRotateBtn = document.getElementById("crop-rotate-btn");
+const cropResetBtn = document.getElementById("crop-reset-btn");
+const cropSaveBtn = document.getElementById("crop-save-btn");
+
 const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
 const inviteForm = document.getElementById("invite-form");
@@ -906,6 +916,10 @@ window.addEventListener("popstate", () => {
     pushBackState("call-modal");
     return;
   }
+  if (avatarCropModal && !avatarCropModal.classList.contains("hidden")) {
+    closeAvatarCropModal();
+    return;
+  }
   // 1. Önce açık bir modal varsa onu kapat
   if (imageModal && !imageModal.classList.contains("hidden")) {
     imageModal.classList.add("hidden");
@@ -999,17 +1013,18 @@ document.querySelectorAll("[data-auth-tab]").forEach((tabBtn) => {
 
 regAvatarBtn.addEventListener("click", () => regAvatarInput.click());
 
-regAvatarInput.addEventListener("change", async () => {
+regAvatarInput.addEventListener("change", () => {
   const file = regAvatarInput.files && regAvatarInput.files[0];
   regAvatarInput.value = "";
   if (!file) return;
-  try {
-    const avatarData = await compressImageToBase64(file, 180, 0.75);
-    state.pendingRegAvatar = avatarData;
-    regAvatarPreview.src = avatarData;
-  } catch {
-    showRegisterError("Profil fotoğrafı yüklenemedi.");
-  }
+  openAvatarCropModal(file, {
+    title: "Profil Fotoğrafını Ayarla",
+    outputSize: 200,
+    onSave: async (avatarData) => {
+      state.pendingRegAvatar = avatarData;
+      regAvatarPreview.src = avatarData;
+    }
+  });
 });
 
 function slugifyId(name) {
@@ -4068,18 +4083,19 @@ if (closeGroupSettingsBtn && groupSettingsModal) {
 
 if (groupAvatarBtn && groupAvatarInput) {
   groupAvatarBtn.addEventListener("click", () => groupAvatarInput.click());
-  groupAvatarInput.addEventListener("change", async () => {
+  groupAvatarInput.addEventListener("change", () => {
     const file = groupAvatarInput.files && groupAvatarInput.files[0];
     groupAvatarInput.value = "";
     if (!file) return;
-    try {
-      const dataUrl = await compressImageToBase64(file, 256, 0.8);
-      await state.db.ref("config/mainGroup").update({ avatarData: dataUrl });
-      state.mainGroupInfo.avatarData = dataUrl;
-      applyMainGroupInfoUI();
-    } catch {
-      alert("Grup fotoğrafı yüklenemedi.");
-    }
+    openAvatarCropModal(file, {
+      title: "Grup Fotoğrafını Ayarla",
+      outputSize: 256,
+      onSave: async (dataUrl) => {
+        await state.db.ref("config/mainGroup").update({ avatarData: dataUrl });
+        state.mainGroupInfo.avatarData = dataUrl;
+        applyMainGroupInfoUI();
+      }
+    });
   });
 }
 
@@ -4093,7 +4109,7 @@ if (groupAvatarRemoveBtn) {
 }
 
 if (saveGroupInfoBtn) {
-  saveGroupInfoBtn.addEventListener("click", async () => {
+  const saveGroupInfo = async () => {
     const name = (groupNameInput && groupNameInput.value.trim().slice(0, 32)) || "Ana Grup";
     const description =
       (groupDescInput && groupDescInput.value.trim().slice(0, 80)) || "Tüm yetkili arkadaşlar";
@@ -4102,6 +4118,16 @@ if (saveGroupInfoBtn) {
     state.mainGroupInfo.description = description;
     applyMainGroupInfoUI();
     alert("Grup bilgileri kaydedildi!");
+  };
+  saveGroupInfoBtn.addEventListener("click", saveGroupInfo);
+  [groupNameInput, groupDescInput].forEach((inp) => {
+    if (!inp) return;
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveGroupInfo();
+      }
+    });
   });
 }
 
@@ -4334,20 +4360,221 @@ closeProfileBtn.addEventListener("click", () => {
 
 profileAvatarBtn.addEventListener("click", () => profileAvatarInput.click());
 
-profileAvatarInput.addEventListener("change", async () => {
+profileAvatarInput.addEventListener("change", () => {
   const file = profileAvatarInput.files && profileAvatarInput.files[0];
   profileAvatarInput.value = "";
   if (!file || !state.user) return;
-  try {
-    const avatarData = await compressImageToBase64(file, 180, 0.75);
-    await state.db.ref("users/" + state.user.id + "/avatarData").set(avatarData);
-    state.user.avatarData = avatarData;
-    headerAvatar.src = avatarData;
-    profileAvatarPreview.src = avatarData;
-  } catch {
-    alert("Profil fotoğrafı güncellenemedi.");
-  }
+  openAvatarCropModal(file, {
+    title: "Profil Fotoğrafını Ayarla",
+    outputSize: 200,
+    onSave: async (avatarData) => {
+      await state.db.ref("users/" + state.user.id + "/avatarData").set(avatarData);
+      state.user.avatarData = avatarData;
+      headerAvatar.src = avatarData;
+      profileAvatarPreview.src = avatarData;
+    }
+  });
 });
+
+// Dairesel Fotoğraf Kırpma & Ebat Ayarlama
+const cropState = {
+  img: null,
+  zoom: 1,
+  rotation: 0,
+  offsetX: 0,
+  offsetY: 0,
+  outputSize: 256,
+  onSave: null,
+  dragging: false,
+  lastX: 0,
+  lastY: 0
+};
+
+function drawCropCanvas() {
+  if (!cropCanvas || !cropState.img) return;
+  const ctx = cropCanvas.getContext("2d");
+  const size = cropCanvas.width;
+  const half = size / 2;
+  const img = cropState.img;
+  const rotRad = (cropState.rotation * Math.PI) / 180;
+  const swapped = cropState.rotation % 180 !== 0;
+  const effW = swapped ? img.height : img.width;
+  const effH = swapped ? img.width : img.height;
+  const baseScale = Math.max(size / effW, size / effH);
+  const scale = baseScale * cropState.zoom;
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = "#020617";
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.save();
+  ctx.translate(half + cropState.offsetX, half + cropState.offsetY);
+  ctx.rotate(rotRad);
+  ctx.scale(scale, scale);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  ctx.restore();
+
+  // Dairesel alanın dışını karart
+  ctx.save();
+  ctx.fillStyle = "rgba(2, 6, 23, 0.62)";
+  ctx.beginPath();
+  ctx.rect(0, 0, size, size);
+  ctx.arc(half, half, half - 6, 0, Math.PI * 2, true);
+  ctx.fill("evenodd");
+  ctx.restore();
+
+  // Daire çerçevesi
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(half, half, half - 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function closeAvatarCropModal() {
+  cropState.img = null;
+  cropState.onSave = null;
+  cropState.dragging = false;
+  if (avatarCropModal) avatarCropModal.classList.add("hidden");
+}
+
+function openAvatarCropModal(file, opts = {}) {
+  if (!avatarCropModal || !cropCanvas) return;
+  if (!file.type || !file.type.startsWith("image/")) {
+    alert("Lütfen geçerli bir fotoğraf dosyası seç.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onerror = () => alert("Fotoğraf okunamadı.");
+  reader.onload = () => {
+    const img = new Image();
+    img.onerror = () => alert("Fotoğraf yüklenemedi.");
+    img.onload = () => {
+      cropState.img = img;
+      cropState.zoom = 1;
+      cropState.rotation = 0;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      cropState.outputSize = opts.outputSize || 256;
+      cropState.onSave = opts.onSave || null;
+      if (cropModalTitle) cropModalTitle.textContent = opts.title || "Fotoğrafı Ayarla";
+      if (cropZoomRange) cropZoomRange.value = "1";
+      if (cropZoomValue) cropZoomValue.textContent = "1.0x";
+      drawCropCanvas();
+      avatarCropModal.classList.remove("hidden");
+      pushBackState("avatar-crop-modal");
+    };
+    img.src = String(reader.result || "");
+  };
+  reader.readAsDataURL(file);
+}
+
+if (closeCropBtn) {
+  closeCropBtn.addEventListener("click", closeAvatarCropModal);
+}
+
+if (cropZoomRange) {
+  cropZoomRange.addEventListener("input", () => {
+    cropState.zoom = parseFloat(cropZoomRange.value) || 1;
+    if (cropZoomValue) cropZoomValue.textContent = `${cropState.zoom.toFixed(1)}x`;
+    drawCropCanvas();
+  });
+}
+
+if (cropRotateBtn) {
+  cropRotateBtn.addEventListener("click", () => {
+    cropState.rotation = (cropState.rotation + 90) % 360;
+    cropState.offsetX = 0;
+    cropState.offsetY = 0;
+    drawCropCanvas();
+  });
+}
+
+if (cropResetBtn) {
+  cropResetBtn.addEventListener("click", () => {
+    cropState.zoom = 1;
+    cropState.rotation = 0;
+    cropState.offsetX = 0;
+    cropState.offsetY = 0;
+    if (cropZoomRange) cropZoomRange.value = "1";
+    if (cropZoomValue) cropZoomValue.textContent = "1.0x";
+    drawCropCanvas();
+  });
+}
+
+if (cropCanvas) {
+  cropCanvas.addEventListener("pointerdown", (e) => {
+    cropState.dragging = true;
+    cropState.lastX = e.clientX;
+    cropState.lastY = e.clientY;
+    if (cropCanvas.setPointerCapture) {
+      try { cropCanvas.setPointerCapture(e.pointerId); } catch {}
+    }
+  });
+  cropCanvas.addEventListener("pointermove", (e) => {
+    if (!cropState.dragging) return;
+    const dx = e.clientX - cropState.lastX;
+    const dy = e.clientY - cropState.lastY;
+    cropState.lastX = e.clientX;
+    cropState.lastY = e.clientY;
+    cropState.offsetX += dx;
+    cropState.offsetY += dy;
+    drawCropCanvas();
+  });
+  const endCropDrag = () => {
+    cropState.dragging = false;
+  };
+  cropCanvas.addEventListener("pointerup", endCropDrag);
+  cropCanvas.addEventListener("pointercancel", endCropDrag);
+}
+
+if (cropSaveBtn) {
+  cropSaveBtn.addEventListener("click", async () => {
+    if (!cropState.img || !cropCanvas) return;
+    const outSize = cropState.outputSize || 256;
+    const srcSize = cropCanvas.width;
+    const circleRadius = srcSize / 2 - 6;
+    const ratio = outSize / (circleRadius * 2);
+
+    const out = document.createElement("canvas");
+    out.width = outSize;
+    out.height = outSize;
+    const ctx = out.getContext("2d");
+
+    const img = cropState.img;
+    const rotRad = (cropState.rotation * Math.PI) / 180;
+    const swapped = cropState.rotation % 180 !== 0;
+    const effW = swapped ? img.height : img.width;
+    const effH = swapped ? img.width : img.height;
+    const baseScale = Math.max(srcSize / effW, srcSize / effH);
+    const scale = baseScale * cropState.zoom * ratio;
+
+    ctx.fillStyle = "#020617";
+    ctx.fillRect(0, 0, outSize, outSize);
+    ctx.save();
+    ctx.translate(outSize / 2 + cropState.offsetX * ratio, outSize / 2 + cropState.offsetY * ratio);
+    ctx.rotate(rotRad);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    ctx.restore();
+
+    const dataUrl = out.toDataURL("image/jpeg", 0.82);
+    const onSave = cropState.onSave;
+    cropSaveBtn.disabled = true;
+    cropSaveBtn.textContent = "Kaydediliyor...";
+    try {
+      if (onSave) await onSave(dataUrl);
+      closeAvatarCropModal();
+    } catch {
+      alert("Fotoğraf kaydedilemedi.");
+    } finally {
+      cropSaveBtn.disabled = false;
+      cropSaveBtn.textContent = "Kırp ve Kaydet";
+    }
+  });
+}
 
 quickPlaceBtn.addEventListener("click", async () => {
   if (!state.activeRoom) return;

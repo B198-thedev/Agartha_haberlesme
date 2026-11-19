@@ -519,6 +519,36 @@
       </div>
     </div>
 
+    <!-- FOTOĞRAF KIRPMA & EBAT AYARLAMA MODALI -->
+    <div id="avatar-crop-modal" class="modal hidden">
+      <div class="modal-card crop-modal-card">
+        <div class="modal-header">
+          <h2 id="crop-modal-title">Fotoğrafı Ayarla</h2>
+          <button id="close-crop-btn" class="icon-btn">İptal</button>
+        </div>
+        <div class="modal-body crop-modal-body">
+          <p class="muted" style="text-align:center; margin-bottom:10px;">
+            Fotoğrafı parmağınla sürükleyerek hizala, alttan yakınlaştır.
+          </p>
+          <div class="crop-stage-wrap">
+            <canvas id="crop-canvas" width="260" height="260"></canvas>
+          </div>
+          <div class="crop-controls">
+            <label class="crop-zoom-label" for="crop-zoom-range">
+              <span>Yakınlaştırma (Ebat)</span>
+              <span id="crop-zoom-value">1.0x</span>
+            </label>
+            <input id="crop-zoom-range" type="range" min="1" max="3.5" step="0.05" value="1" />
+          </div>
+          <div class="top-bar-actions" style="margin-top:12px;">
+            <button id="crop-rotate-btn" type="button" class="icon-btn">90° Döndür</button>
+            <button id="crop-reset-btn" type="button" class="icon-btn">Sıfırla</button>
+            <button id="crop-save-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Kırp ve Kaydet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- KULLANICI PROFİL KARTI MODALI -->
     <div id="user-profile-modal" class="modal hidden">
       <div class="modal-card">
