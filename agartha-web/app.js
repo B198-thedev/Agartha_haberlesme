@@ -77,6 +77,7 @@ const placesList = document.getElementById("places-list");
 const aiList = document.getElementById("ai-list");
 
 const chatBackBtn = document.getElementById("chat-back-btn");
+const chatRoomHeaderInfo = document.getElementById("chat-room-header-info");
 const chatRoomAvatar = document.getElementById("chat-room-avatar");
 const chatRoomTitle = document.getElementById("chat-room-title");
 const chatRoomSubtitle = document.getElementById("chat-room-subtitle");
@@ -105,15 +106,31 @@ const closeImageBtn = document.getElementById("close-image-btn");
 
 const profileModal = document.getElementById("profile-modal");
 const closeProfileBtn = document.getElementById("close-profile-btn");
+const profileBannerPreview = document.getElementById("profile-banner-preview");
 const profileAvatarPreview = document.getElementById("profile-avatar-preview");
+const profileNamePreview = document.getElementById("profile-name-preview");
+const profileBioPreview = document.getElementById("profile-bio-preview");
 const profileAvatarInput = document.getElementById("profile-avatar-input");
 const profileAvatarBtn = document.getElementById("profile-avatar-btn");
+const profileEmojiInput = document.getElementById("profile-emoji-input");
+const profileBioInput = document.getElementById("profile-bio-input");
+const emojiPresets = document.getElementById("emoji-presets");
+const profileBannerInput = document.getElementById("profile-banner-input");
+const saveProfileDetailsBtn = document.getElementById("save-profile-details-btn");
 const profileColorInput = document.getElementById("profile-color-input");
 const profileColorHex = document.getElementById("profile-color-hex");
 const profileColorPreview = document.getElementById("profile-color-preview");
 const colorPresets = document.getElementById("color-presets");
 const saveColorBtn = document.getElementById("save-color-btn");
 const resetColorBtn = document.getElementById("reset-color-btn");
+
+const userProfileModal = document.getElementById("user-profile-modal");
+const closeUserProfileBtn = document.getElementById("close-user-profile-btn");
+const viewUserBanner = document.getElementById("view-user-banner");
+const viewUserAvatar = document.getElementById("view-user-avatar");
+const viewUserName = document.getElementById("view-user-name");
+const viewUserStatus = document.getElementById("view-user-status");
+const viewUserBio = document.getElementById("view-user-bio");
 
 const adminModal = document.getElementById("admin-modal");
 const closeAdminBtn = document.getElementById("close-admin-btn");
@@ -466,7 +483,10 @@ function verifyAndEnter(sessionUser) {
         name: data.name,
         isAdmin: Boolean(data.isAdmin),
         avatarData: data.avatarData || "",
-        bubbleColor: data.bubbleColor || ""
+        bubbleColor: data.bubbleColor || "",
+        bio: data.bio || "",
+        statusEmoji: data.statusEmoji || "",
+        bannerColor: data.bannerColor || ""
       };
       enterMainApp();
     })
@@ -493,7 +513,10 @@ function waitForReactivation(sessionUser) {
         name: data.name,
         isAdmin: Boolean(data.isAdmin),
         avatarData: data.avatarData || "",
-        bubbleColor: data.bubbleColor || ""
+        bubbleColor: data.bubbleColor || "",
+        bio: data.bio || "",
+        statusEmoji: data.statusEmoji || "",
+        bannerColor: data.bannerColor || ""
       };
       enterMainApp();
     }
@@ -534,6 +557,9 @@ loginForm.addEventListener("submit", async (e) => {
       const existingAdmin = existingAdminSnap.val();
       const avatarData = (existingAdmin && existingAdmin.avatarData) || "";
       const bubbleColor = (existingAdmin && existingAdmin.bubbleColor) || "";
+      const bio = (existingAdmin && existingAdmin.bio) || "";
+      const statusEmoji = (existingAdmin && existingAdmin.statusEmoji) || "";
+      const bannerColor = (existingAdmin && existingAdmin.bannerColor) || "";
       await state.db.ref("users/" + userId).set({
         name: username,
         isAdmin: true,
@@ -541,9 +567,12 @@ loginForm.addEventListener("submit", async (e) => {
         online: true,
         avatarData,
         bubbleColor,
+        bio,
+        statusEmoji,
+        bannerColor,
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
-      state.user = { id: userId, name: username, isAdmin: true, avatarData, bubbleColor };
+      state.user = { id: userId, name: username, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor };
       localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
       return;
@@ -574,7 +603,10 @@ loginForm.addEventListener("submit", async (e) => {
         name: existingUser.name,
         isAdmin: Boolean(existingUser.isAdmin),
         avatarData: existingUser.avatarData || "",
-        bubbleColor: existingUser.bubbleColor || ""
+        bubbleColor: existingUser.bubbleColor || "",
+        bio: existingUser.bio || "",
+        statusEmoji: existingUser.statusEmoji || "",
+        bannerColor: existingUser.bannerColor || ""
       };
       localStorage.setItem(
         SESSION_KEY,
@@ -664,11 +696,19 @@ registerForm.addEventListener("submit", async (e) => {
   }
 });
 
-function enterMainApp() {
+function updateHeaderIdentity() {
+  const emojiPrefix = state.user.statusEmoji ? `${state.user.statusEmoji} ` : "";
   currentUserLabel.textContent = state.user.isAdmin
-    ? `${state.user.name} (Admin)`
-    : state.user.name;
+    ? `${emojiPrefix}${state.user.name} (Admin)`
+    : `${emojiPrefix}${state.user.name}`;
   headerAvatar.src = state.user.avatarData || "./icon-192.png";
+  headerAvatar.style.border = isValidHexColor(state.user.bannerColor)
+    ? `2px solid ${state.user.bannerColor}`
+    : "";
+}
+
+function enterMainApp() {
+  updateHeaderIdentity();
 
   if (state.user.isAdmin) {
     openAdminBtn.classList.remove("hidden");
@@ -792,7 +832,10 @@ function watchOwnAccess() {
     const nextAdmin = Boolean(data.isAdmin);
     state.user.avatarData = data.avatarData || "";
     state.user.bubbleColor = data.bubbleColor || "";
-    headerAvatar.src = state.user.avatarData || "./icon-192.png";
+    state.user.bio = data.bio || "";
+    state.user.statusEmoji = data.statusEmoji || "";
+    state.user.bannerColor = data.bannerColor || "";
+    updateHeaderIdentity();
     if (nextAdmin !== state.user.isAdmin) {
       state.user.isAdmin = nextAdmin;
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.user));
@@ -889,10 +932,15 @@ function renderContactsList() {
         : u.lastSeen
         ? `Son görülme ${formatTime(u.lastSeen)}`
         : "Özel sohbet aç";
+      const emojiPrefix = u.statusEmoji ? `${escapeHtml(u.statusEmoji)} ` : "";
+      const bioSuffix = u.bio ? ` • ${escapeHtml(u.bio)}` : "";
+      const ringStyle = isValidHexColor(u.bannerColor)
+        ? ` style="border: 2px solid ${u.bannerColor};"`
+        : "";
 
       const avatarHtml = u.avatarData
-        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="${escapeHtml(u.name)}" />`
-        : `<div class="avatar">${initial}</div>`;
+        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="${escapeHtml(u.name)}"${ringStyle} />`
+        : `<div class="avatar"${ringStyle}>${initial}</div>`;
 
       return `
         <button class="chat-item" data-dm-id="${escapeHtml(id)}" data-dm-name="${escapeHtml(u.name)}">
@@ -902,9 +950,9 @@ function renderContactsList() {
           </div>
           <div class="chat-item-body">
             <div class="chat-item-top">
-              <span class="chat-name">${escapeHtml(u.name)}${unreadHtml}</span>
+              <span class="chat-name">${emojiPrefix}${escapeHtml(u.name)}${unreadHtml}</span>
             </div>
-            <div class="chat-preview">${statusText}${role}</div>
+            <div class="chat-preview">${statusText}${bioSuffix}${role}</div>
           </div>
         </button>
       `;
@@ -1090,10 +1138,14 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
           : "";
         const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
+        const senderRingStyle =
+          senderUser && isValidHexColor(senderUser.bannerColor)
+            ? ` style="border-color:${senderUser.bannerColor};border-width:2px;cursor:pointer;"`
+            : ` style="cursor:pointer;"`;
         const senderAvatarHtml = !isMe
           ? senderUser && senderUser.avatarData
-            ? `<img class="msg-avatar" src="${escapeHtml(senderUser.avatarData)}" alt="" />`
-            : `<div class="msg-avatar">${escapeHtml((m.senderName || "?").charAt(0).toUpperCase())}</div>`
+            ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderUser.avatarData)}" alt=""${senderRingStyle} />`
+            : `<div class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}"${senderRingStyle}>${escapeHtml((m.senderName || "?").charAt(0).toUpperCase())}</div>`
           : "";
         return `
           <div class="msg-row ${isMe ? "me" : "other"}">
@@ -1125,6 +1177,10 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         }
         imageModal.classList.remove("hidden");
       });
+    });
+
+    messagesContainer.querySelectorAll("[data-view-user]").forEach((el) => {
+      el.addEventListener("click", () => openUserProfileCard(el.dataset.viewUser));
     });
 
     messagesContainer.querySelectorAll("[data-del-msg]").forEach((btn) => {
@@ -1453,8 +1509,36 @@ function updateColorPreview(hex) {
   }
 }
 
+function updateProfilePreviewCard() {
+  const emoji = profileEmojiInput ? profileEmojiInput.value.trim() : state.user.statusEmoji || "";
+  const bio = profileBioInput ? profileBioInput.value.trim() : state.user.bio || "";
+  const banner = profileBannerInput ? profileBannerInput.value : state.user.bannerColor || "#38bdf8";
+
+  if (profileNamePreview) {
+    profileNamePreview.textContent = `${emoji ? emoji + " " : ""}${state.user.name}`;
+  }
+  if (profileBioPreview) {
+    profileBioPreview.textContent = bio || "Henüz durum yazısı yok";
+  }
+  if (profileBannerPreview && isValidHexColor(banner)) {
+    profileBannerPreview.style.background = `linear-gradient(135deg, ${banner}, #1e293b)`;
+  }
+  if (profileAvatarPreview && isValidHexColor(banner)) {
+    profileAvatarPreview.style.borderColor = banner;
+  }
+}
+
 function openProfileModal() {
   profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
+  if (profileEmojiInput) profileEmojiInput.value = state.user.statusEmoji || "";
+  if (profileBioInput) profileBioInput.value = state.user.bio || "";
+  if (profileBannerInput) {
+    profileBannerInput.value = isValidHexColor(state.user.bannerColor)
+      ? state.user.bannerColor
+      : "#38bdf8";
+  }
+  updateProfilePreviewCard();
+
   if (profileColorInput && profileColorPreview) {
     const currentHex = isValidHexColor(state.user.bubbleColor)
       ? state.user.bubbleColor
@@ -1464,6 +1548,73 @@ function openProfileModal() {
     updateColorPreview(state.user.bubbleColor || "");
   }
   profileModal.classList.remove("hidden");
+}
+
+function openUserProfileCard(uid) {
+  const u = state.usersCache[uid];
+  if (!u || !userProfileModal) return;
+  const banner = isValidHexColor(u.bannerColor) ? u.bannerColor : "#38bdf8";
+  viewUserBanner.style.background = `linear-gradient(135deg, ${banner}, #1e293b)`;
+  viewUserAvatar.src = u.avatarData || "./icon-192.png";
+  viewUserAvatar.style.borderColor = banner;
+  viewUserName.textContent = `${u.statusEmoji ? u.statusEmoji + " " : ""}${u.name || ""}`;
+  viewUserStatus.textContent = u.online
+    ? "Çevrimiçi"
+    : u.lastSeen
+    ? `Son görülme ${formatTime(u.lastSeen)}`
+    : "Üye";
+  viewUserBio.textContent = u.bio || "Durum yazısı eklenmemiş.";
+  userProfileModal.classList.remove("hidden");
+}
+
+if (closeUserProfileBtn) {
+  closeUserProfileBtn.addEventListener("click", () => {
+    userProfileModal.classList.add("hidden");
+  });
+}
+
+if (chatRoomHeaderInfo) {
+  chatRoomHeaderInfo.addEventListener("click", (e) => {
+    if (e.target.closest("#chat-back-btn")) return;
+    if (state.activeRoom && !state.activeRoom.isGroup && state.activeRoom.otherId) {
+      openUserProfileCard(state.activeRoom.otherId);
+    }
+  });
+}
+
+if (profileEmojiInput) profileEmojiInput.addEventListener("input", updateProfilePreviewCard);
+if (profileBioInput) profileBioInput.addEventListener("input", updateProfilePreviewCard);
+if (profileBannerInput) profileBannerInput.addEventListener("input", updateProfilePreviewCard);
+
+if (emojiPresets) {
+  emojiPresets.querySelectorAll("[data-emoji]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (profileEmojiInput) profileEmojiInput.value = btn.dataset.emoji;
+      updateProfilePreviewCard();
+    });
+  });
+}
+
+if (saveProfileDetailsBtn) {
+  saveProfileDetailsBtn.addEventListener("click", async () => {
+    if (!state.user) return;
+    const statusEmoji = profileEmojiInput ? profileEmojiInput.value.trim().slice(0, 4) : "";
+    const bio = profileBioInput ? profileBioInput.value.trim().slice(0, 80) : "";
+    const bannerColor =
+      profileBannerInput && isValidHexColor(profileBannerInput.value)
+        ? profileBannerInput.value
+        : "";
+    await state.db.ref("users/" + state.user.id).update({
+      statusEmoji,
+      bio,
+      bannerColor
+    });
+    state.user.statusEmoji = statusEmoji;
+    state.user.bio = bio;
+    state.user.bannerColor = bannerColor;
+    updateHeaderIdentity();
+    alert("Profil özelleştirmelerin kaydedildi!");
+  });
 }
 
 if (profileTrigger) {

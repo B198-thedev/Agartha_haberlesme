@@ -895,3 +895,43 @@ input:-webkit-autofill:focus {
   padding: 0;
 }
 
+.profile-card-preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  padding-bottom: 14px;
+}
+
+.profile-banner {
+  height: 76px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.profile-avatar-overlap {
+  margin-top: -38px;
+  padding: 0 14px;
+}
+
+.profile-avatar-overlap img {
+  background: var(--bg);
+  border-width: 3px;
+}
+
+.emoji-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.emoji-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 14px;
+  cursor: pointer;
+}
+

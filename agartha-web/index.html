@@ -176,7 +176,7 @@
     <!-- SOHBET ODASI EKRANI -->
     <section id="chat-view" class="view">
       <header class="top-bar">
-        <div class="top-bar-left">
+        <div class="top-bar-left" id="chat-room-header-info" style="cursor:pointer;">
           <button id="chat-back-btn" class="icon-btn">&larr; Geri</button>
           <img id="chat-room-avatar" src="./icon-192.png" alt="" class="mini-logo round-avatar hidden" />
           <div>
@@ -211,21 +211,51 @@
       </form>
     </section>
 
-    <!-- PROFİL FOTOĞRAFI MODALI -->
+    <!-- PROFİL ÖZELLEŞTİRME MODALI -->
     <div id="profile-modal" class="modal hidden">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Profil Ayarları</h2>
+          <h2>Profil Özelleştirme</h2>
           <button id="close-profile-btn" class="icon-btn">Kapat</button>
         </div>
         <div class="modal-body">
-          <div class="avatar-picker">
-            <img id="profile-avatar-preview" src="./icon-192.png" alt="Profil" />
-            <input id="profile-avatar-input" type="file" accept="image/*" class="hidden" />
-            <button id="profile-avatar-btn" type="button" class="btn-primary">Yeni Profil Fotoğrafı Seç</button>
+          <div class="profile-card-preview">
+            <div id="profile-banner-preview" class="profile-banner"></div>
+            <div class="avatar-picker profile-avatar-overlap">
+              <img id="profile-avatar-preview" src="./icon-192.png" alt="Profil" />
+              <div id="profile-name-preview" class="place-title"></div>
+              <div id="profile-bio-preview" class="user-sub"></div>
+              <input id="profile-avatar-input" type="file" accept="image/*" class="hidden" />
+              <button id="profile-avatar-btn" type="button" class="icon-btn">Fotoğrafı Değiştir</button>
+            </div>
           </div>
 
-          <div class="card" style="margin-top: 14px;">
+          <div class="card">
+            <h3>Durum &amp; Hakkında</h3>
+            <div class="stack-form">
+              <div class="inline-form">
+                <input id="profile-emoji-input" type="text" maxlength="4" placeholder="😊" style="width:68px; text-align:center;" />
+                <input id="profile-bio-input" type="text" maxlength="80" placeholder="Durum / Bio (Örn. Kahveye müsait)" />
+              </div>
+              <div class="emoji-presets" id="emoji-presets">
+                <button type="button" class="emoji-btn" data-emoji="☕">☕</button>
+                <button type="button" class="emoji-btn" data-emoji="🎮">🎮</button>
+                <button type="button" class="emoji-btn" data-emoji="🎧">🎧</button>
+                <button type="button" class="emoji-btn" data-emoji="🚗">🚗</button>
+                <button type="button" class="emoji-btn" data-emoji="🌙">🌙</button>
+                <button type="button" class="emoji-btn" data-emoji="🔥">🔥</button>
+                <button type="button" class="emoji-btn" data-emoji="✨">✨</button>
+                <button type="button" class="emoji-btn" data-emoji="">Temizle</button>
+              </div>
+              <label class="user-sub" for="profile-banner-input" style="margin-top:4px;">Profil Kapak &amp; Çerçeve Rengi</label>
+              <div class="color-picker-row">
+                <input id="profile-banner-input" type="color" value="#38bdf8" />
+                <button id="save-profile-details-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Profili Kaydet</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
             <h3>Sohbet Baloncuğu Rengi (Custom)</h3>
             <p class="muted">Renk paletinden seç veya özel hex kodu yaz; tüm sohbetlerde bu renkle görünürsün.</p>
             <div class="color-picker-row">
@@ -246,6 +276,27 @@
             <div class="top-bar-actions" style="margin-top: 10px;">
               <button id="save-color-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Rengi Kaydet</button>
               <button id="reset-color-btn" type="button" class="icon-btn">Varsayılan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KULLANICI PROFİL KARTI MODALI -->
+    <div id="user-profile-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Profil Kartı</h2>
+          <button id="close-user-profile-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <div class="profile-card-preview">
+            <div id="view-user-banner" class="profile-banner"></div>
+            <div class="avatar-picker profile-avatar-overlap">
+              <img id="view-user-avatar" src="./icon-192.png" alt="Profil" />
+              <div id="view-user-name" class="place-title"></div>
+              <div id="view-user-status" class="place-meta"></div>
+              <div id="view-user-bio" class="place-note" style="text-align:center;"></div>
             </div>
           </div>
         </div>
