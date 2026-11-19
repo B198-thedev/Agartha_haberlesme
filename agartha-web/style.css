@@ -33,13 +33,14 @@ html, body {
 #app {
   max-width: 540px;
   margin: 0 auto;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   position: relative;
   background: var(--bg);
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
+  overflow: hidden;
 }
 
 .view {
@@ -931,6 +932,7 @@ input:-webkit-autofill:focus {
   align-items: flex-end;
   gap: 8px;
   max-width: 100%;
+  touch-action: pan-y;
 }
 
 .msg-row.me {

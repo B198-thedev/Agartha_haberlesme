@@ -538,6 +538,28 @@ function ensureAudioContext() {
 
 document.addEventListener("pointerdown", () => ensureAudioContext(), { once: true, passive: true });
 
+// Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle
+function syncVisualViewportHeight() {
+  if (window.visualViewport) {
+    document.documentElement.style.setProperty(
+      "--app-height",
+      window.visualViewport.height + "px"
+    );
+    window.scrollTo(0, 0);
+  }
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", () => {
+    syncVisualViewportHeight();
+    if (chatView && chatView.classList.contains("active") && messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  });
+  window.visualViewport.addEventListener("scroll", syncVisualViewportHeight);
+  syncVisualViewportHeight();
+}
+
 function playTone(ctx, freq, startOffset, duration, type = "sine", gainPeak = 0.08) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -2097,6 +2119,87 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       });
     });
 
+    // Sola veya sağa kaydırarak yanıtla (Swipe-to-Reply)
+    messagesContainer.querySelectorAll(".msg-row").forEach((row) => {
+      const bubble = row.querySelector(".msg-bubble");
+      const msgKey = row.dataset.msgKey;
+      if (!bubble || !msgKey || !data[msgKey]) return;
+
+      let startX = 0;
+      let startY = 0;
+      let currentDx = 0;
+      let tracking = false;
+      let horizontalLocked = false;
+      let thresholdTriggered = false;
+
+      row.addEventListener(
+        "touchstart",
+        (e) => {
+          if (e.touches.length !== 1) return;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          currentDx = 0;
+          tracking = true;
+          horizontalLocked = false;
+          thresholdTriggered = false;
+          bubble.style.transition = "none";
+        },
+        { passive: true }
+      );
+
+      row.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!tracking || e.touches.length !== 1) return;
+          const dx = e.touches[0].clientX - startX;
+          const dy = e.touches[0].clientY - startY;
+
+          if (!horizontalLocked) {
+            if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+              tracking = false;
+              return;
+            }
+            if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+              horizontalLocked = true;
+            } else {
+              return;
+            }
+          }
+
+          currentDx = Math.max(-72, Math.min(72, dx));
+          bubble.style.transform = `translateX(${currentDx}px)`;
+
+          if (!thresholdTriggered && Math.abs(currentDx) >= 48) {
+            thresholdTriggered = true;
+            if (navigator.vibrate) navigator.vibrate(15);
+          }
+        },
+        { passive: true }
+      );
+
+      const finishSwipe = () => {
+        if (!tracking && !horizontalLocked) return;
+        tracking = false;
+        bubble.style.transition = "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)";
+        bubble.style.transform = "translateX(0)";
+        if (horizontalLocked && Math.abs(currentDx) >= 48) {
+          const target = data[msgKey];
+          const sUser = state.usersCache[target.senderId];
+          const sName = sUser ? getDisplayName(sUser) : (target.senderName || "?");
+          setReplyTarget({
+            msgKey,
+            senderName: sName,
+            preview: getReplySnippet(target)
+          });
+        }
+        horizontalLocked = false;
+        currentDx = 0;
+      };
+
+      row.addEventListener("touchend", finishSwipe, { passive: true });
+      row.addEventListener("touchcancel", finishSwipe, { passive: true });
+    });
+
     messagesContainer.querySelectorAll("[data-jump-msg]").forEach((el) => {
       el.addEventListener("click", () => {
         const key = el.dataset.jumpMsg;
@@ -2222,7 +2325,14 @@ function setReplyTarget(replyObj) {
   if (replyPreviewSender) replyPreviewSender.textContent = replyObj.senderName || "";
   if (replyPreviewText) replyPreviewText.textContent = replyObj.preview || "";
   if (replyPreviewBar) replyPreviewBar.classList.remove("hidden");
-  if (messageInput) messageInput.focus({ preventScroll: true });
+  if (messageInput) {
+    messageInput.focus();
+    setTimeout(() => {
+      syncVisualViewportHeight();
+      if (messageForm) messageForm.scrollIntoView({ block: "end" });
+      if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 120);
+  }
 }
 
 function clearReplyTarget() {
@@ -2423,6 +2533,13 @@ function clearPendingPhoto() {
   photoPreviewName.textContent = "";
   photoPreviewBar.classList.add("hidden");
 }
+
+messageInput.addEventListener("focus", () => {
+  setTimeout(() => {
+    syncVisualViewportHeight();
+    if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }, 150);
+});
 
 messageInput.addEventListener("input", () => {
   resizeMessageInput();
