@@ -178,6 +178,7 @@
 
     <!-- SOHBET ODASI EKRANI -->
     <section id="chat-view" class="view">
+      <div id="chat-bg-layer" class="chat-bg-layer hidden"></div>
       <header class="top-bar">
         <div class="top-bar-left" id="chat-room-header-info" style="cursor:pointer;">
           <button id="chat-back-btn" class="icon-btn">&larr; Geri</button>
@@ -304,6 +305,17 @@
             <div class="top-bar-actions" style="margin-top: 10px;">
               <button id="save-color-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Rengi Kaydet</button>
               <button id="reset-color-btn" type="button" class="icon-btn">Varsayılan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Sohbet Arka Planı (%45 Bulanık)</h3>
+            <p class="muted">Seçtiğin görsel sadece senin sohbet ekranlarında bulanık arka plan olarak görünür.</p>
+            <div id="profile-bg-preview" class="bg-preview-box hidden"></div>
+            <input id="profile-bg-input" type="file" accept="image/*" class="hidden" />
+            <div class="top-bar-actions">
+              <button id="profile-bg-btn" type="button" class="btn-primary" style="flex:1; margin-top:0;">Arka Plan Seç</button>
+              <button id="reset-bg-btn" type="button" class="icon-btn danger">Kaldır</button>
             </div>
           </div>
         </div>

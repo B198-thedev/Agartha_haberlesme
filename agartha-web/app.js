@@ -82,6 +82,7 @@ const placesList = document.getElementById("places-list");
 const aiList = document.getElementById("ai-list");
 
 const chatBackBtn = document.getElementById("chat-back-btn");
+const chatBgLayer = document.getElementById("chat-bg-layer");
 const chatRoomHeaderInfo = document.getElementById("chat-room-header-info");
 const chatRoomAvatar = document.getElementById("chat-room-avatar");
 const chatRoomTitle = document.getElementById("chat-room-title");
@@ -136,6 +137,10 @@ const profileColorPreview = document.getElementById("profile-color-preview");
 const colorPresets = document.getElementById("color-presets");
 const saveColorBtn = document.getElementById("save-color-btn");
 const resetColorBtn = document.getElementById("reset-color-btn");
+const profileBgPreview = document.getElementById("profile-bg-preview");
+const profileBgInput = document.getElementById("profile-bg-input");
+const profileBgBtn = document.getElementById("profile-bg-btn");
+const resetBgBtn = document.getElementById("reset-bg-btn");
 
 const userProfileModal = document.getElementById("user-profile-modal");
 const closeUserProfileBtn = document.getElementById("close-user-profile-btn");
@@ -506,7 +511,8 @@ function verifyAndEnter(sessionUser) {
         bubbleColor: data.bubbleColor || "",
         bio: data.bio || "",
         statusEmoji: data.statusEmoji || "",
-        bannerColor: data.bannerColor || ""
+        bannerColor: data.bannerColor || "",
+        chatBgData: data.chatBgData || ""
       };
       enterMainApp();
     })
@@ -537,7 +543,8 @@ function waitForReactivation(sessionUser) {
         bubbleColor: data.bubbleColor || "",
         bio: data.bio || "",
         statusEmoji: data.statusEmoji || "",
-        bannerColor: data.bannerColor || ""
+        bannerColor: data.bannerColor || "",
+        chatBgData: data.chatBgData || ""
       };
       enterMainApp();
     }
@@ -582,6 +589,7 @@ loginForm.addEventListener("submit", async (e) => {
       const bio = (existingAdmin && existingAdmin.bio) || "";
       const statusEmoji = (existingAdmin && existingAdmin.statusEmoji) || "";
       const bannerColor = (existingAdmin && existingAdmin.bannerColor) || "";
+      const chatBgData = (existingAdmin && existingAdmin.chatBgData) || "";
       await state.db.ref("users/" + userId).set({
         name: username,
         nickname,
@@ -593,9 +601,10 @@ loginForm.addEventListener("submit", async (e) => {
         bio,
         statusEmoji,
         bannerColor,
+        chatBgData,
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
-      state.user = { id: userId, name: username, nickname, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor };
+      state.user = { id: userId, name: username, nickname, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor, chatBgData };
       localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
       return;
@@ -630,7 +639,8 @@ loginForm.addEventListener("submit", async (e) => {
         bubbleColor: existingUser.bubbleColor || "",
         bio: existingUser.bio || "",
         statusEmoji: existingUser.statusEmoji || "",
-        bannerColor: existingUser.bannerColor || ""
+        bannerColor: existingUser.bannerColor || "",
+        chatBgData: existingUser.chatBgData || ""
       };
       localStorage.setItem(
         SESSION_KEY,
@@ -727,6 +737,17 @@ registerForm.addEventListener("submit", async (e) => {
   }
 });
 
+function applyChatBackground(bgData) {
+  if (!chatBgLayer) return;
+  if (bgData) {
+    chatBgLayer.style.backgroundImage = `url("${bgData}")`;
+    chatBgLayer.classList.remove("hidden");
+  } else {
+    chatBgLayer.style.backgroundImage = "";
+    chatBgLayer.classList.add("hidden");
+  }
+}
+
 function updateHeaderIdentity() {
   const emojiPrefix = state.user.statusEmoji ? `${state.user.statusEmoji} ` : "";
   const disp = getDisplayName(state.user);
@@ -737,6 +758,7 @@ function updateHeaderIdentity() {
   headerAvatar.style.border = isValidHexColor(state.user.bannerColor)
     ? `2px solid ${state.user.bannerColor}`
     : "";
+  applyChatBackground(state.user.chatBgData || "");
 }
 
 function enterMainApp() {
@@ -868,6 +890,7 @@ function watchOwnAccess() {
     state.user.bio = data.bio || "";
     state.user.statusEmoji = data.statusEmoji || "";
     state.user.bannerColor = data.bannerColor || "";
+    state.user.chatBgData = data.chatBgData || "";
     updateHeaderIdentity();
     if (nextAdmin !== state.user.isAdmin) {
       state.user.isAdmin = nextAdmin;
@@ -1764,6 +1787,15 @@ function openProfileModal() {
     if (profileColorHex) profileColorHex.value = currentHex;
     updateColorPreview(state.user.bubbleColor || "");
   }
+  if (profileBgPreview) {
+    if (state.user.chatBgData) {
+      profileBgPreview.style.backgroundImage = `url("${state.user.chatBgData}")`;
+      profileBgPreview.classList.remove("hidden");
+    } else {
+      profileBgPreview.style.backgroundImage = "";
+      profileBgPreview.classList.add("hidden");
+    }
+  }
   profileModal.classList.remove("hidden");
 }
 
@@ -1899,6 +1931,45 @@ if (resetColorBtn) {
     if (profileColorHex) profileColorHex.value = "#1d4ed8";
     updateColorPreview("");
     profileModal.classList.add("hidden");
+  });
+}
+
+if (profileBgBtn && profileBgInput) {
+  profileBgBtn.addEventListener("click", () => profileBgInput.click());
+  profileBgInput.addEventListener("change", async () => {
+    const file = profileBgInput.files && profileBgInput.files[0];
+    profileBgInput.value = "";
+    if (!file || !state.user) return;
+    profileBgBtn.disabled = true;
+    profileBgBtn.textContent = "Kaydediliyor...";
+    try {
+      const chatBgData = await compressImageToBase64(file, 720, 0.7);
+      await state.db.ref("users/" + state.user.id + "/chatBgData").set(chatBgData);
+      state.user.chatBgData = chatBgData;
+      applyChatBackground(chatBgData);
+      if (profileBgPreview) {
+        profileBgPreview.style.backgroundImage = `url("${chatBgData}")`;
+        profileBgPreview.classList.remove("hidden");
+      }
+    } catch {
+      alert("Arka plan yüklenemedi.");
+    } finally {
+      profileBgBtn.disabled = false;
+      profileBgBtn.textContent = "Arka Plan Seç";
+    }
+  });
+}
+
+if (resetBgBtn) {
+  resetBgBtn.addEventListener("click", async () => {
+    if (!state.user) return;
+    await state.db.ref("users/" + state.user.id + "/chatBgData").remove();
+    state.user.chatBgData = "";
+    applyChatBackground("");
+    if (profileBgPreview) {
+      profileBgPreview.style.backgroundImage = "";
+      profileBgPreview.classList.add("hidden");
+    }
   });
 }
 
