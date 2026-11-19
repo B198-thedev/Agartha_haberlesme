@@ -13,11 +13,38 @@
   --success: #22c55e;
   --bubble-me: #1d4ed8;
   --bubble-other: #1e293b;
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.28) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 html, body {
@@ -765,6 +792,11 @@ html.is-standalone.is-auth-surface .status-bar-cap {
   min-height: 40px;
   max-height: 120px;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.message-input-bar textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .message-input-bar textarea:focus {
