@@ -238,6 +238,68 @@ function showView(viewEl) {
   viewEl.classList.add("active");
 }
 
+function pushBackState(tag) {
+  try {
+    history.pushState({ agartha: tag }, "");
+  } catch {
+    // Bazı ortamlarda pushState engellenebilir
+  }
+}
+
+function closeActiveChatWithAnimation() {
+  if (!chatView.classList.contains("active")) return;
+  cleanupActiveRoomListeners();
+  state.activeRoom = null;
+  chatView.classList.add("leaving");
+  setTimeout(() => {
+    chatView.classList.remove("leaving");
+    showView(mainView);
+  }, 180);
+}
+
+window.addEventListener("popstate", () => {
+  // 1. Önce açık bir modal varsa onu kapat
+  if (imageModal && !imageModal.classList.contains("hidden")) {
+    imageModal.classList.add("hidden");
+    imageModalImg.src = "";
+    return;
+  }
+  if (locationModal && !locationModal.classList.contains("hidden")) {
+    locationModal.classList.add("hidden");
+    return;
+  }
+  if (userProfileModal && !userProfileModal.classList.contains("hidden")) {
+    userProfileModal.classList.add("hidden");
+    return;
+  }
+  if (profileModal && !profileModal.classList.contains("hidden")) {
+    profileModal.classList.add("hidden");
+    return;
+  }
+  if (adminModal && !adminModal.classList.contains("hidden")) {
+    adminModal.classList.add("hidden");
+    if (state.invitesRef) {
+      state.invitesRef.off();
+      state.invitesRef = null;
+    }
+    return;
+  }
+
+  // 2. Sohbet odası açıksa ana ekrana dön
+  if (chatView.classList.contains("active")) {
+    closeActiveChatWithAnimation();
+    return;
+  }
+
+  // 3. Ana ekranda Mekanlar veya AI sekmesindeyse Sohbetler sekmesine dön
+  if (mainView.classList.contains("active")) {
+    const activeTabIdx = bottomTabs.findIndex((t) => t.classList.contains("active"));
+    if (activeTabIdx > 0) {
+      selectBottomTab(0);
+    }
+  }
+});
+
 function showError(msg) {
   loginError.textContent = msg;
   loginError.classList.remove("hidden");
@@ -940,7 +1002,13 @@ function selectBottomTab(index) {
 }
 
 bottomTabs.forEach((tab, index) => {
-  tab.addEventListener("click", () => selectBottomTab(index));
+  tab.addEventListener("click", () => {
+    const prevIndex = bottomTabs.findIndex((t) => t.classList.contains("active"));
+    selectBottomTab(index);
+    if (prevIndex === 0 && index > 0) {
+      pushBackState("tab");
+    }
+  });
 
   tab.addEventListener("keydown", (event) => {
     const lastIndex = bottomTabs.length - 1;
@@ -1171,6 +1239,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   messagesContainer.innerHTML = "";
   typingIndicator.classList.add("hidden");
   showView(chatView);
+  pushBackState("chat");
 
   state.chatRef = state.db.ref(`chats/${roomId}/messages`).limitToLast(100);
   state.chatRef.on("value", (snap) => {
@@ -1276,6 +1345,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           downloadImageBtn.classList.add("hidden");
         }
         imageModal.classList.remove("hidden");
+        pushBackState("image-modal");
       });
     });
 
@@ -1396,13 +1466,7 @@ messageInput.addEventListener("input", () => {
 });
 
 chatBackBtn.addEventListener("click", () => {
-  cleanupActiveRoomListeners();
-  state.activeRoom = null;
-  chatView.classList.add("leaving");
-  setTimeout(() => {
-    chatView.classList.remove("leaving");
-    showView(mainView);
-  }, 180);
+  closeActiveChatWithAnimation();
 });
 
 deleteChatBtn.addEventListener("click", async () => {
@@ -1546,6 +1610,7 @@ if (locBtn && locationModal) {
   locBtn.addEventListener("click", () => {
     if (!state.activeRoom) return;
     locationModal.classList.remove("hidden");
+    pushBackState("location-modal");
   });
 }
 
@@ -1813,6 +1878,7 @@ function openProfileModal() {
     }
   }
   profileModal.classList.remove("hidden");
+  pushBackState("profile-modal");
 }
 
 function openUserProfileCard(uid) {
@@ -1832,6 +1898,7 @@ function openUserProfileCard(uid) {
   viewUserStatus.textContent = `@${u.name || ""} • ${statusStr}`;
   viewUserBio.textContent = u.bio || "Durum yazısı eklenmemiş.";
   userProfileModal.classList.remove("hidden");
+  pushBackState("user-profile-modal");
 }
 
 if (closeUserProfileBtn) {
@@ -2130,6 +2197,7 @@ function listenAiRecommendations() {
 // Admin Paneli
 openAdminBtn.addEventListener("click", () => {
   adminModal.classList.remove("hidden");
+  pushBackState("admin-modal");
   driveUrlInput.value = state.driveConfig.url || "";
   driveSecretInput.value = state.driveConfig.secret || "";
   listenInvites();
