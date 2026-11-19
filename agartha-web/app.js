@@ -1589,16 +1589,45 @@ function setupPresence() {
   });
 }
 
+function isIosDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isStandalonePwa() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function syncAppBadge() {
+  if (!("setAppBadge" in navigator)) return;
+  try {
+    const groupUnread = mainGroupBadge && !mainGroupBadge.classList.contains("hidden") ? 1 : 0;
+    const total = (state.unreadRooms ? state.unreadRooms.size : 0) + groupUnread;
+    if (total > 0) {
+      navigator.setAppBadge(total).catch(() => {});
+    } else if ("clearAppBadge" in navigator) {
+      navigator.clearAppBadge().catch(() => {});
+    }
+  } catch {}
+}
+
 function updateNotifyButton() {
+  if (!notifyBtn) return;
+  notifyBtn.classList.remove("hidden");
   if (!("Notification" in window)) {
-    notifyBtn.classList.add("hidden");
+    if (notifyStatusLabel) {
+      notifyStatusLabel.textContent = isIosDevice() && !isStandalonePwa()
+        ? "iOS: Önce Ana Ekrana Ekle"
+        : "Desteklenmiyor";
+    }
+    notifyBtn.style.borderColor = "";
     return;
   }
   if (Notification.permission === "granted") {
     if (notifyStatusLabel) notifyStatusLabel.textContent = "Açık";
     notifyBtn.style.borderColor = "rgba(34, 197, 94, 0.5)";
   } else if (Notification.permission === "denied") {
-    if (notifyStatusLabel) notifyStatusLabel.textContent = "Engelli";
+    if (notifyStatusLabel) notifyStatusLabel.textContent = "Engelli (Ayarlardan aç)";
     notifyBtn.style.borderColor = "";
   } else {
     if (notifyStatusLabel) notifyStatusLabel.textContent = "Kapalı (Açmak için dokun)";
@@ -1608,13 +1637,23 @@ function updateNotifyButton() {
 
 notifyBtn.addEventListener("click", async () => {
   if (!("Notification" in window)) {
-    alert("Bu tarayıcı bildirimleri desteklemiyor. iPhone'da önce Ana Ekrana Ekle yapmalısınız.");
+    if (isIosDevice() && !isStandalonePwa()) {
+      alert("iPhone'da bildirim alabilmek için Safari alt menüsünden Paylaş > Ana Ekrana Ekle yapıp uygulamayı ana ekrandaki ikondan açmalısın (iOS 16.4+).");
+    } else {
+      alert("Bu tarayıcı bildirimleri desteklemiyor.");
+    }
     return;
   }
-  const perm = await Notification.requestPermission();
-  updateNotifyButton();
-  if (perm === "granted") {
-    showIncomingNotification("Agartha", "Bildirimler açıldı! Yeni mesaj geldiğinde haber vereceğiz.", "test");
+  try {
+    const perm = await Notification.requestPermission();
+    updateNotifyButton();
+    if (perm === "granted") {
+      await showIncomingNotification("Agartha", "Bildirimler açıldı! Yeni mesaj geldiğinde haber vereceğiz.", "test_" + Date.now());
+    } else if (perm === "denied") {
+      alert("Bildirim izni reddedildi. iPhone Ayarlar > Bildirimler > Agartha üzerinden açabilirsin.");
+    }
+  } catch {
+    alert("Bildirim izni alınamadı. iPhone'da uygulamayı Ana Ekrana Ekle ile açtığından emin ol.");
   }
 });
 
@@ -1623,6 +1662,7 @@ async function showIncomingNotification(title, body, uniqueKey) {
   if (uniqueKey) state.notifiedMsgKeys.add(uniqueKey);
 
   playMessageSound("receive");
+  syncAppBadge();
 
   if (navigator.vibrate) {
     navigator.vibrate([120, 60, 120]);
@@ -1630,22 +1670,30 @@ async function showIncomingNotification(title, body, uniqueKey) {
 
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
+  const iconUrl = new URL("./icon-192.png", location.href).href;
   try {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      const reg = await navigator.serviceWorker.ready;
-      await reg.showNotification(title, {
-        body,
-        icon: "./icon-192.png",
-        badge: "./icon-192.png",
-        tag: uniqueKey || "agartha-msg"
-      });
-      return;
+    if ("serviceWorker" in navigator) {
+      const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.ready);
+      if (reg && typeof reg.showNotification === "function") {
+        await reg.showNotification(title, {
+          body,
+          icon: iconUrl,
+          badge: iconUrl,
+          tag: uniqueKey || "agartha-msg",
+          renotify: true
+        });
+        return;
+      }
     }
   } catch {
     // Fallback'e düş
   }
 
-  new Notification(title, { body, icon: "./icon-192.png" });
+  try {
+    new Notification(title, { body, icon: iconUrl });
+  } catch {
+    // iOS Safari PWA'da doğrudan new Notification desteklenmeyebilir
+  }
 }
 
 function watchOwnAccess() {
@@ -1923,6 +1971,7 @@ function listenMainGroupPreview() {
 
 openMainGroupBtn.addEventListener("click", () => {
   mainGroupBadge.classList.add("hidden");
+  syncAppBadge();
   openChatRoom("main_group", "Ana Grup", true, null);
 });
 
@@ -1931,6 +1980,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   cleanupActiveRoomListeners();
 
   state.unreadRooms.delete(roomId);
+  syncAppBadge();
   if (!isGroup) renderContactsList();
 
   state.activeRoom = { id: roomId, title, isGroup, otherId };
