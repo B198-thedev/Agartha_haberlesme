@@ -2662,3 +2662,229 @@ html.anim-off *::after {
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
+/* v63: BİR KEZ GÖRÜNTÜLE, DÜZENLEME, ÖZEL GRUPLAR, SABİTLE/SESSİZE AL, MEKAN PUAN/YORUM */
+.view-once-toggle {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
+.view-once-toggle.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.view-once-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px dashed rgba(56, 189, 248, 0.45);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.msg-bubble.me .view-once-card {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: inherit;
+}
+
+.view-once-card.opened {
+  opacity: 0.65;
+  border-style: solid;
+  cursor: default;
+}
+
+.msg-edit-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.msg-edit-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.msg-edited-tag {
+  font-size: 10px;
+  opacity: 0.68;
+  font-style: italic;
+}
+
+.chat-action-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-action-pills .icon-btn.active {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.chat-meta-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.chat-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #38bdf8;
+  opacity: 0.9;
+}
+
+.chat-meta-badge.muted {
+  color: var(--muted);
+}
+
+.member-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.member-check-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent, #38bdf8);
+  flex-shrink: 0;
+}
+
+.place-rating-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.place-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.place-star-btn {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 17px;
+  line-height: 1;
+  padding: 2px 3px;
+  cursor: pointer;
+  transition: transform 0.12s ease, color 0.12s ease;
+}
+
+.place-star-btn.filled {
+  color: #facc15;
+}
+
+.place-star-btn:hover {
+  transform: scale(1.15);
+}
+
+.place-rating-avg {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.place-visit-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.place-visit-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+}
+
+.place-visit-btn.visited {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.55);
+  color: #4ade80;
+}
+
+.place-visitors-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.place-comments-box {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.place-comment-item {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.35);
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.place-comment-author {
+  font-weight: 600;
+  color: #38bdf8;
+  margin-right: 4px;
+}
+
+.place-comment-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.place-comment-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+

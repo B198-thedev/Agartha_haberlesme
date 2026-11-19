@@ -357,6 +357,9 @@ const state = {
   pendingRegAvatar: "",
   pendingPhotoFile: null,
   pendingPhotoUrl: "",
+  pendingPhotoViewOnce: false,
+  viewingOnceMsg: null,
+  editingMsg: null,
   pendingVideoFile: null,
   pendingVideoUrl: "",
   mediaRecorder: null,
@@ -390,6 +393,11 @@ const state = {
   e2eeGroupKeys: {},
   e2eeActiveGroupKeyId: "",
   mainGroupKeysSnap: {},
+  customGroups: {},
+  customGroupKeys: {},
+  customGroupActiveKeyIds: {},
+  customGroupListeners: {},
+  customGroupKeyRefs: {},
   decryptedCache: {},
   pendingLoginSecret: ""
 };
@@ -578,7 +586,27 @@ const viewUserAvatar = document.getElementById("view-user-avatar");
 const viewUserName = document.getElementById("view-user-name");
 const viewUserStatus = document.getElementById("view-user-status");
 const viewUserBio = document.getElementById("view-user-bio");
+const pinDmBtn = document.getElementById("pin-dm-btn");
+const muteDmBtn = document.getElementById("mute-dm-btn");
 const removeFriendBtn = document.getElementById("remove-friend-btn");
+
+const pinGroupBtn = document.getElementById("pin-group-btn");
+const muteGroupBtn = document.getElementById("mute-group-btn");
+const leaveCustomGroupBtn = document.getElementById("leave-custom-group-btn");
+
+const customGroupsSectionLabel = document.getElementById("custom-groups-section-label");
+const openCreateGroupBtn = document.getElementById("open-create-group-btn");
+const customGroupsList = document.getElementById("custom-groups-list");
+const createGroupModal = document.getElementById("create-group-modal");
+const closeCreateGroupBtn = document.getElementById("close-create-group-btn");
+const createGroupForm = document.getElementById("create-group-form");
+const createGroupNameInput = document.getElementById("create-group-name");
+const createGroupDescInput = document.getElementById("create-group-desc");
+const createGroupMembersList = document.getElementById("create-group-members");
+const createGroupError = document.getElementById("create-group-error");
+
+const photoViewOnceBtn = document.getElementById("photo-view-once-btn");
+const placeRatingSelect = document.getElementById("place-rating-select");
 
 const groupSettingsModal = document.getElementById("group-settings-modal");
 const closeGroupSettingsBtn = document.getElementById("close-group-settings-btn");
@@ -1040,6 +1068,11 @@ window.addEventListener("popstate", () => {
   if (imageModal && !imageModal.classList.contains("hidden")) {
     imageModal.classList.add("hidden");
     imageModalImg.src = "";
+    consumeViewingOnceMsg();
+    return;
+  }
+  if (createGroupModal && !createGroupModal.classList.contains("hidden")) {
+    createGroupModal.classList.add("hidden");
     return;
   }
   if (locationModal && !locationModal.classList.contains("hidden")) {
@@ -1552,7 +1585,7 @@ function listenMainGroupKeys() {
   });
 }
 
-async function encryptOutgoingMessage({ isGroup, otherId, text, replyTo }) {
+async function encryptOutgoingMessage({ isGroup, roomId = null, otherId, text, replyTo }) {
   if (!window.crypto || !window.crypto.subtle || (!text && (!replyTo || !replyTo.preview))) {
     return { text, replyTo };
   }
@@ -1564,6 +1597,18 @@ async function encryptOutgoingMessage({ isGroup, otherId, text, replyTo }) {
   );
 
   try {
+    if (isGroup && roomId && roomId !== "main_group") {
+      const cKeyId = state.customGroupActiveKeyIds[roomId];
+      const cKey = cKeyId && state.customGroupKeys[roomId] ? state.customGroupKeys[roomId][cKeyId] : null;
+      if (!cKey) return { text, replyTo };
+      const { iv, ct } = await aesGcmEncryptBytes(cKey, plainJson);
+      return {
+        text: "",
+        replyTo: replyTo ? { msgKey: replyTo.msgKey, senderName: replyTo.senderName, preview: "" } : null,
+        e2ee: { v: 1, alg: "CUSTOM-GROUP-AES-GCM", roomId, keyId: cKeyId, iv, ct }
+      };
+    }
+
     if (isGroup) {
       const keyId = state.e2eeActiveGroupKeyId;
       const gKey = keyId ? state.e2eeGroupKeys[keyId] : null;
@@ -1604,7 +1649,7 @@ async function encryptOutgoingMessage({ isGroup, otherId, text, replyTo }) {
   return { text, replyTo };
 }
 
-async function decryptMessageRecord(msgKey, m, otherId = null) {
+async function decryptMessageRecord(msgKey, m, otherId = null, roomId = null) {
   if (!m) return { text: "", replyPreview: "" };
   if (!m.e2ee) {
     return {
@@ -1618,7 +1663,10 @@ async function decryptMessageRecord(msgKey, m, otherId = null) {
 
   try {
     let aesKey = null;
-    if (m.e2ee.alg === "GROUP-AES-GCM") {
+    if (m.e2ee.alg === "CUSTOM-GROUP-AES-GCM") {
+      const targetRoom = m.e2ee.roomId || roomId;
+      aesKey = targetRoom && state.customGroupKeys[targetRoom] ? state.customGroupKeys[targetRoom][m.e2ee.keyId] : null;
+    } else if (m.e2ee.alg === "GROUP-AES-GCM") {
       aesKey = state.e2eeGroupKeys[m.e2ee.keyId];
     } else if (m.e2ee.alg === "ECDH-P256-AES-GCM") {
       const targetPub =
@@ -2246,8 +2294,44 @@ const DEFAULT_UI_PREFS = {
   bgPattern: "none",
   reactionPreset: "classic",
   reactionCustom: "❤️ 😂 👍 🔥 😮",
-  hideReadReceipts: false
+  hideReadReceipts: false,
+  pinnedChats: {},
+  mutedChats: {}
 };
+
+const PIN_ICON_SVG = '<svg class="ui-icon" style="width:12px;height:12px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z"/></svg>';
+const MUTE_ICON_SVG = '<svg class="ui-icon" style="width:12px;height:12px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
+
+function isChatPinned(roomId) {
+  return Boolean(roomId && uiPrefs && uiPrefs.pinnedChats && uiPrefs.pinnedChats[roomId]);
+}
+
+function isChatMuted(roomId) {
+  return Boolean(roomId && uiPrefs && uiPrefs.mutedChats && uiPrefs.mutedChats[roomId]);
+}
+
+function toggleChatPref(prefKey, roomId) {
+  if (!roomId) return false;
+  const cur = { ...(uiPrefs[prefKey] || {}) };
+  const nextVal = !cur[roomId];
+  if (nextVal) {
+    cur[roomId] = true;
+  } else {
+    delete cur[roomId];
+  }
+  saveUiPrefs({ [prefKey]: cur });
+  applyMainGroupInfoUI();
+  renderCustomGroupsList();
+  renderContactsList();
+  return nextVal;
+}
+
+function chatMetaBadgesHtml(roomId) {
+  const pinned = isChatPinned(roomId);
+  const muted = isChatMuted(roomId);
+  if (!pinned && !muted) return "";
+  return `<span class="chat-meta-badges">${pinned ? `<span class="chat-meta-badge" title="Sabitlenmiş">${PIN_ICON_SVG}</span>` : ""}${muted ? `<span class="chat-meta-badge muted" title="Sessize Alınmış">${MUTE_ICON_SVG}</span>` : ""}</span>`;
+}
 const REACTION_PRESETS = {
   classic: ["❤️", "😂", "👍", "🔥", "😮"],
   fun: ["🤣", "💀", "😭", "🤡", "🎉"],
@@ -2474,6 +2558,30 @@ async function preloadInitialData() {
   tasks.push(state.db.ref("places").limitToLast(50).once("value").catch(() => {}));
   tasks.push(state.db.ref("recommendations").limitToLast(30).once("value").catch(() => {}));
   tasks.push(state.db.ref("config/drive").once("value").catch(() => {}));
+  tasks.push(
+    state.db.ref("customGroups").once("value").then(async (snap) => {
+      const groups = snap.val() || {};
+      const myGroups = Object.entries(groups).filter(
+        ([, g]) => g && g.members && g.members[state.user.id]
+      );
+      myGroups.forEach(([gid, g]) => {
+        state.customGroups[gid] = g;
+      });
+      await Promise.all(
+        myGroups.map(([gid]) =>
+          state.db
+            .ref(`chats/${gid}/messages`)
+            .limitToLast(100)
+            .once("value")
+            .then((mSnap) => {
+              state.preloadedChats[gid] = mSnap.val() || {};
+              markRoomDelivered(gid);
+            })
+            .catch(() => {})
+        )
+      );
+    }).catch(() => {})
+  );
 
   const timeout = new Promise((resolve) => setTimeout(resolve, 8000));
   await Promise.race([Promise.allSettled(tasks), timeout]);
@@ -2514,6 +2622,7 @@ async function enterMainApp() {
     listenMainGroupPreview();
   }
   listenUsers();
+  listenCustomGroups();
   listenFriendRequests();
   listenPlaces();
   listenAiRecommendations();
@@ -2548,7 +2657,9 @@ function applyMainGroupInfoUI() {
   const gDesc = info.description || "Tüm yetkili arkadaşlar";
   const gAvatar = sanitizeMediaSrc(info.avatarData, "image");
 
-  if (mainGroupTitle) mainGroupTitle.textContent = gName;
+  if (mainGroupTitle) {
+    mainGroupTitle.innerHTML = `${escapeHtml(gName)}${chatMetaBadgesHtml("main_group")}`;
+  }
   if (mainGroupAvatar) {
     if (gAvatar) {
       mainGroupAvatar.innerHTML = `<img src="${escapeHtml(gAvatar)}" alt="Grup" />`;
@@ -2556,7 +2667,7 @@ function applyMainGroupInfoUI() {
       mainGroupAvatar.textContent = "#";
     }
   }
-  if (state.activeRoom && state.activeRoom.isGroup) {
+  if (state.activeRoom && state.activeRoom.id === "main_group") {
     state.activeRoom.title = gName;
     if (chatRoomTitle) chatRoomTitle.textContent = gName;
     if (chatRoomSubtitle) chatRoomSubtitle.textContent = gDesc;
@@ -2565,7 +2676,11 @@ function applyMainGroupInfoUI() {
       chatRoomAvatar.classList.remove("hidden");
     }
   }
-  if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
+  if (
+    groupSettingsModal &&
+    !groupSettingsModal.classList.contains("hidden") &&
+    (!state.activeRoom || state.activeRoom.id === "main_group")
+  ) {
     if (groupAvatarPreview) groupAvatarPreview.src = gAvatar || "./icon-192.png";
     if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar);
     if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = gDesc;
@@ -2669,7 +2784,8 @@ notifyBtn.addEventListener("click", async () => {
   }
 });
 
-async function showIncomingNotification(title, body, uniqueKey) {
+async function showIncomingNotification(title, body, uniqueKey, roomId = null) {
+  if (roomId && isChatMuted(roomId)) return;
   if (uniqueKey && state.notifiedMsgKeys.has(uniqueKey)) return;
   if (uniqueKey) state.notifiedMsgKeys.add(uniqueKey);
 
@@ -3007,9 +3123,15 @@ if (addFriendForm && friendCodeInput) {
 
 function renderContactsList() {
   const myFriends = (state.user && state.user.friends) || {};
-  const others = Object.entries(state.usersCache).filter(
-    ([id, u]) => id !== state.user.id && u.active !== false && Boolean(myFriends[id])
-  );
+  const others = Object.entries(state.usersCache)
+    .filter(([id, u]) => id !== state.user.id && u.active !== false && Boolean(myFriends[id]))
+    .sort(([idA, a], [idB, b]) => {
+      const dmA = getDmRoomId(state.user.id, idA);
+      const dmB = getDmRoomId(state.user.id, idB);
+      const pinDiff = (isChatPinned(dmB) ? 1 : 0) - (isChatPinned(dmA) ? 1 : 0);
+      if (pinDiff !== 0) return pinDiff;
+      return getDisplayName(a).localeCompare(getDisplayName(b), "tr");
+    });
 
   if (others.length === 0) {
     contactsList.innerHTML = `<div class="empty-hint">Arkadaş listende henüz kimse yok. Yukarıdan "+ Arkadaş Ekle" ile arkadaş kodunu gir!</div>`;
@@ -3023,6 +3145,7 @@ function renderContactsList() {
       const role = u.isAdmin ? " • Yönetici" : "";
       const dmId = getDmRoomId(state.user.id, id);
       const unreadHtml = state.unreadRooms.has(dmId) ? `<span class="unread-dot"></span>` : "";
+      const badgesHtml = chatMetaBadgesHtml(dmId);
       const onlineDot = u.online ? `<span class="online-dot"></span>` : "";
       const statusText = u.online
         ? "Çevrimiçi"
@@ -3048,7 +3171,7 @@ function renderContactsList() {
           </div>
           <div class="chat-item-body">
             <div class="chat-item-top">
-              <span class="chat-name">${emojiPrefix}${escapeHtml(dispName)}${unreadHtml}</span>
+              <span class="chat-name">${emojiPrefix}${escapeHtml(dispName)}${badgesHtml}${unreadHtml}</span>
             </div>
             <div class="chat-preview">${statusText}${bioSuffix}${role}</div>
           </div>
@@ -3144,21 +3267,24 @@ function listenUsers() {
           }
           showIncomingNotification(
             `${msg.senderName || u.name} (Özel)`,
-            decodedText ||
-              (msg.imageUrl || msg.imageData
-                ? "Fotoğraf gönderdi"
-                : msg.videoDriveFileId || msg.videoUrl || msg.videoData
-                ? "Video gönderdi"
-                : msg.audioUrl || msg.audioData
-                ? "Sesli mesaj"
-                : msg.location
-                ? msg.location.live
-                  ? "Canlı konum başlattı"
-                  : "Konum paylaştı"
-                : msg.callLog
-                ? "Sesli arama başlattı"
-                : "Şifreli mesaj"),
-            msgSnap.key
+            msg.viewOnce
+              ? "1 kezlik fotoğraf gönderdi"
+              : decodedText ||
+                  (msg.imageUrl || msg.imageData
+                    ? "Fotoğraf gönderdi"
+                    : msg.videoDriveFileId || msg.videoUrl || msg.videoData
+                    ? "Video gönderdi"
+                    : msg.audioUrl || msg.audioData
+                    ? "Sesli mesaj"
+                    : msg.location
+                    ? msg.location.live
+                      ? "Canlı konum başlattı"
+                      : "Konum paylaştı"
+                    : msg.callLog
+                    ? "Sesli arama başlattı"
+                    : "Şifreli mesaj"),
+            msgSnap.key,
+            dmId
           );
         }
       });
@@ -3185,6 +3311,7 @@ function listenMainGroupPreview() {
         decodedText = dec.text || "";
       }
       const previewText =
+        (msg.viewOnce ? "1 kezlik fotoğraf" : "") ||
         decodedText ||
         (msg.imageUrl || msg.imageData
           ? "Fotoğraf"
@@ -3211,7 +3338,7 @@ function listenMainGroupPreview() {
         const isVisibleViewing = isViewingGroup && document.visibilityState === "visible";
         if (!isVisibleViewing) {
           mainGroupBadge.classList.remove("hidden");
-          showIncomingNotification("Ana Grup", `${msg.senderName}: ${previewText}`, key);
+          showIncomingNotification("Ana Grup", `${msg.senderName}: ${previewText}`, key, "main_group");
         }
       }
     });
@@ -3224,20 +3351,348 @@ openMainGroupBtn.addEventListener("click", () => {
   openChatRoom("main_group", gName, true, null);
 });
 
+async function distributeCustomGroupKey(groupId, membersMap) {
+  if (!state.db || !state.user || !state.e2eePubJwk || !membersMap) return;
+  const keyId = state.customGroupActiveKeyIds[groupId];
+  const gKey = keyId && state.customGroupKeys[groupId] ? state.customGroupKeys[groupId][keyId] : null;
+  if (!gKey) return;
+  try {
+    const rawKeyBytes = await window.crypto.subtle.exportKey("raw", gKey);
+    const snap = await state.db.ref(`customGroups/${groupId}/keys`).once("value");
+    const existing = snap.val() || {};
+    const memberIds = Object.keys(membersMap).filter((uid) => membersMap[uid]);
+    for (const uid of memberIds) {
+      if (existing[uid] && existing[uid].keyId === keyId) continue;
+      const u = state.usersCache[uid];
+      if (!u || u.active === false || !u.e2eePub) continue;
+      const shared = await deriveSharedAesKey(u.e2eePub);
+      if (!shared) continue;
+      const { iv, ct } = await aesGcmEncryptBytes(shared, rawKeyBytes);
+      await state.db.ref(`customGroups/${groupId}/keys/${uid}`).set({
+        keyId,
+        fromPub: state.e2eePubJwk,
+        iv,
+        ct
+      });
+    }
+  } catch {}
+}
+
+function listenCustomGroupKeys(groupId, membersMap) {
+  if (!state.db || !state.user || !window.crypto || !window.crypto.subtle) return;
+  if (state.customGroupKeyRefs[groupId]) return;
+  const ref = state.db.ref(`customGroups/${groupId}/keys`);
+  state.customGroupKeyRefs[groupId] = ref;
+  ref.on("value", async (snap) => {
+    const val = snap.val() || {};
+    if (!state.customGroupKeys[groupId]) state.customGroupKeys[groupId] = {};
+
+    if (!val.keyMeta) {
+      const tx = await state.db.ref(`customGroups/${groupId}/keys/keyMeta`).transaction((cur) => {
+        if (cur) return;
+        return { keyId: "ck_1", createdBy: state.user.id, createdAt: Date.now() };
+      });
+      if (tx.committed) {
+        const key = await window.crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        state.customGroupKeys[groupId]["ck_1"] = key;
+        state.customGroupActiveKeyIds[groupId] = "ck_1";
+        await distributeCustomGroupKey(groupId, membersMap);
+      }
+      return;
+    }
+
+    const myEntry = val[state.user.id];
+    if (myEntry && myEntry.fromPub && myEntry.iv && myEntry.ct && !state.customGroupKeys[groupId][myEntry.keyId]) {
+      try {
+        const shared = await deriveSharedAesKey(myEntry.fromPub);
+        if (shared) {
+          const rawKeyBytes = await aesGcmDecryptBytes(shared, myEntry.iv, myEntry.ct);
+          const groupKey = await window.crypto.subtle.importKey(
+            "raw",
+            rawKeyBytes,
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+          );
+          state.customGroupKeys[groupId][myEntry.keyId] = groupKey;
+          state.customGroupActiveKeyIds[groupId] = myEntry.keyId;
+          if (typeof state.onGroupKeyReady === "function" && state.activeRoom && state.activeRoom.id === groupId) {
+            state.onGroupKeyReady();
+          }
+        }
+      } catch {}
+    }
+
+    const latestGroup = state.customGroups[groupId];
+    if (state.customGroupActiveKeyIds[groupId] && state.customGroupKeys[groupId][state.customGroupActiveKeyIds[groupId]]) {
+      distributeCustomGroupKey(groupId, (latestGroup && latestGroup.members) || membersMap);
+    }
+  });
+}
+
+function renderCustomGroupsList() {
+  if (!customGroupsList) return;
+  const entries = Object.entries(state.customGroups || {})
+    .filter(([, g]) => g && g.members && g.members[state.user.id])
+    .sort(([idA, a], [idB, b]) => {
+      const pinDiff = (isChatPinned(idB) ? 1 : 0) - (isChatPinned(idA) ? 1 : 0);
+      if (pinDiff !== 0) return pinDiff;
+      return String(a.name || "").localeCompare(String(b.name || ""), "tr");
+    });
+
+  if (entries.length === 0) {
+    customGroupsList.innerHTML = `<div class="empty-hint">Henüz özel grubun yok. "+ Grup Kur" ile arkadaş grubu oluşturabilirsin.</div>`;
+    return;
+  }
+
+  customGroupsList.innerHTML = entries
+    .map(([gid, g]) => {
+      const gName = g.name || "Özel Grup";
+      const memberCount = Object.keys(g.members || {}).filter((k) => g.members[k]).length;
+      const gDesc = g.description ? `${escapeHtml(g.description)} • ` : "";
+      const unreadHtml = state.unreadRooms.has(gid) ? `<span class="unread-dot"></span>` : "";
+      const badgesHtml = chatMetaBadgesHtml(gid);
+      const safeAvatar = sanitizeMediaSrc(g.avatarData, "image");
+      const avatarHtml = safeAvatar
+        ? `<img class="avatar-img" src="${escapeHtml(safeAvatar)}" alt="${escapeHtml(gName)}" />`
+        : `<div class="avatar group-avatar">${escapeHtml(gName.charAt(0).toUpperCase())}</div>`;
+
+      return `
+        <button class="chat-item" data-cg-id="${escapeHtml(gid)}">
+          <div class="avatar-wrap">${avatarHtml}</div>
+          <div class="chat-item-body">
+            <div class="chat-item-top">
+              <span class="chat-name">${escapeHtml(gName)}${badgesHtml}${unreadHtml}</span>
+            </div>
+            <div class="chat-preview">${gDesc}${memberCount} üye</div>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  customGroupsList.querySelectorAll("[data-cg-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const gid = btn.dataset.cgId;
+      const cg = state.customGroups[gid];
+      if (!cg) return;
+      openChatRoom(gid, cg.name || "Özel Grup", true, null);
+    });
+  });
+}
+
+function listenCustomGroups() {
+  if (!state.db || !state.user) return;
+  state.db.ref("customGroups").on("value", (snap) => {
+    const all = snap.val() || {};
+    const myGroups = {};
+    Object.entries(all).forEach(([gid, g]) => {
+      if (g && g.members && g.members[state.user.id]) {
+        myGroups[gid] = g;
+      }
+    });
+    state.customGroups = myGroups;
+
+    Object.keys(state.customGroupListeners).forEach((gid) => {
+      if (!myGroups[gid]) {
+        try { state.customGroupListeners[gid].off(); } catch {}
+        delete state.customGroupListeners[gid];
+      }
+    });
+    Object.keys(state.customGroupKeyRefs).forEach((gid) => {
+      if (!myGroups[gid]) {
+        try { state.customGroupKeyRefs[gid].off(); } catch {}
+        delete state.customGroupKeyRefs[gid];
+      }
+    });
+
+    if (state.activeRoom && state.activeRoom.isGroup && state.activeRoom.id !== "main_group") {
+      const cur = myGroups[state.activeRoom.id];
+      if (!cur) {
+        closeActiveChatWithAnimation();
+      } else {
+        state.activeRoom.title = cur.name || "Özel Grup";
+        if (chatRoomTitle) chatRoomTitle.textContent = state.activeRoom.title;
+        if (chatRoomSubtitle) chatRoomSubtitle.textContent = cur.description || `${Object.keys(cur.members || {}).filter((k) => cur.members[k]).length} üye`;
+        const gAv = sanitizeMediaSrc(cur.avatarData, "image");
+        if (chatRoomAvatar) {
+          chatRoomAvatar.src = gAv || "./icon-192.png";
+          chatRoomAvatar.classList.remove("hidden");
+        }
+        if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
+          renderGroupMembersList(state.activeRoom.id);
+        }
+      }
+    }
+
+    Object.entries(myGroups).forEach(([gid, g]) => {
+      listenCustomGroupKeys(gid, g.members);
+      if (!state.customGroupListeners[gid]) {
+        const ref = state.db.ref(`chats/${gid}/messages`).limitToLast(1);
+        state.customGroupListeners[gid] = ref;
+        ref.on("child_added", async (msgSnap) => {
+          const msg = msgSnap.val();
+          if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
+          if (msg.senderId === state.user.id) return;
+          markRoomDelivered(gid, msg.timestamp);
+          const isViewingThis = state.activeRoom && state.activeRoom.id === gid;
+          const isVisibleViewing = isViewingThis && document.visibilityState === "visible";
+          if (!isVisibleViewing) {
+            state.unreadRooms.add(gid);
+            renderCustomGroupsList();
+            syncAppBadge();
+            let decodedText = msg.text || "";
+            if (msg.e2ee) {
+              const dec = await decryptMessageRecord(msgSnap.key, msg, null, gid);
+              decodedText = dec.text || "";
+            }
+            const curGroupName = (state.customGroups[gid] && state.customGroups[gid].name) || "Özel Grup";
+            const preview = msg.viewOnce
+              ? "1 kezlik fotoğraf gönderdi"
+              : decodedText || (msg.imageUrl || msg.imageData ? "Fotoğraf gönderdi" : "Yeni mesaj");
+            showIncomingNotification(
+              curGroupName,
+              `${msg.senderName || "?"}: ${preview}`,
+              msgSnap.key,
+              gid
+            );
+          }
+        });
+      }
+    });
+
+    renderCustomGroupsList();
+  });
+}
+
+if (openCreateGroupBtn && createGroupModal) {
+  openCreateGroupBtn.addEventListener("click", () => {
+    if (!state.user) return;
+    if (createGroupError) createGroupError.classList.add("hidden");
+    if (createGroupNameInput) createGroupNameInput.value = "";
+    if (createGroupDescInput) createGroupDescInput.value = "";
+
+    const myFriends = state.user.friends || {};
+    const friendEntries = Object.entries(state.usersCache || {})
+      .filter(([uid, u]) => uid !== state.user.id && u && u.active !== false && Boolean(myFriends[uid]))
+      .sort(([, a], [, b]) => getDisplayName(a).localeCompare(getDisplayName(b), "tr"));
+
+    if (createGroupMembersList) {
+      if (friendEntries.length === 0) {
+        createGroupMembersList.innerHTML = `<div class="empty-hint">Özel grup kurmak için önce en az 1 arkadaş eklemelisin.</div>`;
+      } else {
+        createGroupMembersList.innerHTML = friendEntries
+          .map(([uid, u]) => {
+            const disp = getDisplayName(u);
+            const av = sanitizeMediaSrc(u.avatarData, "image");
+            const avHtml = av
+              ? `<img class="avatar-img" src="${escapeHtml(av)}" alt="" />`
+              : `<div class="avatar">${escapeHtml(disp.charAt(0).toUpperCase())}</div>`;
+            return `
+              <label class="member-check-row">
+                <input type="checkbox" value="${escapeHtml(uid)}" />
+                ${avHtml}
+                <div>
+                  <div class="group-member-name">${escapeHtml(disp)}</div>
+                  <div class="user-sub">@${escapeHtml(u.name || "")}</div>
+                </div>
+              </label>
+            `;
+          })
+          .join("");
+      }
+    }
+
+    createGroupModal.classList.remove("hidden");
+    pushBackState("create-group-modal");
+  });
+}
+
+if (closeCreateGroupBtn && createGroupModal) {
+  closeCreateGroupBtn.addEventListener("click", () => {
+    createGroupModal.classList.add("hidden");
+  });
+}
+
+if (createGroupForm) {
+  createGroupForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.db || !state.user) return;
+    const gName = (createGroupNameInput && createGroupNameInput.value.trim().slice(0, 32)) || "";
+    const gDesc = (createGroupDescInput && createGroupDescInput.value.trim().slice(0, 80)) || "";
+    const checked = createGroupMembersList
+      ? Array.from(createGroupMembersList.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value)
+      : [];
+
+    if (!gName) {
+      if (createGroupError) {
+        createGroupError.textContent = "Lütfen bir grup adı gir.";
+        createGroupError.classList.remove("hidden");
+      }
+      return;
+    }
+    if (checked.length === 0) {
+      if (createGroupError) {
+        createGroupError.textContent = "En az 1 arkadaş seçmelisin.";
+        createGroupError.classList.remove("hidden");
+      }
+      return;
+    }
+
+    const members = { [state.user.id]: true };
+    checked.forEach((uid) => {
+      members[uid] = true;
+    });
+
+    const newRef = state.db.ref("customGroups").push();
+    const groupId = newRef.key;
+    const groupObj = {
+      name: gName,
+      description: gDesc || `${Object.keys(members).length} kişilik özel grup`,
+      avatarData: "",
+      createdBy: state.user.id,
+      createdAt: Date.now(),
+      members
+    };
+    await newRef.set(groupObj);
+    state.customGroups[groupId] = groupObj;
+    listenCustomGroupKeys(groupId, members);
+    createGroupModal.classList.add("hidden");
+    openChatRoom(groupId, gName, true, null);
+  });
+}
+
 // Sohbet Odası
 function openChatRoom(roomId, title, isGroup, otherId) {
   cleanupActiveRoomListeners();
 
   state.unreadRooms.delete(roomId);
   syncAppBadge();
-  if (!isGroup) renderContactsList();
+  if (isGroup && roomId !== "main_group") {
+    renderCustomGroupsList();
+  } else if (!isGroup) {
+    renderContactsList();
+  }
 
   state.activeRoom = { id: roomId, title, isGroup, otherId };
   state.roomReadBy = {};
   state.roomDeliveredBy = {};
   state.lastRenderedMsgKey = null;
   chatRoomTitle.textContent = title;
-  if (isGroup) {
+  if (isGroup && roomId !== "main_group") {
+    const cg = state.customGroups[roomId] || {};
+    const cName = cg.name || title || "Özel Grup";
+    const cAvatar = sanitizeMediaSrc(cg.avatarData, "image");
+    const mCount = Object.keys(cg.members || {}).filter((k) => cg.members[k]).length;
+    chatRoomTitle.textContent = cName;
+    chatRoomAvatar.src = cAvatar || "./icon-192.png";
+    chatRoomAvatar.classList.remove("hidden");
+    chatRoomSubtitle.textContent = cg.description || `${mCount} üye • Özel grup`;
+  } else if (isGroup) {
     const info = state.mainGroupInfo || {};
     chatRoomTitle.textContent = info.name || title || "Ana Grup";
     chatRoomAvatar.src = info.avatarData || "./icon-192.png";
@@ -3338,6 +3793,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     const cached = msgKey && state.decryptedCache[msgKey];
     const resolvedText = cached ? cached.text : (m.text || "");
     if (resolvedText) return resolvedText.slice(0, 80);
+    if (m.viewOnce) return "1 kezlik fotoğraf";
     if (m.imageUrl || m.imageData) return "Fotoğraf";
     if (m.videoDriveFileId || m.videoUrl || m.videoData) return "Video";
     if (m.audioUrl || m.audioData) return "Sesli mesaj";
@@ -3360,7 +3816,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     const encryptedEntries = entries.filter(([msgKey, m]) => m && m.e2ee && !state.decryptedCache[msgKey]);
     if (encryptedEntries.length > 0) {
       await Promise.all(
-        encryptedEntries.map(([msgKey, m]) => decryptMessageRecord(msgKey, m, otherId))
+        encryptedEntries.map(([msgKey, m]) => decryptMessageRecord(msgKey, m, otherId, roomId))
       );
       if (!state.activeRoom || state.activeRoom.id !== roomId) return;
     }
@@ -3369,6 +3825,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     const [lastKey, lastMsg] = lastEntry;
     if (
       isLiveUpdate &&
+      !isChatMuted(roomId) &&
       document.visibilityState === "visible" &&
       state.lastRenderedMsgKey &&
       lastKey !== state.lastRenderedMsgKey &&
@@ -3411,6 +3868,16 @@ function openChatRoom(roomId, title, isGroup, otherId) {
               <div class="reply-quote-text">${escapeHtml(resolvedReplyPreview)}</div>
             </div>`
           : "";
+        const canEdit =
+          isMe &&
+          !m.callLog &&
+          !m.location &&
+          !m.viewOnce &&
+          Boolean(resolvedText) &&
+          resolvedText !== "[Şifreli mesaj çözülemedi]";
+        const editBtnHtml = canEdit
+          ? `<button class="msg-edit-btn" data-edit-msg="${escapeHtml(msgKey)}" title="Mesajı düzenle">Düzenle</button>`
+          : "";
         const replyBtnHtml = `<button class="msg-reply-btn" data-reply-msg="${escapeHtml(msgKey)}" title="Yanıtla">Yanıtla</button>`;
         const reactBtnHtml = `<button class="msg-react-btn" data-react-open="${escapeHtml(msgKey)}" title="Tepki ekle" aria-label="Tepki ekle"><svg class="ui-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>`;
         let reactionsHtml = "";
@@ -3444,9 +3911,21 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             ? fullImgSrc + "=w400"
             : fullImgSrc;
         const safeDownloadUrl = sanitizeHttpUrl(m.downloadUrl);
-        const imgHtml = fullImgSrc
-          ? `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(safeDownloadUrl)}" alt="Fotoğraf" loading="lazy" />`
-          : "";
+        let imgHtml = "";
+        if (m.viewOnce) {
+          const viewedByMe = m.viewedBy && m.viewedBy[state.user.id];
+          if (m.viewOnceExpired || viewedByMe) {
+            imgHtml = `<div class="view-once-card opened">Bir kezlik fotoğraf açıldı</div>`;
+          } else if (isMe) {
+            imgHtml = `<div class="view-once-card opened">Bir kezlik fotoğraf gönderildi</div>`;
+          } else if (fullImgSrc) {
+            imgHtml = `<button type="button" class="view-once-card" data-open-viewonce="${escapeHtml(msgKey)}">Fotoğrafı Aç (1 Kez)</button>`;
+          } else {
+            imgHtml = `<div class="view-once-card opened">Bir kezlik fotoğraf açıldı</div>`;
+          }
+        } else if (fullImgSrc) {
+          imgHtml = `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(safeDownloadUrl)}" alt="Fotoğraf" loading="lazy" />`;
+        }
         let videoHtml = "";
         const safeVideoDriveId = sanitizeDriveFileId(m.videoDriveFileId);
         const safeVideoData = sanitizeMediaSrc(m.videoData, "video");
@@ -3543,7 +4022,9 @@ function openChatRoom(roomId, title, isGroup, otherId) {
               <div class="msg-footer">
                 ${reactBtnHtml}
                 ${replyBtnHtml}
+                ${editBtnHtml}
                 ${delHtml}
+                ${m.editedAt ? '<span class="msg-edited-tag">Düzenlendi</span>' : ""}
                 <span class="msg-time">${formatTime(m.timestamp)}</span>
                 ${tickHtml}
               </div>
@@ -3569,6 +4050,47 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         }
         imageModal.classList.remove("hidden");
         pushBackState("image-modal");
+      });
+    });
+
+    messagesContainer.querySelectorAll("[data-open-viewonce]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const msgKey = btn.dataset.openViewonce;
+        const m = data[msgKey];
+        if (!m || !m.viewOnce || m.viewOnceExpired) return;
+        const safeFull = sanitizeMediaSrc(m.imageUrl || m.imageData, "image");
+        if (!safeFull) return;
+        state.viewingOnceMsg = {
+          roomId,
+          msgKey,
+          driveFileId: m.driveFileId || "",
+          isGroup,
+          viewedBy: { ...(m.viewedBy || {}) }
+        };
+        imageModalImg.src = safeFull;
+        downloadImageBtn.removeAttribute("href");
+        downloadImageBtn.classList.add("hidden");
+        imageModal.classList.remove("hidden");
+        pushBackState("image-modal");
+      });
+    });
+
+    messagesContainer.querySelectorAll("[data-edit-msg]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const msgKey = btn.dataset.editMsg;
+        const m = data[msgKey];
+        if (!m || m.senderId !== state.user.id) return;
+        const dec = state.decryptedCache[msgKey];
+        const rawText = m.e2ee ? (dec ? dec.text : "") : (m.text || "");
+        if (!rawText) return;
+        setEditTarget({
+          roomId,
+          msgKey,
+          isGroup,
+          otherId,
+          text: rawText,
+          replyTo: m.replyTo || null
+        });
       });
     });
 
@@ -3870,6 +4392,7 @@ function cleanupActiveRoomListeners() {
 }
 
 function setReplyTarget(replyObj) {
+  state.editingMsg = null;
   state.replyTo = replyObj;
   if (replyPreviewSender) replyPreviewSender.textContent = replyObj.senderName || "";
   if (replyPreviewText) replyPreviewText.textContent = replyObj.preview || "";
@@ -3884,15 +4407,38 @@ function setReplyTarget(replyObj) {
   }
 }
 
+function setEditTarget(editObj) {
+  state.replyTo = null;
+  state.editingMsg = editObj;
+  if (replyPreviewSender) replyPreviewSender.textContent = "Mesajı Düzenle";
+  if (replyPreviewText) replyPreviewText.textContent = String(editObj.text || "").slice(0, 80);
+  if (replyPreviewBar) replyPreviewBar.classList.remove("hidden");
+  if (messageInput) {
+    messageInput.value = editObj.text || "";
+    resizeMessageInput();
+    updateMicVisibility();
+    messageInput.focus();
+  }
+}
+
 function clearReplyTarget() {
   state.replyTo = null;
+  state.editingMsg = null;
   if (replyPreviewSender) replyPreviewSender.textContent = "";
   if (replyPreviewText) replyPreviewText.textContent = "";
   if (replyPreviewBar) replyPreviewBar.classList.add("hidden");
 }
 
 if (cancelReplyBtn) {
-  cancelReplyBtn.addEventListener("click", clearReplyTarget);
+  cancelReplyBtn.addEventListener("click", () => {
+    const wasEditing = Boolean(state.editingMsg);
+    clearReplyTarget();
+    if (wasEditing && messageInput) {
+      messageInput.value = "";
+      resizeMessageInput();
+      updateMicVisibility();
+    }
+  });
 }
 
 document.addEventListener("visibilitychange", () => {
@@ -4653,6 +5199,11 @@ function stopActiveRecording(discard = false) {
 
 function clearPendingPhoto() {
   state.pendingPhotoFile = null;
+  state.pendingPhotoViewOnce = false;
+  if (photoViewOnceBtn) {
+    photoViewOnceBtn.classList.remove("active");
+    photoViewOnceBtn.setAttribute("aria-pressed", "false");
+  }
   if (state.pendingPhotoUrl) {
     URL.revokeObjectURL(state.pendingPhotoUrl);
     state.pendingPhotoUrl = "";
@@ -4661,6 +5212,14 @@ function clearPendingPhoto() {
   photoPreviewName.textContent = "";
   photoPreviewBar.classList.add("hidden");
   updateMicVisibility();
+}
+
+if (photoViewOnceBtn) {
+  photoViewOnceBtn.addEventListener("click", () => {
+    state.pendingPhotoViewOnce = !state.pendingPhotoViewOnce;
+    photoViewOnceBtn.classList.toggle("active", state.pendingPhotoViewOnce);
+    photoViewOnceBtn.setAttribute("aria-pressed", String(state.pendingPhotoViewOnce));
+  });
 }
 
 function clearPendingVideo() {
@@ -4765,10 +5324,12 @@ messageForm.addEventListener("submit", async (e) => {
   const targetOtherId = state.activeRoom.otherId || null;
   const text = messageInput.value.trim();
   const file = state.pendingPhotoFile;
+  const isViewOnce = Boolean(file && state.pendingPhotoViewOnce);
   const videoFile = state.pendingVideoFile;
   const audioBlob = state.pendingAudioBlob;
   const audioMime = state.pendingAudioMime;
   const replyTo = state.replyTo ? { ...state.replyTo } : null;
+  const editCtx = state.editingMsg ? { ...state.editingMsg } : null;
   if (!text && !file && !videoFile && !audioBlob) {
     messageInput.focus({ preventScroll: true });
     return;
@@ -4782,6 +5343,23 @@ messageForm.addEventListener("submit", async (e) => {
   clearTimeout(state.typingTimeout);
   state.db.ref(`chats/${targetRoomId}/typing/${state.user.id}`).remove();
 
+  if (editCtx && !file && !videoFile && !audioBlob) {
+    const encEdit = await encryptOutgoingMessage({
+      isGroup: editCtx.isGroup,
+      roomId: editCtx.roomId,
+      otherId: editCtx.otherId,
+      text,
+      replyTo: editCtx.replyTo
+    });
+    delete state.decryptedCache[editCtx.msgKey];
+    await state.db.ref(`chats/${editCtx.roomId}/messages/${editCtx.msgKey}`).update({
+      text: encEdit.text,
+      e2ee: encEdit.e2ee || null,
+      editedAt: Date.now()
+    });
+    return;
+  }
+
   sendBtn.classList.remove("sending");
   void sendBtn.offsetWidth;
   sendBtn.classList.add("sending");
@@ -4790,6 +5368,7 @@ messageForm.addEventListener("submit", async (e) => {
   if (!file && !videoFile && !audioBlob) {
     const enc = await encryptOutgoingMessage({
       isGroup: targetIsGroup,
+      roomId: targetRoomId,
       otherId: targetOtherId,
       text,
       replyTo
@@ -4816,6 +5395,7 @@ messageForm.addEventListener("submit", async (e) => {
   try {
     const enc = await encryptOutgoingMessage({
       isGroup: targetIsGroup,
+      roomId: targetRoomId,
       otherId: targetOtherId,
       text,
       replyTo
@@ -4830,6 +5410,7 @@ messageForm.addEventListener("submit", async (e) => {
     if (enc.e2ee) payload.e2ee = enc.e2ee;
 
     if (file) {
+      if (isViewOnce) payload.viewOnce = true;
       if (state.driveConfig && state.driveConfig.url) {
         const uploaded = await uploadToGoogleDrive(file);
         payload.imageUrl = uploaded.url;
@@ -5155,15 +5736,50 @@ micBtn.addEventListener("click", async () => {
   }
 });
 
+async function consumeViewingOnceMsg() {
+  const vo = state.viewingOnceMsg;
+  if (!vo || !state.db || !state.user) return;
+  state.viewingOnceMsg = null;
+
+  const msgRef = state.db.ref(`chats/${vo.roomId}/messages/${vo.msgKey}`);
+  try {
+    await msgRef.child(`viewedBy/${state.user.id}`).set(true);
+    let shouldExpire = !vo.isGroup;
+    if (vo.isGroup && vo.roomId !== "main_group") {
+      const cg = state.customGroups[vo.roomId];
+      const members = cg && cg.members ? Object.keys(cg.members).filter((uid) => cg.members[uid] && uid !== state.user.id) : [];
+      const snap = await msgRef.once("value");
+      const val = snap.val() || {};
+      const viewedMap = val.viewedBy || {};
+      const others = members.filter((uid) => uid !== val.senderId);
+      shouldExpire = others.length > 0 && others.every((uid) => Boolean(viewedMap[uid]));
+    }
+    if (shouldExpire) {
+      await msgRef.update({
+        viewOnceExpired: true,
+        imageUrl: null,
+        imageData: null,
+        downloadUrl: null,
+        driveFileId: null
+      });
+      if (vo.driveFileId) {
+        await deleteFromGoogleDrive(vo.driveFileId);
+      }
+    }
+  } catch {}
+}
+
 closeImageBtn.addEventListener("click", () => {
   imageModal.classList.add("hidden");
   imageModalImg.src = "";
+  consumeViewingOnceMsg();
 });
 
 imageModal.addEventListener("click", (e) => {
   if (e.target === imageModal) {
     imageModal.classList.add("hidden");
     imageModalImg.src = "";
+    consumeViewingOnceMsg();
   }
 });
 
@@ -5316,8 +5932,41 @@ function openUserProfileCard(uid) {
   if (removeFriendBtn) {
     removeFriendBtn.classList.toggle("hidden", isSelf || !isFriend);
   }
+  const dmId = !isSelf && isFriend ? getDmRoomId(state.user.id, uid) : "";
+  if (pinDmBtn) {
+    pinDmBtn.classList.toggle("hidden", !dmId);
+    const pinned = isChatPinned(dmId);
+    pinDmBtn.textContent = pinned ? "Sabitlemeyi Kaldır" : "Sohbeti Sabitle";
+    pinDmBtn.classList.toggle("active", pinned);
+  }
+  if (muteDmBtn) {
+    muteDmBtn.classList.toggle("hidden", !dmId);
+    const muted = isChatMuted(dmId);
+    muteDmBtn.textContent = muted ? "Sesi Aç" : "Sessize Al";
+    muteDmBtn.classList.toggle("active", muted);
+  }
   userProfileModal.classList.remove("hidden");
   pushBackState("user-profile-modal");
+}
+
+if (pinDmBtn) {
+  pinDmBtn.addEventListener("click", () => {
+    if (!viewedProfileUserId || !state.user) return;
+    const dmId = getDmRoomId(state.user.id, viewedProfileUserId);
+    const nextVal = toggleChatPref("pinnedChats", dmId);
+    pinDmBtn.textContent = nextVal ? "Sabitlemeyi Kaldır" : "Sohbeti Sabitle";
+    pinDmBtn.classList.toggle("active", nextVal);
+  });
+}
+
+if (muteDmBtn) {
+  muteDmBtn.addEventListener("click", () => {
+    if (!viewedProfileUserId || !state.user) return;
+    const dmId = getDmRoomId(state.user.id, viewedProfileUserId);
+    const nextVal = toggleChatPref("mutedChats", dmId);
+    muteDmBtn.textContent = nextVal ? "Sesi Aç" : "Sessize Al";
+    muteDmBtn.classList.toggle("active", nextVal);
+  });
 }
 
 if (removeFriendBtn) {
@@ -5339,10 +5988,19 @@ if (closeUserProfileBtn) {
   });
 }
 
-function renderGroupMembersList() {
+let activeGroupSettingsRoomId = "main_group";
+
+function renderGroupMembersList(targetRoomId = null) {
   if (!groupMembersList) return;
+  const roomId = targetRoomId || activeGroupSettingsRoomId || "main_group";
+  const isCustom = roomId !== "main_group";
+  const cg = isCustom ? state.customGroups[roomId] : null;
   const members = Object.entries(state.usersCache || {})
-    .filter(([, u]) => u && u.active !== false && u.inMainGroup !== false)
+    .filter(([uid, u]) => {
+      if (!u || u.active === false) return false;
+      if (isCustom) return Boolean(cg && cg.members && cg.members[uid]);
+      return u.inMainGroup !== false;
+    })
     .sort(([, a], [, b]) => {
       if (Boolean(a.online) !== Boolean(b.online)) return a.online ? -1 : 1;
       return getDisplayName(a).localeCompare(getDisplayName(b), "tr");
@@ -5396,23 +6054,71 @@ function renderGroupMembersList() {
 
 function openGroupSettingsModal() {
   if (!groupSettingsModal) return;
-  const info = state.mainGroupInfo || {};
-  const gName = info.name || "Ana Grup";
-  const gDesc = info.description || "Tüm yetkili arkadaşlar";
+  activeGroupSettingsRoomId =
+    state.activeRoom && state.activeRoom.isGroup ? state.activeRoom.id : "main_group";
+  const isCustom = activeGroupSettingsRoomId !== "main_group";
+  const cg = isCustom ? state.customGroups[activeGroupSettingsRoomId] : null;
+  const info = isCustom ? (cg || {}) : (state.mainGroupInfo || {});
+  const gName = info.name || (isCustom ? "Özel Grup" : "Ana Grup");
+  const gDesc = info.description || (isCustom ? "Özel arkadaş grubu" : "Tüm yetkili arkadaşlar");
   const gAvatar = sanitizeMediaSrc(info.avatarData, "image");
-  const isAdmin = Boolean(state.user && state.user.isAdmin);
+  const canEdit = isCustom
+    ? Boolean(state.user && ((cg && cg.createdBy === state.user.id) || state.user.isAdmin))
+    : Boolean(state.user && state.user.isAdmin);
 
   if (groupAvatarPreview) groupAvatarPreview.src = gAvatar || "./icon-192.png";
-  if (groupAvatarControls) groupAvatarControls.classList.toggle("hidden", !isAdmin);
-  if (groupInfoEditCard) groupInfoEditCard.classList.toggle("hidden", !isAdmin);
-  if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar || !isAdmin);
-  if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = isAdmin ? gDesc : `${gName} • ${gDesc}`;
+  if (groupAvatarControls) groupAvatarControls.classList.toggle("hidden", !canEdit);
+  if (groupInfoEditCard) groupInfoEditCard.classList.toggle("hidden", !canEdit);
+  if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar || !canEdit);
+  if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = canEdit ? gDesc : `${gName} • ${gDesc}`;
   if (groupNameInput) groupNameInput.value = gName;
   if (groupDescInput) groupDescInput.value = gDesc;
+  if (leaveCustomGroupBtn) leaveCustomGroupBtn.classList.toggle("hidden", !isCustom);
 
-  renderGroupMembersList();
+  if (pinGroupBtn) {
+    const pinned = isChatPinned(activeGroupSettingsRoomId);
+    pinGroupBtn.textContent = pinned ? "Sabitlemeyi Kaldır" : "Sohbeti Sabitle";
+    pinGroupBtn.classList.toggle("active", pinned);
+  }
+  if (muteGroupBtn) {
+    const muted = isChatMuted(activeGroupSettingsRoomId);
+    muteGroupBtn.textContent = muted ? "Bildirimleri Aç" : "Bildirimleri Sessize Al";
+    muteGroupBtn.classList.toggle("active", muted);
+  }
+
+  renderGroupMembersList(activeGroupSettingsRoomId);
   groupSettingsModal.classList.remove("hidden");
   pushBackState("group-settings-modal");
+}
+
+if (pinGroupBtn) {
+  pinGroupBtn.addEventListener("click", () => {
+    const nextVal = toggleChatPref("pinnedChats", activeGroupSettingsRoomId);
+    pinGroupBtn.textContent = nextVal ? "Sabitlemeyi Kaldır" : "Sohbeti Sabitle";
+    pinGroupBtn.classList.toggle("active", nextVal);
+  });
+}
+
+if (muteGroupBtn) {
+  muteGroupBtn.addEventListener("click", () => {
+    const nextVal = toggleChatPref("mutedChats", activeGroupSettingsRoomId);
+    muteGroupBtn.textContent = nextVal ? "Bildirimleri Aç" : "Bildirimleri Sessize Al";
+    muteGroupBtn.classList.toggle("active", nextVal);
+  });
+}
+
+if (leaveCustomGroupBtn) {
+  leaveCustomGroupBtn.addEventListener("click", async () => {
+    if (!state.db || !state.user || activeGroupSettingsRoomId === "main_group") return;
+    if (!confirm("Bu özel gruptan ayrılmak istiyor musun?")) return;
+    await state.db
+      .ref(`customGroups/${activeGroupSettingsRoomId}/members/${state.user.id}`)
+      .remove();
+    groupSettingsModal.classList.add("hidden");
+    if (state.activeRoom && state.activeRoom.id === activeGroupSettingsRoomId) {
+      closeActiveChatWithAnimation();
+    }
+  });
 }
 
 if (groupSettingsBtn) {
@@ -5425,13 +6131,21 @@ if (closeGroupSettingsBtn && groupSettingsModal) {
   });
 }
 
+function canManageGroupSettings(roomId) {
+  if (!state.user) return false;
+  if (roomId === "main_group") return Boolean(state.user.isAdmin);
+  const cg = state.customGroups[roomId];
+  return Boolean(cg && (cg.createdBy === state.user.id || state.user.isAdmin));
+}
+
 if (groupAvatarBtn && groupAvatarInput) {
   groupAvatarBtn.addEventListener("click", () => {
-    if (!state.user || !state.user.isAdmin) return;
+    if (!canManageGroupSettings(activeGroupSettingsRoomId)) return;
     groupAvatarInput.click();
   });
   groupAvatarInput.addEventListener("change", () => {
-    if (!state.user || !state.user.isAdmin) return;
+    const roomId = activeGroupSettingsRoomId;
+    if (!canManageGroupSettings(roomId)) return;
     const file = groupAvatarInput.files && groupAvatarInput.files[0];
     groupAvatarInput.value = "";
     if (!file) return;
@@ -5439,10 +6153,16 @@ if (groupAvatarBtn && groupAvatarInput) {
       title: "Grup Fotoğrafını Ayarla",
       outputSize: 256,
       onSave: async (dataUrl) => {
-        if (!state.user || !state.user.isAdmin) return;
-        await state.db.ref("config/mainGroup").update({ avatarData: dataUrl });
-        state.mainGroupInfo.avatarData = dataUrl;
-        applyMainGroupInfoUI();
+        if (!canManageGroupSettings(roomId)) return;
+        if (roomId === "main_group") {
+          await state.db.ref("config/mainGroup").update({ avatarData: dataUrl });
+          state.mainGroupInfo.avatarData = dataUrl;
+          applyMainGroupInfoUI();
+        } else {
+          await state.db.ref(`customGroups/${roomId}`).update({ avatarData: dataUrl });
+        }
+        if (groupAvatarPreview) groupAvatarPreview.src = dataUrl || "./icon-192.png";
+        if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !dataUrl);
       }
     });
   });
@@ -5450,24 +6170,37 @@ if (groupAvatarBtn && groupAvatarInput) {
 
 if (groupAvatarRemoveBtn) {
   groupAvatarRemoveBtn.addEventListener("click", async () => {
-    if (!state.user || !state.user.isAdmin) return;
+    const roomId = activeGroupSettingsRoomId;
+    if (!canManageGroupSettings(roomId)) return;
     if (!confirm("Grup fotoğrafı kaldırılsın mı?")) return;
-    await state.db.ref("config/mainGroup").update({ avatarData: "" });
-    state.mainGroupInfo.avatarData = "";
-    applyMainGroupInfoUI();
+    if (roomId === "main_group") {
+      await state.db.ref("config/mainGroup").update({ avatarData: "" });
+      state.mainGroupInfo.avatarData = "";
+      applyMainGroupInfoUI();
+    } else {
+      await state.db.ref(`customGroups/${roomId}`).update({ avatarData: "" });
+    }
+    if (groupAvatarPreview) groupAvatarPreview.src = "./icon-192.png";
+    groupAvatarRemoveBtn.classList.add("hidden");
   });
 }
 
 if (saveGroupInfoBtn) {
   const saveGroupInfo = async () => {
-    if (!state.user || !state.user.isAdmin) return;
-    const name = (groupNameInput && groupNameInput.value.trim().slice(0, 32)) || "Ana Grup";
+    const roomId = activeGroupSettingsRoomId;
+    if (!canManageGroupSettings(roomId)) return;
+    const name = (groupNameInput && groupNameInput.value.trim().slice(0, 32)) || (roomId === "main_group" ? "Ana Grup" : "Özel Grup");
     const description =
-      (groupDescInput && groupDescInput.value.trim().slice(0, 80)) || "Tüm yetkili arkadaşlar";
-    await state.db.ref("config/mainGroup").update({ name, description });
-    state.mainGroupInfo.name = name;
-    state.mainGroupInfo.description = description;
-    applyMainGroupInfoUI();
+      (groupDescInput && groupDescInput.value.trim().slice(0, 80)) || (roomId === "main_group" ? "Tüm yetkili arkadaşlar" : "Özel arkadaş grubu");
+    if (roomId === "main_group") {
+      await state.db.ref("config/mainGroup").update({ name, description });
+      state.mainGroupInfo.name = name;
+      state.mainGroupInfo.description = description;
+      applyMainGroupInfoUI();
+    } else {
+      await state.db.ref(`customGroups/${roomId}`).update({ name, description });
+    }
+    if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = description;
     alert("Grup bilgileri kaydedildi!");
   };
   saveGroupInfoBtn.addEventListener("click", saveGroupInfo);
@@ -6038,6 +6771,7 @@ placeForm.addEventListener("submit", async (e) => {
   const area = placeAreaInput.value.trim();
   const category = placeCategoryInput.value;
   const note = placeNoteInput.value.trim();
+  const initialRating = Math.min(5, Math.max(1, Number(placeRatingSelect ? placeRatingSelect.value : 4) || 4));
   if (!name || !area) return;
 
   await state.db.ref("places").push({
@@ -6046,7 +6780,9 @@ placeForm.addEventListener("submit", async (e) => {
     category,
     note,
     addedBy: state.user.id,
-    addedByName: state.user.name,
+    addedByName: getDisplayName(state.user),
+    ratings: { [state.user.id]: initialRating },
+    visitedBy: { [state.user.id]: getDisplayName(state.user) },
     timestamp: Date.now()
   });
 
@@ -6074,6 +6810,44 @@ function listenPlaces() {
           ? `<button class="icon-btn danger" data-del-place="${escapeHtml(key)}">Sil</button>`
           : "";
         const cat = p.category ? `${escapeHtml(p.category)} • ` : "";
+
+        const ratingsMap = p.ratings && typeof p.ratings === "object" ? p.ratings : {};
+        const ratingVals = Object.values(ratingsMap).map((v) => Number(v)).filter((v) => v >= 1 && v <= 5);
+        const avgRating = ratingVals.length ? ratingVals.reduce((s, v) => s + v, 0) / ratingVals.length : 0;
+        const myRating = Number(ratingsMap[state.user.id] || 0);
+        const displayStars = myRating || Math.round(avgRating);
+        const starsHtml = [1, 2, 3, 4, 5]
+          .map(
+            (v) =>
+              `<button type="button" class="place-star-btn${v <= displayStars ? " filled" : ""}" data-rate-place="${escapeHtml(key)}" data-rate-val="${v}" title="${v} yıldız">${v <= displayStars ? "★" : "☆"}</button>`
+          )
+          .join("");
+        const avgLabel = ratingVals.length
+          ? `${avgRating.toFixed(1)} (${ratingVals.length} oy)`
+          : "Henüz puan yok";
+
+        const visitedMap = p.visitedBy && typeof p.visitedBy === "object" ? p.visitedBy : {};
+        const iVisited = Boolean(visitedMap[state.user.id]);
+        const visitorNames = Object.entries(visitedMap)
+          .filter(([, v]) => Boolean(v))
+          .map(([uid, v]) => {
+            const u = state.usersCache[uid];
+            return u ? getDisplayName(u) : typeof v === "string" ? v : "Üye";
+          });
+        const visitorsLabel = visitorNames.length
+          ? `Gidenler: ${visitorNames.map((n) => escapeHtml(n)).join(", ")}`
+          : "Henüz giden işaretlenmedi";
+
+        const commentsObj = p.comments && typeof p.comments === "object" ? p.comments : {};
+        const commentsHtml = Object.entries(commentsObj)
+          .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0))
+          .slice(-20)
+          .map(([, c]) => {
+            if (!c || !c.text) return "";
+            return `<div class="place-comment-item"><span class="place-comment-author">${escapeHtml(c.authorName || "Üye")}:</span>${escapeHtml(c.text)}</div>`;
+          })
+          .join("");
+
         return `
         <div class="place-card">
           <div class="place-header">
@@ -6084,6 +6858,20 @@ function listenPlaces() {
             ${delBtn}
           </div>
           ${p.note ? `<div class="place-note">${escapeHtml(p.note)}</div>` : ""}
+          <div class="place-rating-row">
+            <div class="place-stars">${starsHtml}<span class="place-rating-avg">${escapeHtml(avgLabel)}</span></div>
+          </div>
+          <div class="place-visit-row">
+            <button type="button" class="icon-btn place-visit-btn${iVisited ? " visited" : ""}" data-visit-place="${escapeHtml(key)}">${iVisited ? "Gittim ✓" : "Ben de Gittim"}</button>
+            <span class="place-visitors-text">${visitorsLabel}</span>
+          </div>
+          <div class="place-comments-box">
+            ${commentsHtml}
+            <form class="place-comment-form" data-comment-form="${escapeHtml(key)}">
+              <input type="text" class="place-comment-input" maxlength="140" placeholder="Kısa yorum ekle..." required />
+              <button type="submit" class="icon-btn">Yaz</button>
+            </form>
+          </div>
         </div>
       `;
       })
@@ -6093,6 +6881,46 @@ function listenPlaces() {
       btn.addEventListener("click", () => {
         if (!confirm("Bu mekan kaydı silinsin mi?")) return;
         state.db.ref("places/" + btn.dataset.delPlace).remove();
+      });
+    });
+
+    placesList.querySelectorAll("[data-rate-place]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const placeId = btn.dataset.ratePlace;
+        const val = Number(btn.dataset.rateVal);
+        if (!placeId || val < 1 || val > 5 || !state.user) return;
+        state.db.ref(`places/${placeId}/ratings/${state.user.id}`).set(val).catch(() => {});
+      });
+    });
+
+    placesList.querySelectorAll("[data-visit-place]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const placeId = btn.dataset.visitPlace;
+        if (!placeId || !state.user) return;
+        const ref = state.db.ref(`places/${placeId}/visitedBy/${state.user.id}`);
+        const cur = data[placeId] && data[placeId].visitedBy && data[placeId].visitedBy[state.user.id];
+        if (cur) {
+          ref.remove().catch(() => {});
+        } else {
+          ref.set(getDisplayName(state.user)).catch(() => {});
+        }
+      });
+    });
+
+    placesList.querySelectorAll("[data-comment-form]").forEach((form) => {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const placeId = form.dataset.commentForm;
+        const inp = form.querySelector(".place-comment-input");
+        const commentText = inp ? inp.value.trim().slice(0, 140) : "";
+        if (!placeId || !commentText || !state.user) return;
+        if (inp) inp.value = "";
+        await state.db.ref(`places/${placeId}/comments`).push({
+          authorId: state.user.id,
+          authorName: getDisplayName(state.user),
+          text: commentText,
+          timestamp: Date.now()
+        });
       });
     });
   });
@@ -6308,9 +7136,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v61)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v63)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "v63",
+    title: "Bir Kez Görüntüle, Mesaj Düzenleme, Özel Gruplar, Sabitleme & Mekan Puanları",
+    desc: "5 büyük özellik birden eklendi: 1) Fotoğraf önizlemesinde '1 Kez' seçeneğiyle Bir Kez Görüntüle fotoğraf gönderme (açılıp kapatılınca otomatik silinir). 2) Kendi mesajlarını 'Düzenle' ile değiştirme ve 'Düzenlendi' etiketi. 3) '+ Grup Kur' ile arkadaşlarından çoklu Özel Grup oluşturma (E2EE destekli). 4) Kişi ve grup ayarlarından Sohbet Sabitleme & Sessize Alma. 5) Mekanlar sekmesinde 1-5 yıldız puanlama, 'Ben de Gittim' listesi ve mekan içi kısa yorumlar."
+  },
   {
     v: "v62",
     title: "Mesaj Tepki Penceresi Düzeltmesi",

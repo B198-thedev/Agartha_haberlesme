@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (v61)
+          Duyurular &amp; Sürüm Geçmişi (v63)
         </button>
       </div>
     </section>
@@ -146,9 +146,9 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">v61</span>
+                <span id="home-announcement-version" class="exp-badge">v63</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">v61: Her kullanıcıya özel Arkadaş Sistemi eklendi! Arkadaş kodu ile sadece kendi arkadaşlarını ekleyebilirsin.</div>
+              <div id="home-announcement-summary" class="chat-preview">v63: 5 büyük yenilik! Bir Kez Görüntüle fotoğraf, mesaj düzenleme, özel arkadaş grupları, sohbet sabitleme/sessize alma ve mekan puanlama &amp; yorumlar.</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
@@ -164,6 +164,12 @@
               <div id="main-group-preview" class="chat-preview">Herkesin ortak sohbet odası</div>
             </div>
           </button>
+
+          <div id="custom-groups-section-label" class="section-label section-row-header">
+            <span>Özel Gruplarım</span>
+            <button id="open-create-group-btn" type="button" class="icon-btn mini-pill-btn">+ Grup Kur</button>
+          </div>
+          <div id="custom-groups-list" class="list-stack"></div>
 
           <div class="section-label section-row-header">
             <span>Arkadaşlarım (Özel Sohbet)</span>
@@ -209,6 +215,13 @@
                 <option value="Doğa / Park">Doğa / Park</option>
                 <option value="Eğlence / Kültür">Eğlence / Kültür</option>
                 <option value="Diğer">Diğer</option>
+              </select>
+              <select id="place-rating-select" aria-label="Puan">
+                <option value="5">5 Yıldız (Harika)</option>
+                <option value="4" selected>4 Yıldız (Çok İyi)</option>
+                <option value="3">3 Yıldız (İdare Eder)</option>
+                <option value="2">2 Yıldız (Zayıf)</option>
+                <option value="1">1 Yıldız (Tavsiye Etmem)</option>
               </select>
               <input id="place-note" type="text" placeholder="Kısa not (Örn. Sessiz, kahvesi güzel)" maxlength="100" />
               <button type="submit" class="btn-primary">Mekanı Kaydet</button>
@@ -279,6 +292,9 @@
       <div id="photo-preview-bar" class="photo-preview-bar hidden">
         <img id="photo-preview-img" src="" alt="Önizleme" />
         <span id="photo-preview-name" class="user-sub"></span>
+        <button id="photo-view-once-btn" type="button" class="view-once-toggle" aria-pressed="false" title="Alıcı 1 kez görüntülesin">
+          1 Kez
+        </button>
         <button id="cancel-photo-btn" type="button" class="icon-btn danger">&times;</button>
       </div>
       <div id="video-preview-bar" class="photo-preview-bar hidden">
@@ -429,7 +445,7 @@
             </div>
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – v61 tüm güncellemeler</span>
+              <span class="user-sub">v1 – v63 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yetkiler</span>
@@ -450,7 +466,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">v61</span>
+            <span id="announcements-modal-ver" class="exp-badge">v63</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -469,7 +485,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v61)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v63)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -694,6 +710,15 @@
             </div>
           </div>
 
+          <div class="card chat-prefs-card">
+            <h3>Sohbet Tercihleri</h3>
+            <div class="chat-action-pills">
+              <button id="pin-group-btn" type="button" class="icon-btn">Sohbeti Sabitle</button>
+              <button id="mute-group-btn" type="button" class="icon-btn">Bildirimleri Sessize Al</button>
+            </div>
+            <button id="leave-custom-group-btn" type="button" class="icon-btn danger hidden" style="margin-top:8px; width:100%;">Gruptan Ayrıl</button>
+          </div>
+
           <div id="group-info-edit-card" class="card">
             <h3>Grup Bilgileri</h3>
             <div class="stack-form">
@@ -754,9 +779,33 @@
               <div id="view-user-name" class="place-title"></div>
               <div id="view-user-status" class="place-meta"></div>
               <div id="view-user-bio" class="place-note" style="text-align:center;"></div>
+              <div id="dm-prefs-actions" class="chat-action-pills" style="margin-top:10px; justify-content:center;">
+                <button id="pin-dm-btn" type="button" class="icon-btn">Sabitle</button>
+                <button id="mute-dm-btn" type="button" class="icon-btn">Sessize Al</button>
+              </div>
               <button id="remove-friend-btn" type="button" class="icon-btn danger hidden" style="margin-top:10px;">Arkadaşlıktan Çıkar</button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- YENİ ÖZEL GRUP OLUŞTURMA MODALI -->
+    <div id="create-group-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Yeni Özel Grup Kur</h2>
+          <button id="close-create-group-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <form id="create-group-form" class="stack-form">
+            <input id="create-group-name" type="text" maxlength="32" placeholder="Grup Adı (Örn. Hafta Sonu Planı)" required />
+            <input id="create-group-desc" type="text" maxlength="80" placeholder="Kısa açıklama (isteğe bağlı)" />
+            <div class="section-label">Arkadaşlarından Üye Seç</div>
+            <div id="create-group-members" class="list-stack"></div>
+            <div id="create-group-error" class="error-text hidden"></div>
+            <button type="submit" class="btn-primary">Grubu Oluştur</button>
+          </form>
         </div>
       </div>
     </div>
