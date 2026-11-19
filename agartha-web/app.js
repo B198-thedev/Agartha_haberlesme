@@ -142,6 +142,126 @@ const APP_THEMES = {
     bubbleMe: "#2563eb",
     bubbleOther: "#171717"
   },
+  cyberpunk: {
+    name: "Cyberpunk 2077",
+    bg: "#0d0b1a",
+    surface: "#17132b",
+    surface2: "#241d42",
+    border: "#3e2e6e",
+    text: "#fefce8",
+    muted: "#00f0ff",
+    navText: "#fde047",
+    accent: "#fcee09",
+    accent2: "#00f0ff",
+    onAccent: "#090714",
+    bubbleMe: "#0284c7",
+    bubbleOther: "#241d42"
+  },
+  synthwave: {
+    name: "Synthwave 80s",
+    bg: "#140624",
+    surface: "#210a3b",
+    surface2: "#331159",
+    border: "#5a1e96",
+    text: "#fdf4ff",
+    muted: "#ff7eb6",
+    navText: "#f5d0fe",
+    accent: "#ff2a85",
+    accent2: "#7b2cbf",
+    onAccent: "#ffffff",
+    bubbleMe: "#db2777",
+    bubbleOther: "#331159"
+  },
+  radioactive: {
+    name: "Radyoaktif",
+    bg: "#030c03",
+    surface: "#081708",
+    surface2: "#102b10",
+    border: "#1f521f",
+    text: "#ecfccb",
+    muted: "#a3e635",
+    navText: "#bef264",
+    accent: "#76ff03",
+    accent2: "#00e676",
+    onAccent: "#052e16",
+    bubbleMe: "#4d7c0f",
+    bubbleOther: "#102b10"
+  },
+  electricCyan: {
+    name: "Elektrik Cyan",
+    bg: "#03131c",
+    surface: "#061f2e",
+    surface2: "#0b324a",
+    border: "#135278",
+    text: "#ecfeff",
+    muted: "#67e8f9",
+    navText: "#a5f3fc",
+    accent: "#00f5ff",
+    accent2: "#0066ff",
+    onAccent: "#021824",
+    bubbleMe: "#0284c7",
+    bubbleOther: "#0b324a"
+  },
+  lava: {
+    name: "Lav Patlaması",
+    bg: "#190502",
+    surface: "#290904",
+    surface2: "#421008",
+    border: "#6e1c0e",
+    text: "#fff7ed",
+    muted: "#ffab91",
+    navText: "#fed7aa",
+    accent: "#ff3d00",
+    accent2: "#ff9100",
+    onAccent: "#ffffff",
+    bubbleMe: "#ea580c",
+    bubbleOther: "#421008"
+  },
+  sakura: {
+    name: "Sakura Neon",
+    bg: "#210c19",
+    surface: "#301225",
+    surface2: "#471c37",
+    border: "#702c57",
+    text: "#fff1f2",
+    muted: "#f9a8d4",
+    navText: "#fbcfe8",
+    accent: "#ff66b2",
+    accent2: "#ff99cc",
+    onAccent: "#2b091d",
+    bubbleMe: "#be185d",
+    bubbleOther: "#471c37"
+  },
+  matrix: {
+    name: "Matrix Terminal",
+    bg: "#000800",
+    surface: "#031203",
+    surface2: "#072207",
+    border: "#0f450f",
+    text: "#b9fbc0",
+    muted: "#4ade80",
+    navText: "#86efac",
+    accent: "#00ff41",
+    accent2: "#008f11",
+    onAccent: "#001400",
+    bubbleMe: "#166534",
+    bubbleOther: "#072207"
+  },
+  rainbow: {
+    name: "RGB Parti Modu",
+    bg: "#090616",
+    surface: "#120c29",
+    surface2: "#1e1542",
+    border: "#3b2a7a",
+    text: "#ffffff",
+    muted: "#f472b6",
+    navText: "#e879f9",
+    accent: "#ff0080",
+    accent2: "#00dfd8",
+    onAccent: "#ffffff",
+    bubbleMe: "#9333ea",
+    bubbleOther: "#1e1542"
+  },
   light: {
     name: "Aydınlık",
     bg: "#f1f5f9",
@@ -226,7 +346,9 @@ const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const themeGrid = document.getElementById("theme-grid");
 const customThemeInput = document.getElementById("custom-theme-input");
+const customBgInput = document.getElementById("custom-bg-input");
 const applyCustomThemeBtn = document.getElementById("apply-custom-theme-btn");
+const randomThemeBtn = document.getElementById("random-theme-btn");
 
 const openMainGroupBtn = document.getElementById("open-main-group-btn");
 const mainGroupBadge = document.getElementById("main-group-badge");
@@ -360,18 +482,40 @@ function getContrastTextColor(hex) {
   return luminance > 0.62 ? "#0f172a" : "#f8fafc";
 }
 
-function applyAppTheme(themeId, customHex = "") {
+function hslToHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) =>
+    Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function applyAppTheme(themeId, customHex = "", customBgHex = "") {
   const root = document.documentElement;
+  root.classList.toggle("theme-rainbow", themeId === "rainbow");
   let t = APP_THEMES[themeId] || APP_THEMES.midnight;
 
   if (themeId === "custom" && isValidHexColor(customHex)) {
+    const bgHex = isValidHexColor(customBgHex) ? customBgHex : "#080812";
+    const bgIsLight = getContrastTextColor(bgHex) === "#0f172a";
     t = {
-      ...APP_THEMES.amoled,
       name: "Özel",
+      bg: bgHex,
+      surface: bgIsLight ? "#ffffff" : "#111322",
+      surface2: bgIsLight ? "#e2e8f0" : "#1e2238",
+      border: bgIsLight ? "#cbd5e1" : "#2f3557",
+      text: bgIsLight ? "#0f172a" : "#f8fafc",
+      muted: bgIsLight ? "#475569" : "#94a3b8",
+      navText: bgIsLight ? "#475569" : "#cbd5e1",
       accent: customHex,
       accent2: customHex,
       onAccent: getContrastTextColor(customHex),
-      bubbleMe: customHex
+      bubbleMe: customHex,
+      bubbleOther: bgIsLight ? "#e2e8f0" : "#1e2238"
     };
   }
 
@@ -393,7 +537,7 @@ function applyAppTheme(themeId, customHex = "") {
 
   localStorage.setItem(
     THEME_STORAGE_KEY,
-    JSON.stringify({ id: themeId, customHex })
+    JSON.stringify({ id: themeId, customHex, customBgHex })
   );
   renderThemeGrid(themeId);
 }
@@ -406,9 +550,12 @@ function loadSavedTheme() {
       return;
     }
     const parsed = JSON.parse(raw);
-    applyAppTheme(parsed.id || "midnight", parsed.customHex || "");
+    applyAppTheme(parsed.id || "midnight", parsed.customHex || "", parsed.customBgHex || "");
     if (customThemeInput && isValidHexColor(parsed.customHex)) {
       customThemeInput.value = parsed.customHex;
+    }
+    if (customBgInput && isValidHexColor(parsed.customBgHex)) {
+      customBgInput.value = parsed.customBgHex;
     }
   } catch {
     renderThemeGrid("midnight");
@@ -1094,9 +1241,12 @@ function enterMainApp() {
   state.db.ref("users/" + state.user.id + "/appTheme").once("value").then((snap) => {
     const val = snap.val();
     if (val && val.id) {
-      applyAppTheme(val.id, val.customHex || "");
+      applyAppTheme(val.id, val.customHex || "", val.customBgHex || "");
       if (customThemeInput && isValidHexColor(val.customHex)) {
         customThemeInput.value = val.customHex;
+      }
+      if (customBgInput && isValidHexColor(val.customBgHex)) {
+        customBgInput.value = val.customBgHex;
       }
     }
   }).catch(() => {});
@@ -2237,10 +2387,25 @@ if (settingsModal) {
 if (applyCustomThemeBtn && customThemeInput) {
   applyCustomThemeBtn.addEventListener("click", () => {
     const hex = customThemeInput.value;
+    const bgHex = customBgInput ? customBgInput.value : "#080812";
     if (!isValidHexColor(hex)) return;
-    applyAppTheme("custom", hex);
+    applyAppTheme("custom", hex, bgHex);
     if (state.db && state.user) {
-      state.db.ref("users/" + state.user.id + "/appTheme").set({ id: "custom", customHex: hex });
+      state.db.ref("users/" + state.user.id + "/appTheme").set({ id: "custom", customHex: hex, customBgHex: bgHex });
+    }
+  });
+}
+
+if (randomThemeBtn) {
+  randomThemeBtn.addEventListener("click", () => {
+    const hue = Math.floor(Math.random() * 360);
+    const accentHex = hslToHex(hue, 95, 58);
+    const bgHex = hslToHex((hue + 190) % 360, 55, 7);
+    if (customThemeInput) customThemeInput.value = accentHex;
+    if (customBgInput) customBgInput.value = bgHex;
+    applyAppTheme("custom", accentHex, bgHex);
+    if (state.db && state.user) {
+      state.db.ref("users/" + state.user.id + "/appTheme").set({ id: "custom", customHex: accentHex, customBgHex: bgHex });
     }
   });
 }

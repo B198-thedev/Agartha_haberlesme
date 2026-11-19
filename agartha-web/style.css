@@ -1530,3 +1530,26 @@ input:-webkit-autofill:focus {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+@keyframes rgbHueCycle {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+html.theme-rainbow .btn-primary,
+html.theme-rainbow .send-btn,
+html.theme-rainbow .group-avatar,
+html.theme-rainbow .nav-indicator::before,
+html.theme-rainbow .nav-btn.active {
+  animation: rgbHueCycle 4s linear infinite !important;
+}
+
+html.theme-rainbow #app {
+  box-shadow: 0 0 28px rgba(236, 72, 153, 0.35), inset 0 0 18px rgba(56, 189, 248, 0.16);
+}
+
+html.theme-rainbow .msg-bubble.me {
+  background: linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+}
+
