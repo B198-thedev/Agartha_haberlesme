@@ -342,6 +342,7 @@ const state = {
   dmListeners: {},
   presenceSetup: false,
   driveConfig: { url: "", secret: "" },
+  turnConfig: { apiUrl: "" },
   pendingRegAvatar: "",
   pendingPhotoFile: null,
   pendingPhotoUrl: "",
@@ -534,6 +535,8 @@ const adminUsersList = document.getElementById("admin-users-list");
 const driveConfigForm = document.getElementById("drive-config-form");
 const driveUrlInput = document.getElementById("drive-url-input");
 const driveSecretInput = document.getElementById("drive-secret-input");
+const turnConfigForm = document.getElementById("turn-config-form");
+const turnApiUrlInput = document.getElementById("turn-api-url-input");
 
 const MIC_ICON_HTML =
   '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg>';
@@ -1540,6 +1543,7 @@ async function enterMainApp() {
   updateNotifyButton();
   setupPresence();
   listenDriveConfig();
+  listenTurnConfig();
   listenUsers();
   listenMainGroupPreview();
   listenPlaces();
@@ -1555,6 +1559,15 @@ function listenDriveConfig() {
     state.driveConfig = {
       url: String(val.url || "").trim(),
       secret: String(val.secret || "").trim()
+    };
+  });
+}
+
+function listenTurnConfig() {
+  state.db.ref("config/turn").on("value", (snap) => {
+    const val = snap.val() || {};
+    state.turnConfig = {
+      apiUrl: String(val.apiUrl || "").trim()
     };
   });
 }
@@ -2572,29 +2585,40 @@ if (chatSearchClose) {
 // =========================================================
 // SESLİ ARAMA (DENEYSEL — WebRTC P2P + Firebase Sinyalleşme)
 // =========================================================
-const RTC_CONFIG = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:openrelay.metered.ca:80" },
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    }
-  ],
-  iceCandidatePoolSize: 4
-};
+const DEFAULT_STUN_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" }
+];
+
+async function getRtcConfig() {
+  let iceServers = [...DEFAULT_STUN_SERVERS];
+  let hasTurn = false;
+  const apiUrl = state.turnConfig && state.turnConfig.apiUrl ? state.turnConfig.apiUrl.trim() : "";
+  if (apiUrl) {
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (Array.isArray(data.iceServers) ? data.iceServers : []);
+        if (list.length > 0) {
+          iceServers = [...list, ...DEFAULT_STUN_SERVERS];
+          hasTurn = list.some((s) => {
+            const u = Array.isArray(s.urls) ? s.urls.join(",") : String(s.urls || s.url || "");
+            return /turns?:/i.test(u);
+          });
+        }
+      }
+    } catch {}
+  }
+  return {
+    config: { iceServers, iceCandidatePoolSize: 4 },
+    hasTurn
+  };
+}
 
 function startRingtone(kind = "incoming") {
   stopRingtone();
@@ -2698,7 +2722,8 @@ async function startOutgoingVoiceCall(peerId, peerName) {
 
   try {
     const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const { config: rtcConfig, hasTurn } = await getRtcConfig();
+    const pc = new RTCPeerConnection(rtcConfig);
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
     const callRef = state.db.ref(`calls/${callId}`);
@@ -2730,6 +2755,7 @@ async function startOutgoingVoiceCall(peerId, peerName) {
       timerId: null,
       timeoutId: null,
       disconnectTimeoutId: null,
+      hasTurn,
       connectedAt: 0,
       callRef,
       incomingRef,
@@ -2824,10 +2850,12 @@ async function acceptIncomingCall() {
 
   try {
     const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const { config: rtcConfig, hasTurn } = await getRtcConfig();
+    const pc = new RTCPeerConnection(rtcConfig);
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
     call.pc = pc;
+    call.hasTurn = hasTurn;
     call.localStream = localStream;
     call.iceRef = call.callRef.child("callerIce");
 
@@ -2869,7 +2897,7 @@ async function acceptIncomingCall() {
 
 function wirePeerConnectionEvents(pc, callRef, localIceChild) {
   pc.onicecandidate = (e) => {
-    if (e.candidate) {
+    if (e.candidate && e.candidate.candidate) {
       callRef.child(localIceChild).push(e.candidate.toJSON()).catch(() => {});
     }
   };
@@ -2881,13 +2909,16 @@ function wirePeerConnectionEvents(pc, callRef, localIceChild) {
     }
   };
 
-  pc.onconnectionstatechange = () => {
-    const st = pc.connectionState;
-    if (st === "connected" && state.activeCall) {
+  const handleStateUpdate = () => {
+    if (!state.activeCall || state.activeCall.pc !== pc) return;
+    const conn = pc.connectionState || "";
+    const ice = pc.iceConnectionState || "";
+
+    if (conn === "connected" || ice === "connected" || ice === "completed") {
       clearTimeout(state.activeCall.disconnectTimeoutId);
       state.activeCall.disconnectTimeoutId = null;
       stopRingtone();
-      callStatusText.textContent = "Bağlandı (P2P Ses)";
+      callStatusText.textContent = state.activeCall.hasTurn ? "Bağlandı (Sesli Görüşme)" : "Bağlandı (P2P Ses)";
       if (!state.activeCall.connectedAt) {
         state.activeCall.connectedAt = Date.now();
         if (state.activeCall.logRef) {
@@ -2895,23 +2926,29 @@ function wirePeerConnectionEvents(pc, callRef, localIceChild) {
         }
       }
       startCallTimer();
-    } else if (st === "disconnected" && state.activeCall) {
+    } else if (conn === "disconnected" || ice === "disconnected") {
       if (callStatusText) callStatusText.textContent = "Bağlantı zayıf, yeniden bağlanılıyor...";
       if (typeof pc.restartIce === "function") {
         try { pc.restartIce(); } catch {}
       }
       clearTimeout(state.activeCall.disconnectTimeoutId);
       state.activeCall.disconnectTimeoutId = setTimeout(() => {
-        if (state.activeCall && state.activeCall.pc === pc && pc.connectionState !== "connected") {
+        if (state.activeCall && state.activeCall.pc === pc && pc.connectionState !== "connected" && pc.iceConnectionState !== "connected" && pc.iceConnectionState !== "completed") {
           endCurrentCall(true, "Bağlantı kesildi");
         }
       }, 6000);
-    } else if (st === "failed" || st === "closed") {
-      if (state.activeCall) {
-        endCurrentCall(true, st === "failed" ? "Ağ bağlantısı kurulamadı" : "Bağlantı kesildi");
-      }
+    } else if (conn === "failed" || ice === "failed") {
+      const msg = state.activeCall.hasTurn
+        ? "Ağ bağlantısı kurulamadı"
+        : "Ağ bağlantısı kurulamadı (Admin > TURN ayarı gerekli)";
+      endCurrentCall(true, msg);
+    } else if (conn === "closed") {
+      endCurrentCall(true, "Bağlantı kesildi");
     }
   };
+
+  pc.onconnectionstatechange = handleStateUpdate;
+  pc.oniceconnectionstatechange = handleStateUpdate;
 }
 
 function flushPendingIceCandidates(pc, queue) {
@@ -2951,6 +2988,7 @@ function endCurrentCall(notifyRemote = true, reasonText = "") {
   if (call.pc) {
     try {
       call.pc.onconnectionstatechange = null;
+      call.pc.oniceconnectionstatechange = null;
       call.pc.close();
     } catch {}
   }
@@ -3960,6 +3998,7 @@ openAdminBtn.addEventListener("click", () => {
   pushBackState("admin-modal");
   driveUrlInput.value = state.driveConfig.url || "";
   driveSecretInput.value = state.driveConfig.secret || "";
+  if (turnApiUrlInput) turnApiUrlInput.value = (state.turnConfig && state.turnConfig.apiUrl) || "";
   listenInvites();
   renderAdminUsers(state.usersCache);
 });
@@ -3971,6 +4010,15 @@ driveConfigForm.addEventListener("submit", async (e) => {
   await state.db.ref("config/drive").set({ url, secret });
   alert("Google Drive ayarı kaydedildi.");
 });
+
+if (turnConfigForm) {
+  turnConfigForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const apiUrl = turnApiUrlInput ? turnApiUrlInput.value.trim() : "";
+    await state.db.ref("config/turn").set({ apiUrl });
+    alert(apiUrl ? "TURN sunucusu ayarı kaydedildi." : "TURN ayarı temizlendi.");
+  });
+}
 
 closeAdminBtn.addEventListener("click", () => {
   adminModal.classList.add("hidden");
