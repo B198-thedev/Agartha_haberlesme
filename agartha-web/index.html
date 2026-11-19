@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr" class="is-auth-surface">
+<html lang="tr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div id="status-bar-cap" class="status-bar-cap" aria-hidden="true"></div>
   <div id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
     <span class="loading-spinner update-spinner" aria-hidden="true"></span>
     <span id="update-banner-text">Uygulama güncelleniyor, lütfen bekleyin...</span>
@@ -29,6 +28,10 @@
         <div class="loading-spinner" aria-hidden="true"></div>
         <h2>Mesajlar yükleniyor, lütfen bekleyin...</h2>
         <p id="loading-status" class="subtitle">Sohbetler ve kişiler hazırlanıyor</p>
+        <div class="hydros-badge" aria-label="Secured By HydrOS">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span>Secured By HydrOS</span>
+        </div>
       </div>
     </section>
 
@@ -259,28 +262,24 @@
       </div>
 
       <form id="message-form" class="message-input-bar">
+        <div id="attach-menu" class="attach-menu" aria-hidden="true">
+          <button id="loc-btn" type="button" class="attach-menu-item" title="Konum Gönder" aria-label="Konum Gönder">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.6-6-10a6 6 0 1 1 12 0c0 4.4-6 10-6 10Z"/><circle cx="12" cy="11" r="2.2"/></svg>
+            <span>Konum</span>
+          </button>
+        </div>
         <input id="photo-input" type="file" accept="image/*,video/*" class="hidden" />
         <textarea id="message-input" rows="1" placeholder="Mesaj yaz..." autocomplete="off" maxlength="1000"></textarea>
-        <div class="input-actions-wrap">
-          <button id="mic-btn" type="button" class="icon-btn media-btn circle-btn" title="Sesli Mesaj" aria-label="Sesli Mesaj">
-            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg>
-          </button>
-          <button id="photo-btn" type="button" class="icon-btn media-btn circle-btn" title="Fotoğraf / Video Seç" aria-label="Fotoğraf / Video Seç">
-            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-4 4-2-2-5 5"/></svg>
-          </button>
-          <div class="plus-menu-wrap">
-            <button id="plus-btn" type="button" class="icon-btn media-btn circle-btn" title="Diğer Seçenekler" aria-label="Diğer Seçenekler" aria-expanded="false" aria-haspopup="menu">
-              <svg class="ui-icon plus-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
-            <div id="input-more-menu" class="input-more-menu hidden" role="menu">
-              <button id="loc-btn" type="button" class="input-more-item" role="menuitem" title="Konum Gönder" aria-label="Konum Gönder">
-                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.6-6-10a6 6 0 1 1 12 0c0 4.4-6 10-6 10Z"/><circle cx="12" cy="11" r="2.2"/></svg>
-                <span>Konum</span>
-              </button>
-            </div>
-          </div>
-          <button type="submit" class="send-btn send-btn-hidden" aria-hidden="true" tabindex="-1">Gönder</button>
-        </div>
+        <button id="mic-btn" type="button" class="icon-btn media-btn composer-circle-btn" title="Sesli Mesaj" aria-label="Sesli Mesaj">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg>
+        </button>
+        <button id="photo-btn" type="button" class="icon-btn media-btn composer-circle-btn" title="Fotoğraf / Video Seç" aria-label="Fotoğraf / Video Seç">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-4 4-2-2-5 5"/></svg>
+        </button>
+        <button id="attach-plus-btn" type="button" class="icon-btn media-btn composer-circle-btn attach-plus-btn" title="Ekle" aria-label="Ekle" aria-expanded="false">
+          <svg class="ui-icon plus-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button type="submit" class="send-btn is-collapsed">Gönder</button>
       </form>
     </section>
 
@@ -508,14 +507,14 @@
               <img id="group-avatar-preview" src="./icon-192.png" alt="Grup Fotoğrafı" class="group-avatar-preview" />
               <div id="group-settings-subtitle" class="user-sub">Ana Grup</div>
               <input id="group-avatar-input" type="file" accept="image/*" class="hidden" />
-              <div class="top-bar-actions" style="justify-content:center;">
+              <div id="group-avatar-controls" class="top-bar-actions" style="justify-content:center;">
                 <button id="group-avatar-btn" type="button" class="icon-btn">Grup Fotoğrafını Değiştir</button>
                 <button id="group-avatar-remove-btn" type="button" class="icon-btn danger hidden">Kaldır</button>
               </div>
             </div>
           </div>
 
-          <div class="card">
+          <div id="group-info-edit-card" class="card">
             <h3>Grup Bilgileri</h3>
             <div class="stack-form">
               <input id="group-name-input" type="text" maxlength="32" placeholder="Grup Adı (Örn. Ana Grup)" />
@@ -640,6 +639,7 @@
 
   <!-- Firebase Compat Web SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <script src="./firebase-config.js"></script>
   <script src="./app.js"></script>

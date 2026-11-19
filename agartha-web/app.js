@@ -384,7 +384,14 @@ const state = {
   audioCtx: null,
   activeCall: null,
   ringtoneInterval: null,
-  incomingCallRef: null
+  incomingCallRef: null,
+  e2eeKeyPair: null,
+  e2eePubJwk: null,
+  e2eeGroupKeys: {},
+  e2eeActiveGroupKeyId: "",
+  mainGroupKeysSnap: {},
+  decryptedCache: {},
+  pendingLoginSecret: ""
 };
 
 // DOM Elemanları
@@ -480,12 +487,12 @@ const videoPreviewPlayer = document.getElementById("video-preview-player");
 const videoPreviewName = document.getElementById("video-preview-name");
 const cancelVideoBtn = document.getElementById("cancel-video-btn");
 const micBtn = document.getElementById("mic-btn");
-const plusBtn = document.getElementById("plus-btn");
-const inputMoreMenu = document.getElementById("input-more-menu");
 const audioPreviewBar = document.getElementById("audio-preview-bar");
 const audioPreviewPlayer = document.getElementById("audio-preview-player");
 const cancelAudioBtn = document.getElementById("cancel-audio-btn");
 const locBtn = document.getElementById("loc-btn");
+const attachPlusBtn = document.getElementById("attach-plus-btn");
+const attachMenu = document.getElementById("attach-menu");
 const liveLocBar = document.getElementById("live-loc-bar");
 const stopLiveLocBtn = document.getElementById("stop-live-loc-btn");
 const locationModal = document.getElementById("location-modal");
@@ -555,6 +562,8 @@ const groupSettingsSubtitle = document.getElementById("group-settings-subtitle")
 const groupAvatarInput = document.getElementById("group-avatar-input");
 const groupAvatarBtn = document.getElementById("group-avatar-btn");
 const groupAvatarRemoveBtn = document.getElementById("group-avatar-remove-btn");
+const groupAvatarControls = document.getElementById("group-avatar-controls");
+const groupInfoEditCard = document.getElementById("group-info-edit-card");
 const groupNameInput = document.getElementById("group-name-input");
 const groupDescInput = document.getElementById("group-desc-input");
 const saveGroupInfoBtn = document.getElementById("save-group-info-btn");
@@ -605,110 +614,15 @@ function ensureAudioContext() {
 
 document.addEventListener("pointerdown", () => ensureAudioContext(), { once: true, passive: true });
 
-function syncStandaloneClass() {
-  const isStandalone = Boolean(
-    window.navigator.standalone ||
-      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
-  );
-  document.documentElement.classList.toggle("is-standalone", isStandalone);
-}
-
-syncStandaloneClass();
-
-const NON_KEYBOARD_INPUT_TYPES = new Set([
-  "button",
-  "checkbox",
-  "color",
-  "file",
-  "hidden",
-  "image",
-  "radio",
-  "range",
-  "reset",
-  "submit"
-]);
-
-function isEditableElement(el) {
-  if (!el || el === document.body || el === document.documentElement) return false;
-  if (el.isContentEditable) return true;
-  if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return !el.disabled;
-  if (el.tagName === "INPUT") {
-    const type = (el.type || "text").toLowerCase();
-    return !el.disabled && !el.readOnly && !NON_KEYBOARD_INPUT_TYPES.has(type);
-  }
-  return false;
-}
-
-function blurActiveEditable() {
-  const active = document.activeElement;
-  if (isEditableElement(active) && typeof active.blur === "function") {
-    active.blur();
-  }
-}
-
-function resetDocumentScroll() {
-  if (window.scrollX !== 0 || window.scrollY !== 0) {
+// Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle
+function syncVisualViewportHeight() {
+  if (window.visualViewport) {
+    document.documentElement.style.setProperty(
+      "--app-height",
+      window.visualViewport.height + "px"
+    );
     window.scrollTo(0, 0);
   }
-  if (document.documentElement && document.documentElement.scrollTop !== 0) {
-    document.documentElement.scrollTop = 0;
-  }
-  if (document.body && document.body.scrollTop !== 0) {
-    document.body.scrollTop = 0;
-  }
-}
-
-function clearVisualViewportOverrides() {
-  const rootStyle = document.documentElement.style;
-  rootStyle.removeProperty("--app-height");
-  rootStyle.removeProperty("--app-offset-top");
-}
-
-let maxClosedViewportHeight = 0;
-
-// Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle;
-// klavye kapandığında iOS standalone PWA'da visualViewport gecikmesine takılmadan 100lvh/100dvh yüksekliğe dön.
-function syncVisualViewportHeight() {
-  const vv = window.visualViewport;
-  if (!vv) {
-    clearVisualViewportOverrides();
-    resetDocumentScroll();
-    return;
-  }
-
-  const layoutHeight = Math.max(
-    window.innerHeight || 0,
-    document.documentElement ? document.documentElement.clientHeight : 0
-  );
-  const editableFocused = isEditableElement(document.activeElement);
-  if (!editableFocused && vv.height > maxClosedViewportHeight) {
-    maxClosedViewportHeight = vv.height;
-  }
-  const referenceHeight = Math.max(layoutHeight, maxClosedViewportHeight);
-  const keyboardShrink = referenceHeight - vv.height;
-
-  if (editableFocused && keyboardShrink > 140) {
-    const rootStyle = document.documentElement.style;
-    rootStyle.setProperty("--app-height", `${Math.round(vv.height)}px`);
-    rootStyle.setProperty(
-      "--app-offset-top",
-      vv.offsetTop > 1 ? `${Math.round(vv.offsetTop)}px` : "0px"
-    );
-  } else {
-    clearVisualViewportOverrides();
-  }
-
-  resetDocumentScroll();
-}
-
-let viewportResetTimers = [];
-function scheduleViewportReset() {
-  viewportResetTimers.forEach((id) => clearTimeout(id));
-  viewportResetTimers = [];
-  requestAnimationFrame(syncVisualViewportHeight);
-  [80, 220, 420].forEach((delay) => {
-    viewportResetTimers.push(setTimeout(syncVisualViewportHeight, delay));
-  });
 }
 
 if (window.visualViewport) {
@@ -721,23 +635,6 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("scroll", syncVisualViewportHeight);
   syncVisualViewportHeight();
 }
-
-document.addEventListener("focusin", (e) => {
-  if (!isEditableElement(e.target)) return;
-  syncVisualViewportHeight();
-  setTimeout(syncVisualViewportHeight, 120);
-});
-
-document.addEventListener("focusout", () => {
-  scheduleViewportReset();
-});
-
-window.addEventListener("resize", scheduleViewportReset);
-window.addEventListener("orientationchange", () => {
-  maxClosedViewportHeight = 0;
-  scheduleViewportReset();
-});
-window.addEventListener("pageshow", scheduleViewportReset);
 
 function playTone(ctx, freq, startOffset, duration, type = "sine", gainPeak = 0.08) {
   const osc = ctx.createOscillator();
@@ -936,12 +833,70 @@ function renderThemeGrid(activeId) {
   });
 }
 
+function sanitizeHttpUrl(rawUrl) {
+  const s = String(rawUrl || "").trim();
+  if (!s) return "";
+  try {
+    const parsed = new URL(s);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      return parsed.href;
+    }
+  } catch {}
+  return "";
+}
+
+function sanitizeMediaSrc(rawSrc, kind = "image") {
+  const s = String(rawSrc || "").trim();
+  if (!s) return "";
+  if (s === "./icon-192.png" || s === "./icon-512.png") return s;
+  if (kind === "image" && /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(s)) {
+    return s;
+  }
+  if (
+    kind === "audio" &&
+    /^data:audio\/(mp4|webm|ogg|mpeg|wav|aac|x-m4a)(?:;[a-z0-9=+-]+)?;base64,[A-Za-z0-9+/=]+$/i.test(s)
+  ) {
+    return s;
+  }
+  if (
+    kind === "video" &&
+    /^data:video\/(mp4|webm|ogg|quicktime|3gpp|x-m4v)(?:;[a-z0-9=+-]+)?;base64,[A-Za-z0-9+/=]+$/i.test(s)
+  ) {
+    return s;
+  }
+  return sanitizeHttpUrl(s);
+}
+
+function sanitizeChatBgData(rawVal) {
+  const s = String(rawVal || "").trim();
+  if (!s) return "";
+  if (/^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(s)) {
+    return s;
+  }
+  if (/["'()\\]/.test(s)) return "";
+  return sanitizeHttpUrl(s);
+}
+
+function sanitizeDriveFileId(id) {
+  const s = String(id || "").trim();
+  return /^[a-zA-Z0-9_-]{10,120}$/.test(s) ? s : "";
+}
+
 function linkifyText(str) {
-  const safe = escapeHtml(str);
-  return safe.replace(
-    /(https?:\/\/[^\s<]+)/g,
-    '<a class="msg-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
-  );
+  const urlSplitRe = /(https?:\/\/[^\s<]+)/g;
+  return String(str || "")
+    .split(urlSplitRe)
+    .map((part) => {
+      if (/^https?:\/\/[^\s<]+$/.test(part)) {
+        const cleanUrl = sanitizeHttpUrl(part);
+        if (cleanUrl) {
+          const safeUrl = escapeHtml(cleanUrl);
+          return `<a class="msg-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(part)}</a>`;
+        }
+      }
+      return escapeHtml(part);
+    })
+    .join("");
 }
 
 function escapeRegExp(str) {
@@ -960,14 +915,17 @@ function formatMessageTextWithSearch(str, query) {
   const raw = String(str || "");
   if (!query) return linkifyText(raw);
 
-  const urlSplitRe = /(https?:\/\/[^\s]+)/g;
+  const urlSplitRe = /(https?:\/\/[^\s<]+)/g;
   return raw
     .split(urlSplitRe)
     .map((part) => {
-      if (/^https?:\/\/[^\s]+$/.test(part)) {
-        const safeUrl = escapeHtml(part);
-        const label = highlightRawSegment(part, query);
-        return `<a class="msg-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      if (/^https?:\/\/[^\s<]+$/.test(part)) {
+        const cleanUrl = sanitizeHttpUrl(part);
+        if (cleanUrl) {
+          const safeUrl = escapeHtml(cleanUrl);
+          const label = highlightRawSegment(part, query);
+          return `<a class="msg-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+        }
       }
       return highlightRawSegment(part, query);
     })
@@ -1000,50 +958,9 @@ function normalizeTurkish(str) {
     .replace(/^_|_$/g, "");
 }
 
-let iosTopPocketNudged = false;
-function nudgeIosStandaloneTopPocket() {
-  if (iosTopPocketNudged) return;
-  const isStandalone = Boolean(
-    window.navigator.standalone ||
-      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
-  );
-  if (!isStandalone || !isIosDevice() || !document.body) return;
-  iosTopPocketNudged = true;
-
-  const cover = document.createElement("div");
-  cover.setAttribute("aria-hidden", "true");
-  cover.style.cssText =
-    "display:none;position:fixed;inset:0;z-index:2147483646;background:rgba(255,255,255,0.01);pointer-events:none;opacity:0;transition:opacity 260ms ease;";
-  const panel = document.createElement("div");
-  panel.setAttribute("aria-hidden", "true");
-  panel.style.cssText =
-    "position:fixed;top:0;right:0;bottom:0;width:90%;height:100%;z-index:2147483647;background:rgba(255,255,255,0.01);pointer-events:none;transform:translateX(110%);transition:transform 280ms ease;";
-  document.body.append(cover, panel);
-  void panel.offsetWidth;
-  requestAnimationFrame(() => {
-    cover.style.display = "block";
-    cover.style.opacity = "1";
-    panel.style.transform = "translateX(0%)";
-    setTimeout(() => {
-      cover.style.opacity = "0";
-      cover.style.display = "none";
-      panel.style.transform = "translateX(110%)";
-    }, 450);
-  });
-}
-
 function showView(viewEl) {
-  blurActiveEditable();
   [loadingView, authView, mainView, chatView].forEach((v) => v && v.classList.remove("active"));
   if (viewEl) viewEl.classList.add("active");
-  document.documentElement.classList.toggle(
-    "is-auth-surface",
-    viewEl === authView || viewEl === loadingView
-  );
-  if (viewEl === mainView || viewEl === chatView) {
-    nudgeIosStandaloneTopPocket();
-  }
-  scheduleViewportReset();
 }
 
 function pushBackState(tag) {
@@ -1056,8 +973,6 @@ function pushBackState(tag) {
 
 function closeActiveChatWithAnimation() {
   if (!chatView.classList.contains("active")) return;
-  closeInputMoreMenu();
-  blurActiveEditable();
   cleanupActiveRoomListeners();
   state.activeRoom = null;
   chatView.classList.add("leaving");
@@ -1184,9 +1099,47 @@ regAvatarInput.addEventListener("change", () => {
   });
 });
 
+function randomBytesHex(byteLen = 16) {
+  const bytes = new Uint8Array(byteLen);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < byteLen; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function generateStrongInviteCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(8);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 8; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let body = "";
+  for (let i = 0; i < 8; i++) {
+    body += alphabet[bytes[i] % alphabet.length];
+  }
+  return "AGAR-" + body;
+}
+
+function constantTimeEqual(a, b) {
+  const s1 = String(a || "");
+  const s2 = String(b || "");
+  if (s1.length !== s2.length || s1.length === 0) return false;
+  let diff = 0;
+  for (let i = 0; i < s1.length; i++) {
+    diff |= s1.charCodeAt(i) ^ s2.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 function slugifyId(name) {
   const base = normalizeTurkish(name) || "user";
-  return base + "_" + Math.random().toString(36).slice(2, 6);
+  return base + "_" + randomBytesHex(3);
 }
 
 function getDmRoomId(id1, id2) {
@@ -1207,6 +1160,442 @@ async function sha256(text) {
     hash |= 0;
   }
   return "fallback_" + Math.abs(hash).toString(16);
+}
+
+async function hashPasswordPBKDF2(password, saltHex) {
+  const enc = new TextEncoder();
+  if (window.crypto && window.crypto.subtle) {
+    const keyMat = await window.crypto.subtle.importKey(
+      "raw",
+      enc.encode(password),
+      { name: "PBKDF2" },
+      false,
+      ["deriveBits"]
+    );
+    const bits = await window.crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: enc.encode(saltHex),
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMat,
+      256
+    );
+    return Array.from(new Uint8Array(bits))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  return sha256(saltHex + ":" + password);
+}
+
+async function verifyUserSecret(secretInput, userRecord, legacyCodeHash) {
+  if (!userRecord) return false;
+  if (userRecord.hashAlgo === "pbkdf2-sha256-100k" && userRecord.passwordSalt && userRecord.passwordHash) {
+    const derived = await hashPasswordPBKDF2(secretInput, userRecord.passwordSalt);
+    return constantTimeEqual(derived, userRecord.passwordHash);
+  }
+  if (userRecord.passwordHash && constantTimeEqual(legacyCodeHash, userRecord.passwordHash)) {
+    return true;
+  }
+  if (userRecord.codeHash && constantTimeEqual(legacyCodeHash, userRecord.codeHash)) {
+    return true;
+  }
+  if (userRecord.inviteCode && constantTimeEqual(secretInput, userRecord.inviteCode)) {
+    return true;
+  }
+  return false;
+}
+
+const LOGIN_RATE_KEY = "agartha_login_rl";
+function checkLoginRateLimit() {
+  try {
+    const raw = localStorage.getItem(LOGIN_RATE_KEY);
+    if (!raw) return 0;
+    const rl = JSON.parse(raw);
+    if (rl && rl.lockedUntil && Date.now() < rl.lockedUntil) {
+      return Math.ceil((rl.lockedUntil - Date.now()) / 1000);
+    }
+  } catch {}
+  return 0;
+}
+
+function recordFailedLogin() {
+  try {
+    const raw = localStorage.getItem(LOGIN_RATE_KEY);
+    const rl = raw ? JSON.parse(raw) : { count: 0, lockedUntil: 0 };
+    rl.count = (rl.count || 0) + 1;
+    if (rl.count >= 5) {
+      const step = Math.min(rl.count - 5, 4);
+      const waitSec = 15 * Math.pow(2, step); // 15s, 30s, 60s, 120s, 240s
+      rl.lockedUntil = Date.now() + waitSec * 1000;
+    }
+    localStorage.setItem(LOGIN_RATE_KEY, JSON.stringify(rl));
+  } catch {}
+}
+
+function clearLoginFailures() {
+  try {
+    localStorage.removeItem(LOGIN_RATE_KEY);
+  } catch {}
+}
+
+async function ensureFirebaseAuthSession() {
+  if (typeof firebase === "undefined" || typeof firebase.auth !== "function") return null;
+  const auth = firebase.auth();
+  if (auth.currentUser) return auth.currentUser;
+  try {
+    const cred = await auth.signInAnonymously();
+    return cred && cred.user ? cred.user : auth.currentUser;
+  } catch {
+    return null;
+  }
+}
+
+// =========================================================
+// UÇTAN UCA ŞİFRELEME (E2EE — ECDH P-256 + AES-GCM-256)
+// =========================================================
+function bytesToBase64(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin);
+}
+
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function importEcdhPublicKey(jwk) {
+  if (!jwk || !window.crypto || !window.crypto.subtle) return null;
+  return window.crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    []
+  );
+}
+
+async function deriveSharedAesKey(otherPubJwk) {
+  if (!state.e2eeKeyPair || !state.e2eeKeyPair.privateKey || !otherPubJwk) return null;
+  const otherKey = await importEcdhPublicKey(otherPubJwk);
+  if (!otherKey) return null;
+  return window.crypto.subtle.deriveKey(
+    { name: "ECDH", public: otherKey },
+    state.e2eeKeyPair.privateKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function aesGcmEncryptBytes(aesKey, plainBytes) {
+  const iv = new Uint8Array(12);
+  window.crypto.getRandomValues(iv);
+  const cipherBuf = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    plainBytes
+  );
+  return {
+    iv: bytesToBase64(iv),
+    ct: bytesToBase64(new Uint8Array(cipherBuf))
+  };
+}
+
+async function aesGcmDecryptBytes(aesKey, ivB64, ctB64) {
+  const iv = base64ToBytes(ivB64);
+  const ct = base64ToBytes(ctB64);
+  const plainBuf = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    ct
+  );
+  return new Uint8Array(plainBuf);
+}
+
+async function deriveWrapKeyFromPassword(password, saltHex) {
+  const enc = new TextEncoder();
+  const keyMat = await window.crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+  return window.crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: enc.encode(saltHex), iterations: 100000, hash: "SHA-256" },
+    keyMat,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function wrapPrivateJwkWithPassword(privJwk, password) {
+  const salt = randomBytesHex(16);
+  const wrapKey = await deriveWrapKeyFromPassword(password, salt);
+  const enc = new TextEncoder().encode(JSON.stringify(privJwk));
+  const { iv, ct } = await aesGcmEncryptBytes(wrapKey, enc);
+  return { salt, iv, ct };
+}
+
+async function unwrapPrivateJwkWithPassword(wrapped, password) {
+  const wrapKey = await deriveWrapKeyFromPassword(password, wrapped.salt);
+  const plainBytes = await aesGcmDecryptBytes(wrapKey, wrapped.iv, wrapped.ct);
+  return JSON.parse(new TextDecoder().decode(plainBytes));
+}
+
+async function ensureE2EEInitialized(loginSecret = "") {
+  if (!state.user || !state.db || !window.crypto || !window.crypto.subtle) return;
+  const storageKey = "agartha_e2ee_v1_" + state.user.id;
+  try {
+    let savedPair = null;
+    const rawLocal = localStorage.getItem(storageKey);
+    if (rawLocal) {
+      savedPair = JSON.parse(rawLocal);
+    }
+
+    if (!savedPair && loginSecret) {
+      const wrappedSnap = await state.db.ref(`users/${state.user.id}/e2eeWrappedPriv`).once("value");
+      const wrapped = wrappedSnap.val();
+      const pubSnap = await state.db.ref(`users/${state.user.id}/e2eePub`).once("value");
+      const remotePub = pubSnap.val();
+      if (wrapped && wrapped.salt && wrapped.iv && wrapped.ct && remotePub) {
+        try {
+          const privJwk = await unwrapPrivateJwkWithPassword(wrapped, loginSecret);
+          savedPair = { pubJwk: remotePub, privJwk };
+          localStorage.setItem(storageKey, JSON.stringify(savedPair));
+        } catch {}
+      }
+    }
+
+    if (!savedPair) {
+      const kp = await window.crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        ["deriveKey"]
+      );
+      const pubJwk = await window.crypto.subtle.exportKey("jwk", kp.publicKey);
+      const privJwk = await window.crypto.subtle.exportKey("jwk", kp.privateKey);
+      savedPair = { pubJwk, privJwk };
+      localStorage.setItem(storageKey, JSON.stringify(savedPair));
+      state.e2eeKeyPair = kp;
+      state.e2eePubJwk = pubJwk;
+
+      const userUpdate = { e2eePub: pubJwk };
+      if (loginSecret) {
+        userUpdate.e2eeWrappedPriv = await wrapPrivateJwkWithPassword(privJwk, loginSecret);
+      }
+      await state.db.ref(`users/${state.user.id}`).update(userUpdate);
+      return;
+    }
+
+    const publicKey = await importEcdhPublicKey(savedPair.pubJwk);
+    const privateKey = await window.crypto.subtle.importKey(
+      "jwk",
+      savedPair.privJwk,
+      { name: "ECDH", namedCurve: "P-256" },
+      true,
+      ["deriveKey"]
+    );
+    state.e2eeKeyPair = { publicKey, privateKey };
+    state.e2eePubJwk = savedPair.pubJwk;
+
+    const myNode = state.usersCache[state.user.id];
+    const updates = {};
+    if (!myNode || !myNode.e2eePub) {
+      updates.e2eePub = savedPair.pubJwk;
+    }
+    if (loginSecret && (!myNode || !myNode.e2eeWrappedPriv)) {
+      updates.e2eeWrappedPriv = await wrapPrivateJwkWithPassword(savedPair.privJwk, loginSecret);
+    }
+    if (Object.keys(updates).length > 0) {
+      await state.db.ref(`users/${state.user.id}`).update(updates);
+    }
+  } catch (err) {
+    console.warn("E2EE başlatılamadı:", err && err.message);
+  }
+}
+
+async function distributeGroupKeyToMembers(keyId) {
+  const aesKey = state.e2eeGroupKeys[keyId];
+  if (!aesKey || !state.e2eeKeyPair || !state.e2eePubJwk || !state.db) return;
+  try {
+    const rawBytes = new Uint8Array(await window.crypto.subtle.exportKey("raw", aesKey));
+    const entries = Object.entries(state.usersCache || {}).filter(
+      ([, u]) => u && u.active !== false && u.e2eePub
+    );
+    for (const [uid, u] of entries) {
+      if (state.mainGroupKeysSnap && state.mainGroupKeysSnap[uid] && state.mainGroupKeysSnap[uid].keyId === keyId) {
+        continue;
+      }
+      const shared = await deriveSharedAesKey(u.e2eePub);
+      if (!shared) continue;
+      const { iv, ct } = await aesGcmEncryptBytes(shared, rawBytes);
+      await state.db.ref(`config/mainGroupKeys/${uid}`).set({
+        v: 1,
+        keyId,
+        fromId: state.user.id,
+        fromPub: state.e2eePubJwk,
+        iv,
+        ct
+      });
+    }
+  } catch {}
+}
+
+function listenMainGroupKeys() {
+  if (!state.db || !state.user || !window.crypto || !window.crypto.subtle) return;
+  state.db.ref("config/mainGroupKeys").on("value", async (snap) => {
+    const val = snap.val() || {};
+    state.mainGroupKeysSnap = val;
+
+    if (!val.keyMeta) {
+      const tx = await state.db.ref("config/mainGroupKeys/keyMeta").transaction((cur) => {
+        if (cur) return;
+        return { keyId: "gk_1", createdBy: state.user.id, createdAt: Date.now() };
+      });
+      if (tx.committed) {
+        const key = await window.crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        state.e2eeGroupKeys["gk_1"] = key;
+        state.e2eeActiveGroupKeyId = "gk_1";
+        await distributeGroupKeyToMembers("gk_1");
+      }
+      return;
+    }
+
+    const myEntry = val[state.user.id];
+    if (myEntry && myEntry.fromPub && myEntry.iv && myEntry.ct && !state.e2eeGroupKeys[myEntry.keyId]) {
+      try {
+        const shared = await deriveSharedAesKey(myEntry.fromPub);
+        if (shared) {
+          const rawKeyBytes = await aesGcmDecryptBytes(shared, myEntry.iv, myEntry.ct);
+          const groupKey = await window.crypto.subtle.importKey(
+            "raw",
+            rawKeyBytes,
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+          );
+          state.e2eeGroupKeys[myEntry.keyId] = groupKey;
+          state.e2eeActiveGroupKeyId = myEntry.keyId;
+          if (typeof state.onGroupKeyReady === "function") {
+            state.onGroupKeyReady();
+          }
+        }
+      } catch {}
+    }
+
+    if (state.e2eeActiveGroupKeyId && state.e2eeGroupKeys[state.e2eeActiveGroupKeyId]) {
+      distributeGroupKeyToMembers(state.e2eeActiveGroupKeyId);
+    }
+  });
+}
+
+async function encryptOutgoingMessage({ isGroup, otherId, text, replyTo }) {
+  if (!window.crypto || !window.crypto.subtle || (!text && (!replyTo || !replyTo.preview))) {
+    return { text, replyTo };
+  }
+  const plainJson = new TextEncoder().encode(
+    JSON.stringify({
+      text: text || "",
+      replyPreview: replyTo ? String(replyTo.preview || "") : ""
+    })
+  );
+
+  try {
+    if (isGroup) {
+      const keyId = state.e2eeActiveGroupKeyId;
+      const gKey = keyId ? state.e2eeGroupKeys[keyId] : null;
+      if (!gKey) return { text, replyTo };
+      const { iv, ct } = await aesGcmEncryptBytes(gKey, plainJson);
+      return {
+        text: "",
+        replyTo: replyTo ? { msgKey: replyTo.msgKey, senderName: replyTo.senderName, preview: "" } : null,
+        e2ee: { v: 1, alg: "GROUP-AES-GCM", keyId, iv, ct }
+      };
+    }
+
+    if (otherId && state.e2eeKeyPair && state.e2eePubJwk) {
+      let peerPub = state.usersCache[otherId] && state.usersCache[otherId].e2eePub;
+      if (!peerPub && state.db) {
+        const snap = await state.db.ref(`users/${otherId}/e2eePub`).once("value");
+        peerPub = snap.val();
+      }
+      if (!peerPub) return { text, replyTo };
+      const shared = await deriveSharedAesKey(peerPub);
+      if (!shared) return { text, replyTo };
+      const { iv, ct } = await aesGcmEncryptBytes(shared, plainJson);
+      return {
+        text: "",
+        replyTo: replyTo ? { msgKey: replyTo.msgKey, senderName: replyTo.senderName, preview: "" } : null,
+        e2ee: {
+          v: 1,
+          alg: "ECDH-P256-AES-GCM",
+          iv,
+          ct,
+          senderPub: state.e2eePubJwk,
+          recipientPub: peerPub
+        }
+      };
+    }
+  } catch {}
+
+  return { text, replyTo };
+}
+
+async function decryptMessageRecord(msgKey, m, otherId = null) {
+  if (!m) return { text: "", replyPreview: "" };
+  if (!m.e2ee) {
+    return {
+      text: m.text || "",
+      replyPreview: m.replyTo ? m.replyTo.preview || "" : ""
+    };
+  }
+  if (msgKey && state.decryptedCache[msgKey]) {
+    return state.decryptedCache[msgKey];
+  }
+
+  try {
+    let aesKey = null;
+    if (m.e2ee.alg === "GROUP-AES-GCM") {
+      aesKey = state.e2eeGroupKeys[m.e2ee.keyId];
+    } else if (m.e2ee.alg === "ECDH-P256-AES-GCM") {
+      const targetPub =
+        m.senderId === state.user.id
+          ? m.e2ee.recipientPub || (otherId && state.usersCache[otherId] && state.usersCache[otherId].e2eePub)
+          : m.e2ee.senderPub || (state.usersCache[m.senderId] && state.usersCache[m.senderId].e2eePub);
+      aesKey = await deriveSharedAesKey(targetPub);
+    }
+
+    if (aesKey && m.e2ee.iv && m.e2ee.ct) {
+      const plainBytes = await aesGcmDecryptBytes(aesKey, m.e2ee.iv, m.e2ee.ct);
+      const parsed = JSON.parse(new TextDecoder().decode(plainBytes));
+      const res = {
+        text: String(parsed.text || ""),
+        replyPreview: String(parsed.replyPreview || "")
+      };
+      if (msgKey) state.decryptedCache[msgKey] = res;
+      return res;
+    }
+  } catch {}
+
+  return {
+    text: "[Şifreli mesaj çözülemedi]",
+    replyPreview: "Şifreli mesaj"
+  };
 }
 
 function compressImageToBase64(file, maxSize = 900, quality = 0.72) {
@@ -1347,12 +1736,12 @@ async function uploadVideoToGoogleDrive(file) {
 function extractDriveFileIds(msg) {
   if (!msg) return [];
   const ids = [];
-  if (msg.driveFileId) ids.push(msg.driveFileId);
-  if (msg.audioDriveFileId) ids.push(msg.audioDriveFileId);
-  if (msg.videoDriveFileId) ids.push(msg.videoDriveFileId);
+  if (sanitizeDriveFileId(msg.driveFileId)) ids.push(sanitizeDriveFileId(msg.driveFileId));
+  if (sanitizeDriveFileId(msg.audioDriveFileId)) ids.push(sanitizeDriveFileId(msg.audioDriveFileId));
+  if (sanitizeDriveFileId(msg.videoDriveFileId)) ids.push(sanitizeDriveFileId(msg.videoDriveFileId));
   if (!msg.driveFileId && msg.imageUrl) {
-    const match = String(msg.imageUrl).match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match) ids.push(match[1]);
+    const match = String(msg.imageUrl).match(/\/d\/([a-zA-Z0-9_-]{10,120})/);
+    if (match && sanitizeDriveFileId(match[1])) ids.push(match[1]);
   }
   return ids;
 }
@@ -1375,7 +1764,7 @@ async function deleteFromGoogleDrive(fileId) {
 }
 
 // Başlatma
-function init() {
+async function init() {
   loadSavedTheme();
   if (soundStyleSelect) {
     soundStyleSelect.value = state.soundStyle;
@@ -1414,6 +1803,7 @@ function init() {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.id) {
           if (loadingView) showView(loadingView);
+          await ensureFirebaseAuthSession();
           verifyAndEnter(parsed);
         } else {
           localStorage.removeItem(SESSION_KEY);
@@ -1423,6 +1813,8 @@ function init() {
         localStorage.removeItem(SESSION_KEY);
         showView(authView);
       }
+    } else {
+      ensureFirebaseAuthSession();
     }
   } catch (err) {
     showView(authView);
@@ -1524,7 +1916,14 @@ loginForm.addEventListener("submit", async (e) => {
   const code = loginCode.value.trim();
   if (!username || !code) return;
 
+  const waitSec = checkLoginRateLimit();
+  if (waitSec > 0) {
+    showError(`Çok fazla hatalı deneme. Lütfen ${waitSec} saniye bekle.`);
+    return;
+  }
+
   try {
+    await ensureFirebaseAuthSession();
     const codeHash = await sha256(code);
     const adminHashSnap = await state.db.ref("config/adminHash").once("value");
     const savedAdminHash = adminHashSnap.val();
@@ -1533,7 +1932,8 @@ loginForm.addEventListener("submit", async (e) => {
       await state.db.ref("config/adminHash").set(codeHash);
     }
 
-    if (!savedAdminHash || codeHash === savedAdminHash) {
+    if (!savedAdminHash || constantTimeEqual(codeHash, savedAdminHash)) {
+      clearLoginFailures();
       const userId = "admin_" + (normalizeTurkish(username) || "root");
       const existingAdminSnap = await state.db.ref("users/" + userId).once("value");
       const existingAdmin = existingAdminSnap.val();
@@ -1542,13 +1942,13 @@ loginForm.addEventListener("submit", async (e) => {
         waitForReactivation({ id: userId, name: username, isAdmin: true });
         return;
       }
-      const avatarData = (existingAdmin && existingAdmin.avatarData) || "";
+      const avatarData = sanitizeMediaSrc(existingAdmin && existingAdmin.avatarData, "image");
       const nickname = (existingAdmin && existingAdmin.nickname) || "";
       const bubbleColor = (existingAdmin && existingAdmin.bubbleColor) || "";
       const bio = (existingAdmin && existingAdmin.bio) || "";
       const statusEmoji = (existingAdmin && existingAdmin.statusEmoji) || "";
       const bannerColor = (existingAdmin && existingAdmin.bannerColor) || "";
-      const chatBgData = (existingAdmin && existingAdmin.chatBgData) || "";
+      const chatBgData = sanitizeChatBgData(existingAdmin && existingAdmin.chatBgData);
       await state.db.ref("users/" + userId).update({
         name: username,
         nickname,
@@ -1564,6 +1964,7 @@ loginForm.addEventListener("submit", async (e) => {
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
       state.user = { id: userId, name: username, nickname, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor, chatBgData };
+      state.pendingLoginSecret = code;
       localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
       return;
@@ -1572,44 +1973,63 @@ loginForm.addEventListener("submit", async (e) => {
     // Mevcut kullanıcı kendi adı + şifresi (veya eski davet kodu) ile giriş yapıyorsa
     const usersSnap = await state.db.ref("users").once("value");
     const allUsers = usersSnap.val() || {};
-    const matchedEntry = Object.entries(allUsers).find(([, u]) => {
-      const sameName =
-        String(u.name || "").trim().toLowerCase() === username.toLowerCase();
-      const sameSecret =
-        u.passwordHash === codeHash ||
-        u.codeHash === codeHash ||
-        u.inviteCode === code;
-      return sameName && sameSecret;
-    });
+    const nameMatches = Object.entries(allUsers).filter(
+      ([, u]) => String(u.name || "").trim().toLowerCase() === username.toLowerCase()
+    );
+
+    let matchedEntry = null;
+    for (const entry of nameMatches) {
+      if (await verifyUserSecret(code, entry[1], codeHash)) {
+        matchedEntry = entry;
+        break;
+      }
+    }
 
     if (matchedEntry) {
+      clearLoginFailures();
       const [existingId, existingUser] = matchedEntry;
       if (existingUser.active === false) {
         showError("Erişiminiz yönetici tarafından askıya alınmış.");
         return;
       }
-      await state.db.ref("users/" + existingId).update({ online: true });
+      const userUpdates = { online: true };
+      if (existingUser.hashAlgo !== "pbkdf2-sha256-100k" || existingUser.inviteCode) {
+        const newSalt = randomBytesHex(16);
+        userUpdates.passwordSalt = newSalt;
+        userUpdates.passwordHash = await hashPasswordPBKDF2(code, newSalt);
+        userUpdates.hashAlgo = "pbkdf2-sha256-100k";
+        userUpdates.inviteCode = null;
+        userUpdates.codeHash = null;
+      }
+      await state.db.ref("users/" + existingId).update(userUpdates);
       state.user = {
         id: existingId,
         name: existingUser.name,
         nickname: existingUser.nickname || "",
         isAdmin: Boolean(existingUser.isAdmin),
-        avatarData: existingUser.avatarData || "",
+        avatarData: sanitizeMediaSrc(existingUser.avatarData, "image"),
         bubbleColor: existingUser.bubbleColor || "",
         bio: existingUser.bio || "",
         statusEmoji: existingUser.statusEmoji || "",
         bannerColor: existingUser.bannerColor || "",
-        chatBgData: existingUser.chatBgData || ""
+        chatBgData: sanitizeChatBgData(existingUser.chatBgData)
       };
       localStorage.setItem(
         SESSION_KEY,
         JSON.stringify({ id: existingId, name: existingUser.name, isAdmin: Boolean(existingUser.isAdmin) })
       );
+      state.pendingLoginSecret = code;
       enterMainApp();
       return;
     }
 
-    showError("Kullanıcı adı veya şifre hatalı. Yeni kullanıcıysanız 'Hesap Oluştur' sekmesini kullanın.");
+    recordFailedLogin();
+    const lockedAfter = checkLoginRateLimit();
+    showError(
+      lockedAfter > 0
+        ? `Çok fazla hatalı deneme. ${lockedAfter} saniye bekleyin.`
+        : "Kullanıcı adı veya şifre hatalı. Yeni kullanıcıysanız 'Hesap Oluştur' sekmesini kullanın."
+    );
   } catch (err) {
     showError("Giriş hatası: " + (err.message || "Bağlantı sorunu"));
   }
@@ -1636,7 +2056,17 @@ registerForm.addEventListener("submit", async (e) => {
   const code = regInvite.value.trim();
   if (!username || !password || !code) return;
 
+  if (!/^[A-Za-z0-9_-]{4,32}$/.test(code)) {
+    showRegisterError("Erişim kodu biçimi geçersiz.");
+    return;
+  }
+  if (password.length < 4) {
+    showRegisterError("Şifre en az 4 karakter olmalıdır.");
+    return;
+  }
+
   try {
+    await ensureFirebaseAuthSession();
     const inviteSnap = await state.db.ref("invites/" + code).once("value");
     const invite = inviteSnap.val();
     if (!invite || invite.active !== true) {
@@ -1654,10 +2084,28 @@ registerForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    const passwordHash = await sha256(password);
     const userId = slugifyId(username);
-    const avatarData = state.pendingRegAvatar || "";
     const finalNickname = nickname || username;
+
+    // Aynı davet kodunun eşzamanlı olarak iki kez kullanılmasını transaction ile engelle
+    const txResult = await state.db.ref("invites/" + code).transaction((current) => {
+      if (!current || current.active !== true) return;
+      return {
+        ...current,
+        active: false,
+        usedBy: finalNickname,
+        claimedByUserId: userId,
+        usedAt: Date.now()
+      };
+    });
+    if (!txResult.committed) {
+      showRegisterError("Bu erişim kodu az önce kullanıldı veya geçersiz.");
+      return;
+    }
+
+    const passwordSalt = randomBytesHex(16);
+    const passwordHash = await hashPasswordPBKDF2(password, passwordSalt);
+    const avatarData = sanitizeMediaSrc(state.pendingRegAvatar, "image");
 
     await state.db.ref("users/" + userId).set({
       name: username,
@@ -1665,17 +2113,11 @@ registerForm.addEventListener("submit", async (e) => {
       isAdmin: false,
       active: true,
       online: true,
-      inviteCode: code,
+      passwordSalt,
       passwordHash,
+      hashAlgo: "pbkdf2-sha256-100k",
       avatarData,
       joinedAt: Date.now()
-    });
-
-    await state.db.ref("invites/" + code).update({
-      active: false,
-      usedBy: finalNickname,
-      claimedByUserId: userId,
-      usedAt: Date.now()
     });
 
     state.user = {
@@ -1690,6 +2132,7 @@ registerForm.addEventListener("submit", async (e) => {
       bannerColor: ""
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: false }));
+    state.pendingLoginSecret = password;
     enterMainApp();
   } catch (err) {
     showRegisterError("Kayıt hatası: " + (err.message || "Bağlantı sorunu"));
@@ -1698,8 +2141,9 @@ registerForm.addEventListener("submit", async (e) => {
 
 function applyChatBackground(bgData) {
   if (!chatBgLayer) return;
-  if (bgData) {
-    chatBgLayer.style.backgroundImage = `url("${bgData}")`;
+  const safeBg = sanitizeChatBgData(bgData);
+  if (safeBg) {
+    chatBgLayer.style.backgroundImage = `url("${safeBg}")`;
     chatBgLayer.classList.remove("hidden");
   } else {
     chatBgLayer.style.backgroundImage = "";
@@ -1713,7 +2157,7 @@ function updateHeaderIdentity() {
   currentUserLabel.textContent = state.user.isAdmin
     ? `${emojiPrefix}${disp} (Admin)`
     : `${emojiPrefix}${disp}`;
-  headerAvatar.src = state.user.avatarData || "./icon-192.png";
+  headerAvatar.src = sanitizeMediaSrc(state.user.avatarData, "image") || "./icon-192.png";
   headerAvatar.style.border = isValidHexColor(state.user.bannerColor)
     ? `2px solid ${state.user.bannerColor}`
     : "";
@@ -1812,6 +2256,11 @@ async function enterMainApp() {
 
   await preloadInitialData();
 
+  const loginSecret = state.pendingLoginSecret || "";
+  state.pendingLoginSecret = "";
+  await ensureE2EEInitialized(loginSecret);
+  listenMainGroupKeys();
+
   updateNotifyButton();
   setupPresence();
   listenDriveConfig();
@@ -1849,7 +2298,7 @@ function applyMainGroupInfoUI() {
   const info = state.mainGroupInfo || {};
   const gName = info.name || "Ana Grup";
   const gDesc = info.description || "Tüm yetkili arkadaşlar";
-  const gAvatar = info.avatarData || "";
+  const gAvatar = sanitizeMediaSrc(info.avatarData, "image");
 
   if (mainGroupTitle) mainGroupTitle.textContent = gName;
   if (mainGroupAvatar) {
@@ -2157,8 +2606,9 @@ function renderContactsList() {
         ? ` style="border: 2px solid ${u.bannerColor};"`
         : "";
 
-      const avatarHtml = u.avatarData
-        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="${escapeHtml(dispName)}"${ringStyle} />`
+      const safeAvatar = sanitizeMediaSrc(u.avatarData, "image");
+      const avatarHtml = safeAvatar
+        ? `<img class="avatar-img" src="${escapeHtml(safeAvatar)}" alt="${escapeHtml(dispName)}"${ringStyle} />`
         : `<div class="avatar"${ringStyle}>${initial}</div>`;
 
       return `
@@ -2213,6 +2663,9 @@ function listenUsers() {
     if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
       renderGroupMembersList();
     }
+    if (state.e2eeActiveGroupKeyId && state.e2eeGroupKeys[state.e2eeActiveGroupKeyId]) {
+      distributeGroupKeyToMembers(state.e2eeActiveGroupKeyId);
+    }
 
     const others = Object.entries(users).filter(
       ([id, u]) => id !== state.user.id && u.active !== false
@@ -2231,7 +2684,7 @@ function listenUsers() {
       if (state.dmListeners[dmId]) return;
       const ref = state.db.ref(`chats/${dmId}/messages`).limitToLast(1);
       state.dmListeners[dmId] = ref;
-      ref.on("child_added", (msgSnap) => {
+      ref.on("child_added", async (msgSnap) => {
         const msg = msgSnap.val();
         if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
         if (msg.senderId === state.user.id) return;
@@ -2241,9 +2694,14 @@ function listenUsers() {
         if (!isVisibleViewing) {
           state.unreadRooms.add(dmId);
           renderContactsList();
+          let decodedText = msg.text || "";
+          if (msg.e2ee) {
+            const dec = await decryptMessageRecord(msgSnap.key, msg, otherId);
+            decodedText = dec.text || "";
+          }
           showIncomingNotification(
             `${msg.senderName || u.name} (Özel)`,
-            msg.text ||
+            decodedText ||
               (msg.imageUrl || msg.imageData
                 ? "Fotoğraf gönderdi"
                 : msg.videoDriveFileId || msg.videoUrl || msg.videoData
@@ -2256,7 +2714,7 @@ function listenUsers() {
                   : "Konum paylaştı"
                 : msg.callLog
                 ? "Sesli arama başlattı"
-                : ""),
+                : "Şifreli mesaj"),
             msgSnap.key
           );
         }
@@ -2270,7 +2728,7 @@ function listenMainGroupPreview() {
   state.db
     .ref("chats/main_group/messages")
     .limitToLast(1)
-    .on("value", (snap) => {
+    .on("value", async (snap) => {
       const val = snap.val();
       if (!val) {
         mainGroupPreview.textContent = "Herkesin ortak sohbet odası";
@@ -2278,8 +2736,13 @@ function listenMainGroupPreview() {
         return;
       }
       const [key, msg] = Object.entries(val)[0];
+      let decodedText = msg.text || "";
+      if (msg.e2ee) {
+        const dec = await decryptMessageRecord(key, msg, null);
+        decodedText = dec.text || "";
+      }
       const previewText =
-        msg.text ||
+        decodedText ||
         (msg.imageUrl || msg.imageData
           ? "Fotoğraf"
           : msg.videoDriveFileId || msg.videoUrl || msg.videoData
@@ -2290,6 +2753,8 @@ function listenMainGroupPreview() {
           ? msg.location.live
             ? "Canlı Konum"
             : "Konum"
+          : msg.e2ee
+          ? "Şifreli mesaj"
           : "");
       mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
@@ -2424,17 +2889,19 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     }
   }
 
-  function getReplySnippet(m) {
-    if (m.text) return m.text.slice(0, 80);
+  function getReplySnippet(m, msgKey = null) {
+    const cached = msgKey && state.decryptedCache[msgKey];
+    const resolvedText = cached ? cached.text : (m.text || "");
+    if (resolvedText) return resolvedText.slice(0, 80);
     if (m.imageUrl || m.imageData) return "Fotoğraf";
     if (m.videoDriveFileId || m.videoUrl || m.videoData) return "Video";
     if (m.audioUrl || m.audioData) return "Sesli mesaj";
     if (m.location) return m.location.live ? "Canlı Konum" : "Konum";
     if (m.callLog) return "Sesli arama";
-    return "Mesaj";
+    return m.e2ee ? "Şifreli mesaj" : "Mesaj";
   }
 
-  function renderRoomMessages(data, isLiveUpdate = false) {
+  async function renderRoomMessages(data, isLiveUpdate = false) {
     state.preloadedChats[roomId] = data;
     const entries = Object.entries(data).sort(
       (a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0)
@@ -2443,6 +2910,14 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     if (entries.length === 0) {
       messagesContainer.innerHTML = `<div class="empty-hint">Henüz mesaj yok. İlk mesajı sen yaz!</div>`;
       return;
+    }
+
+    const encryptedEntries = entries.filter(([msgKey, m]) => m && m.e2ee && !state.decryptedCache[msgKey]);
+    if (encryptedEntries.length > 0) {
+      await Promise.all(
+        encryptedEntries.map(([msgKey, m]) => decryptMessageRecord(msgKey, m, otherId))
+      );
+      if (!state.activeRoom || state.activeRoom.id !== roomId) return;
     }
 
     const lastEntry = entries[entries.length - 1];
@@ -2480,10 +2955,15 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           !isMe && isGroup
             ? `<div class="msg-sender"${senderColorStyle}>${escapeHtml(liveSenderName)}</div>`
             : "";
+        const decEntry = state.decryptedCache[msgKey];
+        const resolvedText = m.e2ee ? (decEntry ? decEntry.text : "[Şifreli mesaj]") : (m.text || "");
+        const resolvedReplyPreview = m.replyTo
+          ? (m.e2ee && decEntry ? decEntry.replyPreview : m.replyTo.preview || (m.e2ee ? "Şifreli mesaj" : ""))
+          : "";
         const replyQuoteHtml = m.replyTo
           ? `<div class="reply-quote" data-jump-msg="${escapeHtml(m.replyTo.msgKey || "")}">
               <div class="reply-quote-sender">${escapeHtml(m.replyTo.senderName || "")}</div>
-              <div class="reply-quote-text">${escapeHtml(m.replyTo.preview || "")}</div>
+              <div class="reply-quote-text">${escapeHtml(resolvedReplyPreview)}</div>
             </div>`
           : "";
         const replyBtnHtml = `<button class="msg-reply-btn" data-reply-msg="${escapeHtml(msgKey)}" title="Yanıtla">Yanıtla</button>`;
@@ -2496,40 +2976,51 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           const tk = buildTickMarkup(rState);
           tickHtml = `<span class="${tk.cls}" data-msg-ts="${m.timestamp || 0}" title="${tk.titleText}">${tk.svg}</span>`;
         }
-        const fullImgSrc = m.imageUrl || m.imageData;
+        const fullImgSrc = sanitizeMediaSrc(m.imageUrl || m.imageData, "image");
         const thumbImgSrc =
-          m.imageUrl && m.imageUrl.includes("lh3.googleusercontent.com/d/")
-            ? m.imageUrl + "=w400"
+          m.imageUrl && m.imageUrl.includes("lh3.googleusercontent.com/d/") && fullImgSrc
+            ? fullImgSrc + "=w400"
             : fullImgSrc;
+        const safeDownloadUrl = sanitizeHttpUrl(m.downloadUrl);
         const imgHtml = fullImgSrc
-          ? `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(m.downloadUrl || "")}" alt="Fotoğraf" loading="lazy" />`
+          ? `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(safeDownloadUrl)}" alt="Fotoğraf" loading="lazy" />`
           : "";
         let videoHtml = "";
-        if (m.videoDriveFileId) {
-          const previewSrc = `https://drive.google.com/file/d/${encodeURIComponent(m.videoDriveFileId)}/preview`;
-          const dlSrc = m.videoUrl || `https://drive.google.com/uc?export=download&id=${encodeURIComponent(m.videoDriveFileId)}`;
+        const safeVideoDriveId = sanitizeDriveFileId(m.videoDriveFileId);
+        const safeVideoData = sanitizeMediaSrc(m.videoData, "video");
+        if (safeVideoDriveId) {
+          const previewSrc = `https://drive.google.com/file/d/${encodeURIComponent(safeVideoDriveId)}/preview`;
+          const dlSrc =
+            sanitizeHttpUrl(m.videoUrl) ||
+            `https://drive.google.com/uc?export=download&id=${encodeURIComponent(safeVideoDriveId)}`;
           videoHtml = `
             <div class="msg-video-wrap">
               <iframe class="msg-video-frame" src="${previewSrc}" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
               <a class="msg-video-link" href="${escapeHtml(dlSrc)}" target="_blank" rel="noopener noreferrer">Videoyu İndir / Aç</a>
             </div>
           `;
-        } else if (m.videoData) {
+        } else if (safeVideoData) {
           videoHtml = `
             <div class="msg-video-wrap">
-              <video class="msg-video" controls playsinline preload="metadata" src="${escapeHtml(m.videoData)}"></video>
+              <video class="msg-video" controls playsinline preload="metadata" src="${escapeHtml(safeVideoData)}"></video>
             </div>
           `;
         }
-        const audioSrc = m.audioUrl || m.audioData;
+        const audioSrc = sanitizeMediaSrc(m.audioUrl || m.audioData, "audio");
         const audioHtml = audioSrc
           ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
           : "";
         let locHtml = "";
-        if (m.location && typeof m.location.lat === "number" && typeof m.location.lng === "number") {
+        if (
+          m.location &&
+          Number.isFinite(m.location.lat) &&
+          Number.isFinite(m.location.lng) &&
+          Math.abs(m.location.lat) <= 90 &&
+          Math.abs(m.location.lng) <= 180
+        ) {
           const latStr = m.location.lat.toFixed(5);
           const lngStr = m.location.lng.toFixed(5);
-          const mapsUrl = `https://www.google.com/maps?q=${m.location.lat},${m.location.lng}`;
+          const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(latStr + "," + lngStr)}`;
           const titleLabel = m.location.live
             ? m.location.active
               ? '<span class="live-status-text"><span class="live-pulse-dot"></span>Canlı Konum (Aktif)</span>'
@@ -2544,8 +3035,8 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             </div>
           `;
         }
-        const textHtml = m.text
-          ? `<div class="msg-text" data-raw-text="${escapeHtml(m.text)}">${formatMessageTextWithSearch(m.text, state.chatSearchQuery)}</div>`
+        const textHtml = resolvedText
+          ? `<div class="msg-text" data-raw-text="${escapeHtml(resolvedText)}">${formatMessageTextWithSearch(resolvedText, state.chatSearchQuery)}</div>`
           : "";
         let callLogHtml = "";
         if (m.callLog) {
@@ -2569,9 +3060,10 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             </div>
           `;
         }
+        const senderSafeAvatar = !isMe && senderUser ? sanitizeMediaSrc(senderUser.avatarData, "image") : "";
         const senderAvatarHtml = !isMe
-          ? senderUser && senderUser.avatarData
-            ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderUser.avatarData)}" alt=""${senderRingStyle(senderUser)} />`
+          ? senderSafeAvatar
+            ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderSafeAvatar)}" alt=""${senderRingStyle(senderUser)} />`
             : `<div class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}"${senderRingStyle(senderUser)}>${escapeHtml(liveSenderName.charAt(0).toUpperCase())}</div>`
           : "";
         return `
@@ -2600,12 +3092,15 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
     messagesContainer.querySelectorAll(".msg-image").forEach((imgEl) => {
       imgEl.addEventListener("click", () => {
-        imageModalImg.src = imgEl.dataset.full || imgEl.src;
-        const dl = imgEl.dataset.download;
+        const safeFull = sanitizeMediaSrc(imgEl.dataset.full || imgEl.src, "image");
+        if (!safeFull) return;
+        imageModalImg.src = safeFull;
+        const dl = sanitizeHttpUrl(imgEl.dataset.download);
         if (dl) {
           downloadImageBtn.href = dl;
           downloadImageBtn.classList.remove("hidden");
         } else {
+          downloadImageBtn.removeAttribute("href");
           downloadImageBtn.classList.add("hidden");
         }
         imageModal.classList.remove("hidden");
@@ -2627,7 +3122,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         setReplyTarget({
           msgKey,
           senderName: sName,
-          preview: getReplySnippet(target)
+          preview: getReplySnippet(target, msgKey)
         });
       });
     });
@@ -2702,7 +3197,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           setReplyTarget({
             msgKey,
             senderName: sName,
-            preview: getReplySnippet(target)
+            preview: getReplySnippet(target, msgKey)
           });
         }
         horizontalLocked = false;
@@ -2772,6 +3267,14 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       : ` style="cursor:pointer;"`;
   }
 
+  if (isGroup) {
+    state.onGroupKeyReady = () => {
+      if (state.activeRoom && state.activeRoom.id === "main_group" && state.preloadedChats["main_group"]) {
+        renderRoomMessages(state.preloadedChats["main_group"], false);
+      }
+    };
+  }
+
   if (state.preloadedChats[roomId]) {
     renderRoomMessages(state.preloadedChats[roomId], false);
   }
@@ -2811,6 +3314,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 }
 
 function cleanupActiveRoomListeners() {
+  state.onGroupKeyReady = null;
   if (state.chatRef) {
     state.chatRef.off();
     state.chatRef = null;
@@ -2836,6 +3340,7 @@ function cleanupActiveRoomListeners() {
   stopActiveRecording(true);
   clearPendingAudio();
   clearReplyTarget();
+  closeAttachMenu();
   closeChatSearch();
   messageInput.value = "";
   resizeMessageInput();
@@ -2851,6 +3356,7 @@ function setReplyTarget(replyObj) {
     messageInput.focus();
     setTimeout(() => {
       syncVisualViewportHeight();
+      if (messageForm) messageForm.scrollIntoView({ block: "end" });
       if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, 120);
   }
@@ -2868,13 +3374,10 @@ if (cancelReplyBtn) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    scheduleViewportReset();
-    if (state.activeRoom && state.db && state.user) {
-      const now = Date.now();
-      state.roomReadBy[state.user.id] = now;
-      state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
-    }
+  if (document.visibilityState === "visible" && state.activeRoom && state.db && state.user) {
+    const now = Date.now();
+    state.roomReadBy[state.user.id] = now;
+    state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
   }
 });
 
@@ -2945,10 +3448,6 @@ function applyChatSearch(jumpToLatest = true) {
 }
 
 function closeChatSearch() {
-  if (chatSearchInput && document.activeElement === chatSearchInput) {
-    chatSearchInput.blur();
-    scheduleViewportReset();
-  }
   state.chatSearchQuery = "";
   state.chatSearchMatches = [];
   state.chatSearchIndex = -1;
@@ -3537,17 +4036,61 @@ function resizeMessageInput() {
   messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
 }
 
+function closeAttachMenu() {
+  if (attachMenu) {
+    attachMenu.classList.remove("open");
+    attachMenu.setAttribute("aria-hidden", "true");
+  }
+  if (attachPlusBtn) {
+    attachPlusBtn.classList.remove("open");
+    attachPlusBtn.setAttribute("aria-expanded", "false");
+  }
+}
+
+function toggleAttachMenu() {
+  if (!attachMenu || !attachPlusBtn) return;
+  const opening = !attachMenu.classList.contains("open");
+  if (opening) {
+    attachMenu.classList.add("open");
+    attachMenu.setAttribute("aria-hidden", "false");
+    attachPlusBtn.classList.add("open");
+    attachPlusBtn.setAttribute("aria-expanded", "true");
+  } else {
+    closeAttachMenu();
+  }
+}
+
+if (attachPlusBtn) {
+  attachPlusBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!state.activeRoom) return;
+    toggleAttachMenu();
+  });
+}
+
+document.addEventListener("click", (e) => {
+  if (!attachMenu || !attachMenu.classList.contains("open")) return;
+  if (e.target.closest("#attach-menu") || e.target.closest("#attach-plus-btn")) return;
+  closeAttachMenu();
+});
+
 function updateMicVisibility() {
-  if (micBtn) micBtn.classList.remove("hidden");
-  if (!sendBtn || !messageInput) return;
+  if (!micBtn || !messageInput) return;
+  const isRecording = Boolean(state.mediaRecorder && state.mediaRecorder.state === "recording");
   const hasText = messageInput.value.trim().length > 0;
-  const hasAttachment = Boolean(
-    state.pendingPhotoFile || state.pendingVideoFile || state.pendingAudioBlob
-  );
-  const canSend = sendBtn.disabled || hasText || hasAttachment;
-  sendBtn.classList.toggle("send-btn-hidden", !canSend);
-  sendBtn.setAttribute("aria-hidden", canSend ? "false" : "true");
-  sendBtn.tabIndex = canSend ? 0 : -1;
+  const hasMedia = Boolean(state.pendingPhotoFile || state.pendingVideoFile || state.pendingAudioBlob);
+  const showSend = (hasText || hasMedia) && !isRecording;
+
+  micBtn.classList.toggle("is-collapsed", showSend);
+  if (photoBtn) photoBtn.classList.toggle("is-collapsed", isRecording);
+  if (attachPlusBtn) {
+    const hidePlus = showSend || isRecording;
+    attachPlusBtn.classList.toggle("is-collapsed", hidePlus);
+    if (hidePlus) closeAttachMenu();
+  }
+  if (sendBtn) {
+    sendBtn.classList.toggle("is-collapsed", !showSend);
+  }
 }
 
 function clearPendingAudio() {
@@ -3579,6 +4122,7 @@ function stopActiveRecording(discard = false) {
   }
   micBtn.classList.remove("mic-recording");
   micBtn.innerHTML = MIC_ICON_HTML;
+  updateMicVisibility();
 }
 
 function clearPendingPhoto() {
@@ -3691,6 +4235,8 @@ messageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.activeRoom) return;
   const targetRoomId = state.activeRoom.id;
+  const targetIsGroup = Boolean(state.activeRoom.isGroup);
+  const targetOtherId = state.activeRoom.otherId || null;
   const text = messageInput.value.trim();
   const file = state.pendingPhotoFile;
   const videoFile = state.pendingVideoFile;
@@ -3716,13 +4262,20 @@ messageForm.addEventListener("submit", async (e) => {
   playMessageSound("send");
 
   if (!file && !videoFile && !audioBlob) {
+    const enc = await encryptOutgoingMessage({
+      isGroup: targetIsGroup,
+      otherId: targetOtherId,
+      text,
+      replyTo
+    });
     const msgObj = {
       senderId: state.user.id,
       senderName: getDisplayName(state.user),
-      text,
+      text: enc.text,
       timestamp: Date.now()
     };
-    if (replyTo) msgObj.replyTo = replyTo;
+    if (enc.replyTo) msgObj.replyTo = enc.replyTo;
+    if (enc.e2ee) msgObj.e2ee = enc.e2ee;
     await state.db.ref(`chats/${targetRoomId}/messages`).push(msgObj);
     return;
   }
@@ -3734,16 +4287,21 @@ messageForm.addEventListener("submit", async (e) => {
   sendBtn.textContent = "Yükleniyor...";
   photoBtn.disabled = true;
   micBtn.disabled = true;
-  if (plusBtn) plusBtn.disabled = true;
-  closeInputMoreMenu();
   try {
+    const enc = await encryptOutgoingMessage({
+      isGroup: targetIsGroup,
+      otherId: targetOtherId,
+      text,
+      replyTo
+    });
     const payload = {
       senderId: state.user.id,
       senderName: getDisplayName(state.user),
-      text,
+      text: enc.text,
       timestamp: Date.now()
     };
-    if (replyTo) payload.replyTo = replyTo;
+    if (enc.replyTo) payload.replyTo = enc.replyTo;
+    if (enc.e2ee) payload.e2ee = enc.e2ee;
 
     if (file) {
       if (state.driveConfig && state.driveConfig.url) {
@@ -3792,14 +4350,12 @@ messageForm.addEventListener("submit", async (e) => {
     sendBtn.textContent = "Gönder";
     photoBtn.disabled = false;
     micBtn.disabled = false;
-    if (plusBtn) plusBtn.disabled = false;
-    updateMicVisibility();
   }
 });
 
 photoBtn.addEventListener("click", () => {
   if (!state.activeRoom) return;
-  closeInputMoreMenu();
+  closeAttachMenu();
   photoInput.click();
 });
 
@@ -3860,39 +4416,10 @@ function stopLiveLocation(skipRemoteUpdate = false) {
   if (liveLocBar) liveLocBar.classList.add("hidden");
 }
 
-function closeInputMoreMenu() {
-  if (inputMoreMenu) inputMoreMenu.classList.add("hidden");
-  if (plusBtn) {
-    plusBtn.classList.remove("is-open");
-    plusBtn.setAttribute("aria-expanded", "false");
-  }
-}
-
-if (plusBtn && inputMoreMenu) {
-  plusBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (!state.activeRoom) return;
-    const isHidden = inputMoreMenu.classList.contains("hidden");
-    inputMoreMenu.classList.toggle("hidden", !isHidden);
-    plusBtn.classList.toggle("is-open", isHidden);
-    plusBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!inputMoreMenu.classList.contains("hidden") && !e.target.closest(".plus-menu-wrap")) {
-      closeInputMoreMenu();
-    }
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeInputMoreMenu();
-  });
-}
-
 if (locBtn && locationModal) {
   locBtn.addEventListener("click", () => {
-    closeInputMoreMenu();
     if (!state.activeRoom) return;
+    closeAttachMenu();
     locationModal.classList.remove("hidden");
     pushBackState("location-modal");
   });
@@ -4027,7 +4554,6 @@ if (startLiveLocBtn) {
 
 micBtn.addEventListener("click", async () => {
   if (!state.activeRoom) return;
-  closeInputMoreMenu();
   if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
     stopActiveRecording(false);
     return;
@@ -4082,9 +4608,11 @@ micBtn.addEventListener("click", async () => {
     };
 
     recorder.start(250);
+    closeAttachMenu();
     state.recordingSeconds = 0;
     micBtn.classList.add("mic-recording");
     micBtn.textContent = "00:00";
+    updateMicVisibility();
 
     state.recordingTimer = setInterval(() => {
       state.recordingSeconds += 1;
@@ -4170,8 +4698,9 @@ function openCustomizeModal() {
     updateColorPreview(state.user.bubbleColor || "");
   }
   if (profileBgPreview) {
-    if (state.user.chatBgData) {
-      profileBgPreview.style.backgroundImage = `url("${state.user.chatBgData}")`;
+    const safePreviewBg = sanitizeChatBgData(state.user.chatBgData);
+    if (safePreviewBg) {
+      profileBgPreview.style.backgroundImage = `url("${safePreviewBg}")`;
       profileBgPreview.classList.remove("hidden");
     } else {
       profileBgPreview.style.backgroundImage = "";
@@ -4190,7 +4719,7 @@ function openUserProfileCard(uid) {
   const banner = isValidHexColor(u.bannerColor) ? u.bannerColor : "#38bdf8";
   const dispName = getDisplayName(u);
   viewUserBanner.style.background = `linear-gradient(135deg, ${banner}, #1e293b)`;
-  viewUserAvatar.src = u.avatarData || "./icon-192.png";
+  viewUserAvatar.src = sanitizeMediaSrc(u.avatarData, "image") || "./icon-192.png";
   viewUserAvatar.style.borderColor = banner;
   viewUserName.textContent = `${u.statusEmoji ? u.statusEmoji + " " : ""}${dispName}`;
   const statusStr = u.online
@@ -4233,8 +4762,9 @@ function renderGroupMembersList() {
       const disp = getDisplayName(u);
       const isSelf = state.user && uid === state.user.id;
       const emojiPrefix = u.statusEmoji ? `${escapeHtml(u.statusEmoji)} ` : "";
-      const avatarHtml = u.avatarData
-        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="" />`
+      const safeMemberAvatar = sanitizeMediaSrc(u.avatarData, "image");
+      const avatarHtml = safeMemberAvatar
+        ? `<img class="avatar-img" src="${escapeHtml(safeMemberAvatar)}" alt="" />`
         : `<div class="avatar">${escapeHtml(disp.charAt(0).toUpperCase())}</div>`;
       const statusText = u.online
         ? "Çevrimiçi"
@@ -4269,11 +4799,14 @@ function openGroupSettingsModal() {
   const info = state.mainGroupInfo || {};
   const gName = info.name || "Ana Grup";
   const gDesc = info.description || "Tüm yetkili arkadaşlar";
-  const gAvatar = info.avatarData || "";
+  const gAvatar = sanitizeMediaSrc(info.avatarData, "image");
+  const isAdmin = Boolean(state.user && state.user.isAdmin);
 
   if (groupAvatarPreview) groupAvatarPreview.src = gAvatar || "./icon-192.png";
-  if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar);
-  if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = gDesc;
+  if (groupAvatarControls) groupAvatarControls.classList.toggle("hidden", !isAdmin);
+  if (groupInfoEditCard) groupInfoEditCard.classList.toggle("hidden", !isAdmin);
+  if (groupAvatarRemoveBtn) groupAvatarRemoveBtn.classList.toggle("hidden", !gAvatar || !isAdmin);
+  if (groupSettingsSubtitle) groupSettingsSubtitle.textContent = isAdmin ? gDesc : `${gName} • ${gDesc}`;
   if (groupNameInput) groupNameInput.value = gName;
   if (groupDescInput) groupDescInput.value = gDesc;
 
@@ -4293,8 +4826,12 @@ if (closeGroupSettingsBtn && groupSettingsModal) {
 }
 
 if (groupAvatarBtn && groupAvatarInput) {
-  groupAvatarBtn.addEventListener("click", () => groupAvatarInput.click());
+  groupAvatarBtn.addEventListener("click", () => {
+    if (!state.user || !state.user.isAdmin) return;
+    groupAvatarInput.click();
+  });
   groupAvatarInput.addEventListener("change", () => {
+    if (!state.user || !state.user.isAdmin) return;
     const file = groupAvatarInput.files && groupAvatarInput.files[0];
     groupAvatarInput.value = "";
     if (!file) return;
@@ -4302,6 +4839,7 @@ if (groupAvatarBtn && groupAvatarInput) {
       title: "Grup Fotoğrafını Ayarla",
       outputSize: 256,
       onSave: async (dataUrl) => {
+        if (!state.user || !state.user.isAdmin) return;
         await state.db.ref("config/mainGroup").update({ avatarData: dataUrl });
         state.mainGroupInfo.avatarData = dataUrl;
         applyMainGroupInfoUI();
@@ -4312,6 +4850,7 @@ if (groupAvatarBtn && groupAvatarInput) {
 
 if (groupAvatarRemoveBtn) {
   groupAvatarRemoveBtn.addEventListener("click", async () => {
+    if (!state.user || !state.user.isAdmin) return;
     if (!confirm("Grup fotoğrafı kaldırılsın mı?")) return;
     await state.db.ref("config/mainGroup").update({ avatarData: "" });
     state.mainGroupInfo.avatarData = "";
@@ -4321,6 +4860,7 @@ if (groupAvatarRemoveBtn) {
 
 if (saveGroupInfoBtn) {
   const saveGroupInfo = async () => {
+    if (!state.user || !state.user.isAdmin) return;
     const name = (groupNameInput && groupNameInput.value.trim().slice(0, 32)) || "Ana Grup";
     const description =
       (groupDescInput && groupDescInput.value.trim().slice(0, 80)) || "Tüm yetkili arkadaşlar";
@@ -4943,10 +5483,11 @@ closeAdminBtn.addEventListener("click", () => {
 
 inviteForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!state.user || !state.user.isAdmin) return;
   const label = inviteLabelInput.value.trim();
   if (!label) return;
 
-  const code = "AGAR-" + Math.floor(1000 + Math.random() * 9000);
+  const code = generateStrongInviteCode();
   await state.db.ref("invites/" + code).set({
     label,
     active: true,
