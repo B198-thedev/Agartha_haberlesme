@@ -86,6 +86,10 @@
           <div id="register-error" class="error-text hidden"></div>
           <button type="submit" class="btn-primary">Hesabı Oluştur</button>
         </form>
+
+        <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
+          Duyurular &amp; Sürüm Geçmişi (v59)
+        </button>
       </div>
     </section>
 
@@ -135,6 +139,20 @@
       <main class="tab-content">
         <!-- SEKME 1: SOHBETLER & KİŞİLER -->
         <div id="tab-chats" class="tab-pane active" role="tabpanel" aria-labelledby="nav-chats" tabindex="0">
+          <button id="home-announcements-btn" type="button" class="announcement-banner">
+            <div class="announcement-banner-icon" aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6l-5 4H4a1 1 0 0 0-1 1Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+            </div>
+            <div class="announcement-banner-body">
+              <div class="announcement-banner-top">
+                <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
+                <span id="home-announcement-version" class="exp-badge">v59</span>
+              </div>
+              <div id="home-announcement-summary" class="chat-preview">v59: Duyurular sayfası ve v1–v59 tüm sürüm geçmişi eklendi.</div>
+            </div>
+            <span class="announcement-banner-cta">Gör &rsaquo;</span>
+          </button>
+
           <div class="section-label">Ortak Alan</div>
           <button id="open-main-group-btn" class="chat-item group-card">
             <div id="main-group-avatar" class="avatar group-avatar">#</div>
@@ -375,6 +393,10 @@
                 <option value="off">Sessiz</option>
               </select>
             </div>
+            <button id="open-announcements-btn" type="button" class="settings-item">
+              <span>Duyurular &amp; Sürüm Notları</span>
+              <span class="user-sub">v1 – v59 tüm güncellemeler</span>
+            </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yetkiler</span>
               <span class="user-sub">Davet kodları, üyeler, Drive</span>
@@ -384,6 +406,38 @@
               <span class="user-sub">Oturumu kapat</span>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DUYURULAR & SÜRÜM GEÇMİŞİ MODALI -->
+    <div id="announcements-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="call-title-wrap">
+            <h2>Duyurular</h2>
+            <span id="announcements-modal-ver" class="exp-badge">v59</span>
+          </div>
+          <button id="close-announcements-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <div id="admin-announcement-card" class="card hidden">
+            <h3>Yeni Duyuru Yayınla (Yönetici)</h3>
+            <form id="announcement-form" class="stack-form">
+              <input id="announcement-title-input" type="text" maxlength="60" placeholder="Başlık (Örn. Bu akşam toplanıyoruz)" required />
+              <input id="announcement-body-input" type="text" maxlength="240" placeholder="Duyuru detayı veya eklediğin özellik..." required />
+              <button type="submit" class="btn-primary">Duyuru Yayınla</button>
+            </form>
+          </div>
+
+          <div id="custom-announcements-section" class="hidden">
+            <div class="section-label">Yönetici Duyuruları</div>
+            <div id="custom-announcements-list" class="list-stack"></div>
+          </div>
+
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v59)</div>
+          <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
+          <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
       </div>
     </div>

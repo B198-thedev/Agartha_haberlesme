@@ -592,6 +592,24 @@ const driveSecretInput = document.getElementById("drive-secret-input");
 const turnConfigForm = document.getElementById("turn-config-form");
 const turnApiUrlInput = document.getElementById("turn-api-url-input");
 
+const authAnnouncementsBtn = document.getElementById("auth-announcements-btn");
+const homeAnnouncementsBtn = document.getElementById("home-announcements-btn");
+const homeAnnouncementVersion = document.getElementById("home-announcement-version");
+const homeAnnouncementSummary = document.getElementById("home-announcement-summary");
+const openAnnouncementsBtn = document.getElementById("open-announcements-btn");
+const announcementsModal = document.getElementById("announcements-modal");
+const closeAnnouncementsBtn = document.getElementById("close-announcements-btn");
+const announcementsModalVer = document.getElementById("announcements-modal-ver");
+const adminAnnouncementCard = document.getElementById("admin-announcement-card");
+const announcementForm = document.getElementById("announcement-form");
+const announcementTitleInput = document.getElementById("announcement-title-input");
+const announcementBodyInput = document.getElementById("announcement-body-input");
+const customAnnouncementsSection = document.getElementById("custom-announcements-section");
+const customAnnouncementsList = document.getElementById("custom-announcements-list");
+const changelogSectionLabel = document.getElementById("changelog-section-label");
+const changelogSearchInput = document.getElementById("changelog-search-input");
+const changelogList = document.getElementById("changelog-list");
+
 const MIC_ICON_HTML =
   '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg>';
 
@@ -1008,6 +1026,10 @@ window.addEventListener("popstate", () => {
   }
   if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
     groupSettingsModal.classList.add("hidden");
+    return;
+  }
+  if (announcementsModal && !announcementsModal.classList.contains("hidden")) {
+    announcementsModal.classList.add("hidden");
     return;
   }
   if (profileModal && !profileModal.classList.contains("hidden")) {
@@ -2270,6 +2292,7 @@ async function enterMainApp() {
   listenMainGroupPreview();
   listenPlaces();
   listenAiRecommendations();
+  listenAnnouncements();
   watchOwnAccess();
   listenIncomingCalls();
   showView(mainView);
@@ -5611,5 +5634,231 @@ function renderAdminUsers(users) {
     });
   });
 }
+
+// =========================================================
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v59)
+// =========================================================
+const APP_CHANGELOG = [
+  { v: "v59", title: "Duyurular Sayfası & Sürüm Geçmişi", desc: "Karşılama ekranına Duyurular kartı, Yönetici duyuru paylaşımı ve v1'den bugüne tüm sürüm notları eklendi." },
+  { v: "v58", title: "Animasyonlu + Menüsü & Yeni Alt Bar", desc: "Mesaj barı yenilendi: Mikrofon, Fotoğraf/Video ve + tuşu düzenlendi; + içinden animasyonlu Konum menüsü eklendi." },
+  { v: "v57", title: "Uçtan Uca Şifreleme (E2EE) & Secured By HydrOS", desc: "ECDH P-256 + AES-GCM-256 ile mesajlar uçtan uca şifrelendi; yükleme ekranına Secured By HydrOS rozeti eklendi." },
+  { v: "v56", title: "4 Katmanlı Güvenlik Sıkılaştırması", desc: "Firebase Anonymous Auth, veritabanı güvenlik kuralları, tuzlu PBKDF2 şifreler, 8 haneli davet kodu ve XSS koruması eklendi." },
+  { v: "v55", title: "Dairesel Fotoğraf Kırpıcı & Grup İsmi", desc: "Grup ve profil fotoğraflarını sürükleyip yakınlaştırarak kesme ekranı ile grup adı/açıklaması düzenleme eklendi." },
+  { v: "v54", title: "Ana Grup Ayarları", desc: "Ana Grup için grup fotoğrafı, grup adı/açıklaması ve çevrimiçi sıralı Grup Üyeleri listesi eklendi." },
+  { v: "v53", title: "Video Gönderme", desc: "Galeriden 25 MB'a kadar video seçme, önizleme, iOS/Android uyumlu oynatıcı ve silince Drive'dan temizleme eklendi." },
+  { v: "v52", title: "Genel Hata Temizliği (11 Bug Fix)", desc: "Yanıtla çubuğu görünürlüğü, gelen arama önceliği, kayıt ekranı kaydırma ve canlı konum hayalet mesajı düzeltildi." },
+  { v: "v51", title: "iOS Bildirim & Ana Ekran Rozeti", desc: "iPhone PWA bildirim uyumu ve ana ekran ikonunda okunmamış mesaj sayısı rozeti eklendi." },
+  { v: "v50", title: "Sesli Arama TURN Sunucu Ayarı", desc: "Farklı Wi-Fi ve mobil ağlarda WebRTC bağlantısı için Admin paneline TURN ayarı eklendi." },
+  { v: "v49", title: "Arama ICE & Kopma Düzeltmesi", desc: "Sesli aramada ICE adaylarının silinmesi engellendi ve geçici ağ kopma toleransı eklendi." },
+  { v: "v48", title: "Arama Zil Sesi & Sohbet Kaydı", desc: "Gelen/giden arama zil sesleri, titreşim ve sohbet içine canlı arama durumu kartı eklendi." },
+  { v: "v47", title: "Sesli Arama (Deneysel)", desc: "WebRTC tabanlı birebir sesli arama altyapısı eklendi." },
+  { v: "v46", title: "WhatsApp Tarzı İletildi & Görüldü Tikleri", desc: "Tek tik (Gönderildi), gri çift tik (İletildi) ve mavi çift tik (Görüldü) durumları eklendi." },
+  { v: "v45", title: "Kaydırarak Yanıtla & Klavye Uyumu", desc: "Mesajı sağa veya sola kaydırarak yanıtlama ve yanıt çubuğu açıkken klavye konum düzeltmesi yapıldı." },
+  { v: "v44", title: "Mesaj Yanıtlama, Okundu & Özel Sesler", desc: "Mesajlara alıntılı yanıt verme, okundu bilgisi ve seçilebilir gönderme/alma sesleri eklendi." },
+  { v: "v43", title: "Otomatik Uygulama Güncelleme Bildirimi", desc: "Yeni sürüm yüklendiğinde ekranın üstünde 'Uygulama güncelleniyor' bildirimi ve otomatik yenileme eklendi." },
+  { v: "v42", title: "Sohbet Üst Bar Düzenlemesi", desc: "+ Mekan butonu yalnızca Ana Grup sohbetinde görünecek şekilde düzenlendi." },
+  { v: "v41", title: "Sohbet İçi Mesaj Arama", desc: "Grup ve özel sohbetlerin üst barına mesajlarda arama ve vurgulama özelliği eklendi." },
+  { v: "v40", title: "Mesaj Ön Yükleme Ekranı", desc: "Uygulama açılmadan önce mesajları ve kişileri hazırlayan yükleme ekranı eklendi." },
+  { v: "v39", title: "Otomatik Büyüyen Mesaj Kutusu", desc: "Yazı uzadıkça yukarı doğru genişleyen mesaj yazma alanı eklendi." },
+  { v: "v38", title: "Klavye Odak Koruması", desc: "Gönder butonuna basıldığında mobil klavyenin kendiliğinden kapanmaması sağlandı." },
+  { v: "v37", title: "Ayarlar Menüsü Sınıflandırması", desc: "Profil ve Özelleştirme seçenekleri ayrı kategoriler altında düzenlendi." },
+  { v: "v36", title: "Genişletilmiş Renk Temaları", desc: "18 hazır tema, özel hex/arka plan seçici ve rastgele renk üretici eklendi." },
+  { v: "v35", title: "Uygulama Renk Temaları", desc: "Ayarlar menüsüne canlı uygulama renk teması değiştirme sistemi eklendi." },
+  { v: "v34", title: "Ayarlar Sekmesi & Sade Üst Bar", desc: "Yetkiler, Bildirimler, Profil ve Çıkış butonları tek Ayarlar menüsünde toplandı." },
+  { v: "v33", title: "Android Geri Tuşu Desteği", desc: "Telefonda geri tuşuna basıldığında uygulamadan çıkmak yerine açık pencere/sohbetten dönme eklendi." },
+  { v: "v32", title: "Akıcı Geçiş & Mesaj Animasyonları", desc: "Mesaj gönderme/alma yaylanması, silme efekti ve sekme geçiş animasyonları artırıldı." },
+  { v: "v31", title: "Vektörel SVG İkonlar", desc: "Arayüzdeki emojiler temiz vektörel SVG ikonlara dönüştürüldü." },
+  { v: "v30", title: "%45 Bulanık Sohbet Arka Planı", desc: "Her kullanıcıya kendi seçtiği bulanık sohbet arka planı ekleme özelliği getirildi." },
+  { v: "v29", title: "Anlık & Canlı Konum Paylaşımı", desc: "Haritada açılan anlık konum, canlı konum takibi ve PWA kısıt uyarısı eklendi." },
+  { v: "v28", title: "Takma Ad (Nickname) Sistemi", desc: "Kayıt ve profil ayarlarına kullanıcı adından ayrı takma ad alanı eklendi." },
+  { v: "v27", title: "Profil Özelleştirme & Profil Kartı", desc: "Durum emojisi, hakkında (bio), banner rengi ve dokunulabilir profil kartları eklendi." },
+  { v: "v26", title: "Baloncuk Rengi & Menü Kontrolü", desc: "Alt navigasyon düzeni doğrulandı ve baloncuk rengi özelleştirmesi entegre edildi." },
+  { v: "v25", title: "Özelleştirme Arayüz Eşitlemesi", desc: "Baloncuk rengi seçici kontrolleri HTML ve önbellekle senkronize edildi." },
+  { v: "v24", title: "Önbellek Senkronizasyon İyileştirmesi", desc: "Service Worker sürüm tazeleme kontrolü düzenlendi." },
+  { v: "v23", title: "Özel Sohbet Baloncuğu Rengi", desc: "Her kullanıcının tüm sohbetlerde kendi seçtiği baloncuk rengiyle görünmesi eklendi." },
+  { v: "v22", title: "Android Profil Fotoğrafı Düzeltmesi", desc: "Android cihazlarda sohbet içi profil fotoğraflarının görünmeme sorunu çözüldü." },
+  { v: "v21", title: "Sohbet İçi Profil Fotoğrafları", desc: "Grup ve özel sohbet mesajlarının yanında gönderen avatarları gösterilmeye başlandı." },
+  { v: "v20", title: "Sesli Mesajlar Google Drive'da", desc: "Ses kayıtları yüksek uyumlulukla 5 TB Google Drive köprüsüne yönlendirildi." },
+  { v: "v19", title: "iPhone Sesli Mesaj Düzeltmesi", desc: "iOS Safari/PWA için audio/mp4 ve mikrofon kayıt akışı uyumluluğu sağlandı." },
+  { v: "v18", title: "Sesli Mesaj Kayıt & Önizleme", desc: "Mikrofon kayıt butonu, sayaç ve gönderim öncesi dinleme çubuğu eklendi." },
+  { v: "v17", title: "Fotoğraf Önizleme Çubuğu", desc: "Fotoğraf seçildiğinde doğrudan göndermek yerine önizleme ve iptal butonu eklendi." },
+  { v: "v16", title: "Hesap Oluşturma & Kayıt Avatarı", desc: "İki sekmeli giriş ekranı ve kayıt olurken profil fotoğrafı seçme özelliği eklendi." },
+  { v: "v15", title: "Google Drive'dan Otomatik Silme", desc: "Sohbetten silinen fotoğraf/medyanın Drive klasöründen de çöp kutusuna taşınması eklendi." },
+  { v: "v14", title: "Kişisel Şifre Kalıcılığı", desc: "Kullanıcıların kendi şifreleriyle farklı cihazlardan da hesaba giriş yapabilmesi sağlandı." },
+  { v: "v13", title: "Erişim Kodu Görünürlüğü", desc: "Giriş ekranındaki şifre/kod alanının yazarken okunabilir olması sağlandı." },
+  { v: "v12", title: "Fotoğraf Küçük Resmi & Tam Ekran", desc: "Sohbette fotoğrafların kompakt görünmesi ve dokununca büyütme modalı eklendi." },
+  { v: "v11", title: "Drive Gizlilik Koruması", desc: "Apps Script bağlantısının kodda değil Admin panelinden veritabanında tutulması sağlandı." },
+  { v: "v10", title: "5 TB Google Drive Köprüsü", desc: "Yüksek boyutlu medya paylaşımı için google-drive-bridge.gs altyapısı kuruldu." },
+  { v: "v9", title: "Fotoğraf Gönderme", desc: "Sohbetlere ilk fotoğraf paylaşma özelliği eklendi." },
+  { v: "v8", title: "Türkçe Karakter & Kararlılık Fix", desc: "Türkçe kullanıcı adı normalizasyonu ve genel hata düzeltmeleri yapıldı." },
+  { v: "v7", title: "Tam Kullanıcı & Kod Silme", desc: "Admin panelinden silinen kullanıcıların davet kodlarıyla birlikte tamamen silinmesi sağlandı." },
+  { v: "v6", title: "Admin Şifre & Otomatik Yeniden Giriş", desc: "Askıya alınan kullanıcıların yetkisi açıldığında otomatik geri giriş yapabilmesi eklendi." },
+  { v: "v5", title: "Yetki Yönetimi & Sohbet Silme", desc: "Admin yetki verme, özel konuşma silme ve kullanıcı engelleme özellikleri eklendi." },
+  { v: "v4", title: "Yeni Uygulama Logosu", desc: "Telefon ana ekranı ve PWA uygulama ikonu güncellendi." },
+  { v: "v3", title: "Anlık Mesaj Bildirimleri", desc: "Yeni mesaj geldiğinde telefon ve masaüstü tarayıcı bildirimleri eklendi." },
+  { v: "v2", title: "Mobil Arayüz & Firebase İyileştirmesi", desc: "Firebase gerçek zamanlı bağlantısı ve mobil PWA yerleşimi optimize edildi." },
+  { v: "v1", title: "Agartha İlk Sürüm", desc: "Ana Grup, 1-e-1 Özel Sohbet, Mekanlar ve AI Mekan Önerileri sekmeleriyle uygulama kuruldu." }
+];
+
+let customAnnouncementsCache = [];
+
+function updateHomeAnnouncementBanner() {
+  const latestChangelog = APP_CHANGELOG[0];
+  if (homeAnnouncementVersion && latestChangelog) {
+    homeAnnouncementVersion.textContent = latestChangelog.v;
+  }
+  if (announcementsModalVer && latestChangelog) {
+    announcementsModalVer.textContent = latestChangelog.v;
+  }
+  if (!homeAnnouncementSummary) return;
+  if (customAnnouncementsCache.length > 0) {
+    const newest = customAnnouncementsCache[0];
+    homeAnnouncementSummary.textContent = `${newest.title}: ${newest.body}`;
+  } else if (latestChangelog) {
+    homeAnnouncementSummary.textContent = `${latestChangelog.v}: ${latestChangelog.title} — ${latestChangelog.desc}`;
+  }
+}
+
+function renderCustomAnnouncements() {
+  if (!customAnnouncementsList || !customAnnouncementsSection) return;
+  if (customAnnouncementsCache.length === 0) {
+    customAnnouncementsSection.classList.add("hidden");
+    customAnnouncementsList.innerHTML = "";
+    return;
+  }
+  customAnnouncementsSection.classList.remove("hidden");
+  const isAdmin = Boolean(state.user && state.user.isAdmin);
+  customAnnouncementsList.innerHTML = customAnnouncementsCache
+    .map((item) => {
+      const delBtn = isAdmin
+        ? `<button type="button" class="icon-btn danger" data-del-ann="${escapeHtml(item.id)}" style="padding:3px 8px;font-size:11px;">Sil</button>`
+        : "";
+      const timeStr = item.createdAt ? formatTime(item.createdAt) : "";
+      return `
+        <div class="changelog-card latest">
+          <div class="changelog-card-head">
+            <span class="changelog-ver-badge">Duyuru</span>
+            <span class="changelog-title">${escapeHtml(item.title || "")}</span>
+            <span class="user-sub">${escapeHtml(timeStr)}</span>
+            ${delBtn}
+          </div>
+          <div class="changelog-desc">${escapeHtml(item.body || "")}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  customAnnouncementsList.querySelectorAll("[data-del-ann]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!state.user || !state.user.isAdmin) return;
+      if (!confirm("Bu duyuru silinsin mi?")) return;
+      state.db.ref("announcements/" + btn.dataset.delAnn).remove();
+    });
+  });
+}
+
+function renderChangelogList(query = "") {
+  if (!changelogList) return;
+  const q = String(query || "").trim().toLocaleLowerCase("tr-TR");
+  const items = q
+    ? APP_CHANGELOG.filter(
+        (item) =>
+          item.v.toLocaleLowerCase("tr-TR").includes(q) ||
+          item.title.toLocaleLowerCase("tr-TR").includes(q) ||
+          item.desc.toLocaleLowerCase("tr-TR").includes(q)
+      )
+    : APP_CHANGELOG;
+
+  if (changelogSectionLabel) {
+    changelogSectionLabel.textContent = q
+      ? `Sürüm Geçmişi (${items.length} sonuç)`
+      : `Sürüm Geçmişi (v1 – ${APP_CHANGELOG[0].v})`;
+  }
+
+  if (items.length === 0) {
+    changelogList.innerHTML = `<div class="empty-hint">Aramayla eşleşen sürüm notu bulunamadı.</div>`;
+    return;
+  }
+
+  changelogList.innerHTML = items
+    .map(
+      (item, idx) => `
+      <div class="changelog-card${!q && idx === 0 ? " latest" : ""}">
+        <div class="changelog-card-head">
+          <span class="changelog-ver-badge">${escapeHtml(item.v)}</span>
+          <span class="changelog-title">${escapeHtml(item.title)}</span>
+        </div>
+        <div class="changelog-desc">${escapeHtml(item.desc)}</div>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function listenAnnouncements() {
+  if (!state.db) return;
+  state.db.ref("announcements").limitToLast(20).on("value", (snap) => {
+    const data = snap.val() || {};
+    customAnnouncementsCache = Object.entries(data)
+      .map(([id, val]) => ({ id, ...(val || {}) }))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    updateHomeAnnouncementBanner();
+    if (announcementsModal && !announcementsModal.classList.contains("hidden")) {
+      renderCustomAnnouncements();
+    }
+  });
+}
+
+function openAnnouncementsModal() {
+  if (!announcementsModal) return;
+  if (settingsModal) settingsModal.classList.add("hidden");
+  const isAdmin = Boolean(state.user && state.user.isAdmin);
+  if (adminAnnouncementCard) adminAnnouncementCard.classList.toggle("hidden", !isAdmin);
+  if (changelogSearchInput) changelogSearchInput.value = "";
+  renderCustomAnnouncements();
+  renderChangelogList("");
+  announcementsModal.classList.remove("hidden");
+  pushBackState("announcements-modal");
+}
+
+if (authAnnouncementsBtn) {
+  authAnnouncementsBtn.addEventListener("click", openAnnouncementsModal);
+}
+if (homeAnnouncementsBtn) {
+  homeAnnouncementsBtn.addEventListener("click", openAnnouncementsModal);
+}
+if (openAnnouncementsBtn) {
+  openAnnouncementsBtn.addEventListener("click", openAnnouncementsModal);
+}
+if (closeAnnouncementsBtn && announcementsModal) {
+  closeAnnouncementsBtn.addEventListener("click", () => {
+    announcementsModal.classList.add("hidden");
+  });
+}
+if (changelogSearchInput) {
+  changelogSearchInput.addEventListener("input", () => {
+    renderChangelogList(changelogSearchInput.value);
+  });
+}
+if (announcementForm) {
+  announcementForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.db || !state.user || !state.user.isAdmin) return;
+    const title = announcementTitleInput ? announcementTitleInput.value.trim() : "";
+    const body = announcementBodyInput ? announcementBodyInput.value.trim() : "";
+    if (!title || !body) return;
+    await state.db.ref("announcements").push({
+      title,
+      body,
+      authorId: state.user.id,
+      authorName: getDisplayName(state.user),
+      createdAt: Date.now()
+    });
+    if (announcementTitleInput) announcementTitleInput.value = "";
+    if (announcementBodyInput) announcementBodyInput.value = "";
+  });
+}
+
+updateHomeAnnouncementBanner();
 
 init();
