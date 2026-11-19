@@ -7127,6 +7127,113 @@ function parseAiRecommendationsJson(rawText) {
     }));
 }
 
+function fallbackAreaFromPlaces() {
+  const counts = {};
+  (state.placesCache || []).forEach(([, p]) => {
+    const a = p && p.area ? String(p.area).trim() : "";
+    if (a) counts[a] = (counts[a] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  return sorted.length ? sorted[0][0] : "İstanbul";
+}
+
+async function fetchLiveOsmPlaces(areaQuery, amenityType = "all") {
+  const area = String(areaQuery || "").trim() || fallbackAreaFromPlaces();
+  if (!area) return { area: "", venues: [] };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 7000);
+  try {
+    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=tr&q=${encodeURIComponent(area)}`;
+    const nomRes = await fetch(nomUrl, { signal: ctrl.signal });
+    if (!nomRes.ok) {
+      clearTimeout(timer);
+      return { area, venues: [] };
+    }
+    const nomJson = await nomRes.json();
+    const first = Array.isArray(nomJson) && nomJson[0] ? nomJson[0] : null;
+    if (!first || !first.lat || !first.lon) {
+      clearTimeout(timer);
+      return { area, venues: [] };
+    }
+    const lat = Number(first.lat);
+    const lon = Number(first.lon);
+    const filterMap = {
+      cafe: 'node["amenity"="cafe"]',
+      restaurant: 'node["amenity"~"restaurant|fast_food"]',
+      park: 'node["leisure"~"park|garden"]',
+      entertainment: 'node["amenity"~"bar|pub|cinema|theatre|arts_centre"]',
+      all: 'node["amenity"~"cafe|restaurant|bar|pub|fast_food|cinema|theatre"]'
+    };
+    const qFilter = filterMap[amenityType] || filterMap.all;
+    const overpassQuery = `[out:json][timeout:6];(${qFilter}["name"](around:1800,${lat},${lon});way["amenity"~"cafe|restaurant|bar|pub|cinema"]["name"](around:1800,${lat},${lon}););out center 25;`;
+    const ovRes = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      signal: ctrl.signal,
+      body: overpassQuery
+    });
+    clearTimeout(timer);
+    if (!ovRes.ok) return { area, venues: [] };
+    const ovJson = await ovRes.json().catch(() => ({}));
+    const elements = Array.isArray(ovJson.elements) ? ovJson.elements : [];
+    const seen = new Set();
+    const venues = [];
+    for (const el of elements) {
+      const tags = el.tags || {};
+      const name = String(tags.name || "").trim();
+      if (!name || seen.has(name.toLocaleLowerCase("tr-TR"))) continue;
+      seen.add(name.toLocaleLowerCase("tr-TR"));
+      const kind = tags.amenity || tags.leisure || "mekan";
+      const street = tags["addr:street"] || tags["addr:suburb"] || tags["addr:district"] || "";
+      venues.push({ name, kind, street });
+      if (venues.length >= 20) break;
+    }
+    return { area, venues };
+  } catch {
+    clearTimeout(timer);
+    return { area, venues: [] };
+  }
+}
+
+async function detectSearchIntentWithOllama(baseUrl, chosenModel, contextText, promptHint) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        model: chosenModel,
+        stream: false,
+        format: "json",
+        options: { num_predict: 90 },
+        messages: [
+          {
+            role: "system",
+            content:
+              'Sadece JSON döndür: {"area":"Semt ve Sehir (ornek: Kadikoy Istanbul)","type":"cafe|restaurant|park|entertainment|all"}. Kullanici istegi ve sohbetten aranan semti cikar.'
+          },
+          {
+            role: "user",
+            content: `Istek: ${promptHint || "-"}\nBaglam:\n${String(contextText || "").slice(0, 1200)}`
+          }
+        ]
+      })
+    });
+    clearTimeout(timer);
+    if (!res.ok) return { area: fallbackAreaFromPlaces(), type: "all" };
+    const data = await res.json();
+    const raw = data && data.message ? data.message.content : "";
+    const parsed = JSON.parse(raw);
+    return {
+      area: String(parsed.area || "").trim() || fallbackAreaFromPlaces(),
+      type: String(parsed.type || "all").trim()
+    };
+  } catch {
+    return { area: fallbackAreaFromPlaces(), type: "all" };
+  }
+}
+
 async function saveAiDraftsList(items, meta) {
   if (!state.db || !state.user || !items.length) return 0;
   const baseRef = state.db.ref(`aiDrafts/${state.user.id}`);
@@ -7138,6 +7245,7 @@ async function saveAiDraftsList(items, meta) {
         area: item.area,
         category: item.category,
         reason: item.reason,
+        verifiedOnline: Boolean(item.verifiedOnline),
         sourceRoomId: meta.roomId || "",
         sourceRoomTitle: meta.roomTitle || "",
         model: meta.model || "",
@@ -7165,11 +7273,20 @@ async function tryDirectLocalOllama(contextText, promptHint) {
         ? model
         : availableModels[0];
 
+    const intent = await detectSearchIntentWithOllama(baseUrl, chosenModel, contextText, promptHint);
+    const liveData = await fetchLiveOsmPlaces(intent.area, intent.type);
+    const liveListText = liveData.venues.length
+      ? `\n\nİnternetten Çekilen Güncel Gerçek Mekanlar (${liveData.area} - OpenStreetMap):\n` +
+        liveData.venues
+          .map((v) => `- ${v.name} (${v.kind}${v.street ? ", " + v.street : ""})`)
+          .join("\n")
+      : "";
+
     const chatCtrl = new AbortController();
     const chatTimer = setTimeout(() => chatCtrl.abort(), 55000);
     const systemPrompt =
-      'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete ve puanlara dayalı kısa Türkçe gerekçe"}]}. En fazla 3 özgün öneri ver, uydurma telefon/adres yazma.';
-    const userMsg = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}`;
+      'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, puanlara ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.';
+    const userMsg = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
 
     const chatRes = await fetch(`${baseUrl}/api/chat`, {
       method: "POST",
@@ -7189,7 +7306,11 @@ async function tryDirectLocalOllama(contextText, promptHint) {
     if (!chatRes.ok) throw new Error(`Ollama hata kodu: ${chatRes.status}`);
     const chatData = await chatRes.json();
     const content = chatData && chatData.message ? chatData.message.content : "";
-    const recs = parseAiRecommendationsJson(content);
+    const liveNames = new Set(liveData.venues.map((v) => v.name.toLocaleLowerCase("tr-TR")));
+    const recs = parseAiRecommendationsJson(content).map((rec) => ({
+      ...rec,
+      verifiedOnline: liveNames.has(rec.title.toLocaleLowerCase("tr-TR"))
+    }));
     return { reachable: true, model: chosenModel, recs };
   } catch (err) {
     clearTimeout(pingTimer);
@@ -7310,15 +7431,19 @@ function listenPersonalAiDrafts() {
     aiDraftsList.innerHTML = entries
       .map(([key, r]) => {
         const srcTag = r.sourceRoomTitle ? ` • ${escapeHtml(r.sourceRoomTitle)}` : "";
+        const verifiedBadge = r.verifiedOnline ? `<span class="ai-verified-badge">Canlı Doğrulandı</span>` : "";
+        const mapQ = encodeURIComponent(`${r.title || r.name || ""} ${r.area || ""}`.trim());
+        const mapHref = `https://www.google.com/maps/search/?api=1&query=${mapQ}`;
         return `
           <div class="ai-card ai-draft-card">
-            <div class="place-title">${escapeHtml(r.title || r.name || "Öneri")}</div>
+            <div class="place-title">${escapeHtml(r.title || r.name || "Öneri")}${verifiedBadge}</div>
             <div class="place-meta">${escapeHtml(r.category || "Öneri")} • ${escapeHtml(r.area || "")}${srcTag}</div>
             ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
             <div class="ai-card-actions">
               <button type="button" class="icon-btn" data-publish-draft="${escapeHtml(key)}">Ortak AI'ya Paylaş</button>
               <button type="button" class="icon-btn" data-place-draft="${escapeHtml(key)}">Mekanlara Ekle</button>
               <button type="button" class="icon-btn" data-chat-draft="${escapeHtml(key)}">Sohbete Gönder</button>
+              <a class="icon-btn" href="${mapHref}" target="_blank" rel="noopener noreferrer">Haritada Gör</a>
               <button type="button" class="icon-btn danger" data-del-draft="${escapeHtml(key)}">Sil</button>
             </div>
           </div>
@@ -7336,6 +7461,7 @@ function listenPersonalAiDrafts() {
           area: r.area || "Öneri",
           category: r.category || "Diğer",
           reason: r.reason || "",
+          verifiedOnline: Boolean(r.verifiedOnline),
           sharedBy: state.user.id,
           sharedByName: getDisplayName(state.user),
           timestamp: Date.now()
@@ -7504,13 +7630,17 @@ function listenAiRecommendations() {
       .map((r) => {
         const canDel = state.user && (state.user.isAdmin || r.sharedBy === state.user.id);
         const byStr = r.sharedByName ? ` • Paylaşan: ${escapeHtml(r.sharedByName)}` : "";
+        const verifiedBadge = r.verifiedOnline ? `<span class="ai-verified-badge">Canlı Doğrulandı</span>` : "";
+        const mapQ = encodeURIComponent(`${r.title || r.name || ""} ${r.area || ""}`.trim());
+        const mapHref = `https://www.google.com/maps/search/?api=1&query=${mapQ}`;
         return `
         <div class="ai-card">
-          <div class="place-title">${escapeHtml(r.title || r.name)}</div>
+          <div class="place-title">${escapeHtml(r.title || r.name)}${verifiedBadge}</div>
           <div class="place-meta">${escapeHtml(r.category ? r.category + " • " : "")}${escapeHtml(r.area || "Öneri")}${byStr}</div>
           ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
           <div class="ai-card-actions">
             <button type="button" class="icon-btn" data-place-pub="${escapeHtml(r.id)}">Mekanlara Ekle</button>
+            <a class="icon-btn" href="${mapHref}" target="_blank" rel="noopener noreferrer">Haritada Gör</a>
             ${canDel ? `<button type="button" class="icon-btn danger" data-del-pub="${escapeHtml(r.id)}">Sil</button>` : ""}
           </div>
         </div>
