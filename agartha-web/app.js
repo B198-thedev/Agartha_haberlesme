@@ -367,7 +367,10 @@ const state = {
   roomDeliveredBy: {},
   lastRenderedMsgKey: null,
   soundStyle: localStorage.getItem(SOUND_STORAGE_KEY) || "chime",
-  audioCtx: null
+  audioCtx: null,
+  activeCall: null,
+  ringtoneInterval: null,
+  incomingCallRef: null
 };
 
 // DOM Elemanları
@@ -437,6 +440,7 @@ const chatSearchCount = document.getElementById("chat-search-count");
 const chatSearchPrev = document.getElementById("chat-search-prev");
 const chatSearchNext = document.getElementById("chat-search-next");
 const chatSearchClose = document.getElementById("chat-search-close");
+const voiceCallBtn = document.getElementById("voice-call-btn");
 const chatRoomHeaderInfo = document.getElementById("chat-room-header-info");
 const chatRoomAvatar = document.getElementById("chat-room-avatar");
 const chatRoomTitle = document.getElementById("chat-room-title");
@@ -469,6 +473,19 @@ const replyPreviewBar = document.getElementById("reply-preview-bar");
 const replyPreviewSender = document.getElementById("reply-preview-sender");
 const replyPreviewText = document.getElementById("reply-preview-text");
 const cancelReplyBtn = document.getElementById("cancel-reply-btn");
+
+const callModal = document.getElementById("call-modal");
+const callTimerEl = document.getElementById("call-timer");
+const callPeerAvatar = document.getElementById("call-peer-avatar");
+const callPeerName = document.getElementById("call-peer-name");
+const callStatusText = document.getElementById("call-status-text");
+const callIncomingControls = document.getElementById("call-incoming-controls");
+const callActiveControls = document.getElementById("call-active-controls");
+const callAcceptBtn = document.getElementById("call-accept-btn");
+const callRejectBtn = document.getElementById("call-reject-btn");
+const callMuteBtn = document.getElementById("call-mute-btn");
+const callHangupBtn = document.getElementById("call-hangup-btn");
+const remoteCallAudio = document.getElementById("remote-call-audio");
 
 const imageModal = document.getElementById("image-modal");
 const imageModalImg = document.getElementById("image-modal-img");
@@ -1528,6 +1545,7 @@ async function enterMainApp() {
   listenPlaces();
   listenAiRecommendations();
   watchOwnAccess();
+  listenIncomingCalls();
   showView(mainView);
 }
 
@@ -1926,6 +1944,9 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
   if (quickPlaceBtn) {
     quickPlaceBtn.classList.toggle("hidden", !isGroup);
+  }
+  if (voiceCallBtn) {
+    voiceCallBtn.classList.toggle("hidden", isGroup || !otherId);
   }
 
   if (!isGroup || state.user.isAdmin) {
@@ -2520,6 +2541,388 @@ if (chatSearchNext) {
 
 if (chatSearchClose) {
   chatSearchClose.addEventListener("click", closeChatSearch);
+}
+
+// =========================================================
+// SESLİ ARAMA (DENEYSEL — WebRTC P2P + Firebase Sinyalleşme)
+// =========================================================
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" }
+  ]
+};
+
+function startRingtone(kind = "incoming") {
+  stopRingtone();
+  const ringOnce = () => {
+    if (state.soundStyle === "off") return;
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+    try {
+      if (kind === "incoming") {
+        playTone(ctx, 660, 0, 0.18, "sine", 0.08);
+        playTone(ctx, 880, 0.2, 0.22, "sine", 0.08);
+      } else {
+        playTone(ctx, 440, 0, 0.35, "sine", 0.045);
+      }
+    } catch {}
+  };
+  ringOnce();
+  state.ringtoneInterval = setInterval(ringOnce, kind === "incoming" ? 2000 : 2600);
+}
+
+function stopRingtone() {
+  clearInterval(state.ringtoneInterval);
+  state.ringtoneInterval = null;
+}
+
+function listenIncomingCalls() {
+  if (!state.db || !state.user) return;
+  if (state.incomingCallRef) state.incomingCallRef.off();
+
+  state.incomingCallRef = state.db.ref(`incomingCalls/${state.user.id}`);
+  state.incomingCallRef.on("value", (snap) => {
+    const incoming = snap.val();
+    if (!incoming || !incoming.callId) return;
+    if (Date.now() - (incoming.createdAt || 0) > 60000) {
+      state.db.ref(`incomingCalls/${state.user.id}`).remove().catch(() => {});
+      return;
+    }
+    if (state.activeCall) return;
+    showIncomingCallPrompt(incoming);
+  });
+}
+
+function showIncomingCallPrompt(incoming) {
+  const callerUser = state.usersCache[incoming.callerId];
+  const peerName = callerUser ? getDisplayName(callerUser) : (incoming.callerName || "Arkadaşın");
+  const peerAvatar = (callerUser && callerUser.avatarData) || incoming.callerAvatar || "./icon-192.png";
+
+  state.activeCall = {
+    callId: incoming.callId,
+    role: "callee",
+    peerId: incoming.callerId,
+    peerName,
+    pc: null,
+    localStream: null,
+    muted: false,
+    timerId: null,
+    timeoutId: null,
+    callRef: state.db.ref(`calls/${incoming.callId}`),
+    iceRef: null,
+    pendingIce: []
+  };
+
+  callPeerAvatar.src = peerAvatar;
+  callPeerName.textContent = peerName;
+  callStatusText.textContent = "Gelen sesli arama...";
+  callTimerEl.textContent = "00:00";
+  callIncomingControls.classList.remove("hidden");
+  callActiveControls.classList.add("hidden");
+  callModal.classList.remove("hidden");
+  startRingtone("incoming");
+
+  state.activeCall.callRef.child("status").on("value", (snap) => {
+    const st = snap.val();
+    if (st === "ended" || st === "rejected") {
+      endCurrentCall(false, st === "ended" ? "Arama sonlandırıldı" : "Reddedildi");
+    }
+  });
+}
+
+async function startOutgoingVoiceCall(peerId, peerName) {
+  if (state.activeCall) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof RTCPeerConnection === "undefined") {
+    alert("Bu tarayıcı sesli aramayı (WebRTC) desteklemiyor.");
+    return;
+  }
+
+  const peerUser = state.usersCache[peerId];
+  const peerAvatar = (peerUser && peerUser.avatarData) || "./icon-192.png";
+  const callId = `call_${state.user.id}_${peerId}_${Date.now()}`;
+
+  try {
+    const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+    const callRef = state.db.ref(`calls/${callId}`);
+    const incomingRef = state.db.ref(`incomingCalls/${peerId}`);
+
+    state.activeCall = {
+      callId,
+      role: "caller",
+      peerId,
+      peerName,
+      pc,
+      localStream,
+      muted: false,
+      timerId: null,
+      timeoutId: null,
+      callRef,
+      incomingRef,
+      iceRef: callRef.child("calleeIce"),
+      pendingIce: []
+    };
+
+    callPeerAvatar.src = peerAvatar;
+    callPeerName.textContent = peerName;
+    callStatusText.textContent = "Aranıyor...";
+    callTimerEl.textContent = "00:00";
+    callIncomingControls.classList.add("hidden");
+    callActiveControls.classList.remove("hidden");
+    if (callMuteBtn) callMuteBtn.textContent = "Mikrofonu Kapat";
+    callModal.classList.remove("hidden");
+    startRingtone("outgoing");
+
+    wirePeerConnectionEvents(pc, callRef, "callerIce");
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    await callRef.set({
+      callerId: state.user.id,
+      calleeId: peerId,
+      status: "ringing",
+      offer: { type: offer.type, sdp: offer.sdp },
+      createdAt: Date.now()
+    });
+    callRef.onDisconnect().update({ status: "ended" });
+
+    await incomingRef.set({
+      callId,
+      callerId: state.user.id,
+      callerName: getDisplayName(state.user),
+      callerAvatar: state.user.avatarData || "",
+      createdAt: Date.now()
+    });
+    incomingRef.onDisconnect().remove();
+
+    state.activeCall.timeoutId = setTimeout(() => {
+      if (state.activeCall && state.activeCall.callId === callId && !state.activeCall.timerId) {
+        endCurrentCall(true, "Cevap verilmedi");
+      }
+    }, 45000);
+
+    callRef.child("answer").on("value", async (snap) => {
+      const answer = snap.val();
+      if (!answer || !state.activeCall || state.activeCall.callId !== callId) return;
+      if (pc.currentRemoteDescription) return;
+      stopRingtone();
+      clearTimeout(state.activeCall.timeoutId);
+      callStatusText.textContent = "Bağlanıyor...";
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      flushPendingIceCandidates(pc, state.activeCall.pendingIce);
+    });
+
+    callRef.child("calleeIce").on("child_added", async (snap) => {
+      const cand = snap.val();
+      if (!cand || !state.activeCall || state.activeCall.callId !== callId) return;
+      if (pc.remoteDescription) {
+        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+      } else {
+        state.activeCall.pendingIce.push(cand);
+      }
+    });
+
+    callRef.child("status").on("value", (snap) => {
+      const st = snap.val();
+      if (st === "rejected") {
+        endCurrentCall(false, "Arama reddedildi");
+      } else if (st === "ended") {
+        endCurrentCall(false, "Arama sonlandırıldı");
+      }
+    });
+  } catch (err) {
+    endCurrentCall(true);
+    alert("Sesli arama başlatılamadı: " + (err.message || "Mikrofon izni gerekli"));
+  }
+}
+
+async function acceptIncomingCall() {
+  const call = state.activeCall;
+  if (!call || call.role !== "callee") return;
+
+  stopRingtone();
+  callIncomingControls.classList.add("hidden");
+  callActiveControls.classList.remove("hidden");
+  if (callMuteBtn) callMuteBtn.textContent = "Mikrofonu Kapat";
+  callStatusText.textContent = "Bağlanıyor...";
+
+  try {
+    const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+    call.pc = pc;
+    call.localStream = localStream;
+    call.iceRef = call.callRef.child("callerIce");
+
+    wirePeerConnectionEvents(pc, call.callRef, "calleeIce");
+    call.callRef.onDisconnect().update({ status: "ended" });
+
+    const offerSnap = await call.callRef.child("offer").once("value");
+    const offer = offerSnap.val();
+    if (!offer) {
+      endCurrentCall(true, "Arama bulunamadı");
+      return;
+    }
+
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    await call.callRef.update({
+      status: "accepted",
+      answer: { type: answer.type, sdp: answer.sdp }
+    });
+    await state.db.ref(`incomingCalls/${state.user.id}`).remove();
+
+    call.callRef.child("callerIce").on("child_added", (snap) => {
+      const cand = snap.val();
+      if (!cand || !state.activeCall) return;
+      if (pc.remoteDescription) {
+        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+      } else {
+        call.pendingIce.push(cand);
+      }
+    });
+    flushPendingIceCandidates(pc, call.pendingIce);
+  } catch (err) {
+    endCurrentCall(true);
+    alert("Arama cevaplanamadı: " + (err.message || "Mikrofon hatası"));
+  }
+}
+
+function wirePeerConnectionEvents(pc, callRef, localIceChild) {
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      callRef.child(localIceChild).push(e.candidate.toJSON()).catch(() => {});
+    }
+  };
+
+  pc.ontrack = (e) => {
+    if (remoteCallAudio && e.streams && e.streams[0]) {
+      remoteCallAudio.srcObject = e.streams[0];
+      remoteCallAudio.play().catch(() => {});
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    const st = pc.connectionState;
+    if (st === "connected" && state.activeCall) {
+      stopRingtone();
+      callStatusText.textContent = "Bağlandı (P2P Ses)";
+      startCallTimer();
+    } else if (st === "failed" || st === "disconnected" || st === "closed") {
+      if (state.activeCall) {
+        endCurrentCall(true, st === "failed" ? "Ağ bağlantısı kurulamadı" : "Bağlantı kesildi");
+      }
+    }
+  };
+}
+
+function flushPendingIceCandidates(pc, queue) {
+  while (queue && queue.length > 0) {
+    const c = queue.shift();
+    pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+  }
+}
+
+function startCallTimer() {
+  if (!state.activeCall || state.activeCall.timerId) return;
+  let secs = 0;
+  state.activeCall.timerId = setInterval(() => {
+    secs += 1;
+    const m = String(Math.floor(secs / 60)).padStart(2, "0");
+    const s = String(secs % 60).padStart(2, "0");
+    if (callTimerEl) callTimerEl.textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+function endCurrentCall(notifyRemote = true, reasonText = "") {
+  const call = state.activeCall;
+  if (!call) {
+    stopRingtone();
+    if (callModal) callModal.classList.add("hidden");
+    return;
+  }
+  state.activeCall = null;
+  stopRingtone();
+  clearInterval(call.timerId);
+  clearTimeout(call.timeoutId);
+
+  if (call.localStream) {
+    call.localStream.getTracks().forEach((t) => t.stop());
+  }
+  if (call.pc) {
+    try {
+      call.pc.onconnectionstatechange = null;
+      call.pc.close();
+    } catch {}
+  }
+  if (remoteCallAudio) {
+    remoteCallAudio.srcObject = null;
+  }
+
+  if (call.callRef) {
+    call.callRef.child("status").off();
+    call.callRef.child("answer").off();
+    call.callRef.child("callerIce").off();
+    call.callRef.child("calleeIce").off();
+    if (notifyRemote) {
+      call.callRef.update({ status: "ended" }).catch(() => {});
+    }
+  }
+  if (call.role === "caller" && call.incomingRef) {
+    call.incomingRef.remove().catch(() => {});
+  } else if (call.role === "callee" && state.db && state.user) {
+    state.db.ref(`incomingCalls/${state.user.id}`).remove().catch(() => {});
+  }
+
+  if (reasonText && callStatusText) {
+    callStatusText.textContent = reasonText;
+    setTimeout(() => {
+      if (!state.activeCall && callModal) callModal.classList.add("hidden");
+    }, 1000);
+  } else if (callModal) {
+    callModal.classList.add("hidden");
+  }
+}
+
+if (voiceCallBtn) {
+  voiceCallBtn.addEventListener("click", () => {
+    if (!state.activeRoom || state.activeRoom.isGroup || !state.activeRoom.otherId) return;
+    startOutgoingVoiceCall(state.activeRoom.otherId, state.activeRoom.title);
+  });
+}
+
+if (callAcceptBtn) callAcceptBtn.addEventListener("click", acceptIncomingCall);
+
+if (callRejectBtn) {
+  callRejectBtn.addEventListener("click", () => {
+    const call = state.activeCall;
+    if (call && call.callRef) {
+      call.callRef.update({ status: "rejected" }).catch(() => {});
+    }
+    endCurrentCall(false);
+  });
+}
+
+if (callHangupBtn) {
+  callHangupBtn.addEventListener("click", () => endCurrentCall(true));
+}
+
+if (callMuteBtn) {
+  callMuteBtn.addEventListener("click", () => {
+    if (!state.activeCall || !state.activeCall.localStream) return;
+    state.activeCall.muted = !state.activeCall.muted;
+    state.activeCall.localStream.getAudioTracks().forEach((t) => {
+      t.enabled = !state.activeCall.muted;
+    });
+    callMuteBtn.textContent = state.activeCall.muted ? "Mikrofonu Aç" : "Mikrofonu Kapat";
+  });
 }
 
 function resizeMessageInput() {
