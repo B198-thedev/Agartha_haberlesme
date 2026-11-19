@@ -603,15 +603,94 @@ function ensureAudioContext() {
 
 document.addEventListener("pointerdown", () => ensureAudioContext(), { once: true, passive: true });
 
-// Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle
-function syncVisualViewportHeight() {
-  if (window.visualViewport) {
-    document.documentElement.style.setProperty(
-      "--app-height",
-      window.visualViewport.height + "px"
-    );
+const NON_KEYBOARD_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit"
+]);
+
+function isEditableElement(el) {
+  if (!el || el === document.body || el === document.documentElement) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return !el.disabled;
+  if (el.tagName === "INPUT") {
+    const type = (el.type || "text").toLowerCase();
+    return !el.disabled && !el.readOnly && !NON_KEYBOARD_INPUT_TYPES.has(type);
+  }
+  return false;
+}
+
+function blurActiveEditable() {
+  const active = document.activeElement;
+  if (isEditableElement(active) && typeof active.blur === "function") {
+    active.blur();
+  }
+}
+
+function resetDocumentScroll() {
+  if (window.scrollX !== 0 || window.scrollY !== 0) {
     window.scrollTo(0, 0);
   }
+  if (document.documentElement && document.documentElement.scrollTop !== 0) {
+    document.documentElement.scrollTop = 0;
+  }
+  if (document.body && document.body.scrollTop !== 0) {
+    document.body.scrollTop = 0;
+  }
+}
+
+function clearVisualViewportOverrides() {
+  const rootStyle = document.documentElement.style;
+  rootStyle.removeProperty("--app-height");
+  rootStyle.removeProperty("--app-offset-top");
+}
+
+// Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle;
+// klavye kapandığında iOS standalone PWA'da visualViewport gecikmesine takılmadan 100% yüksekliğe dön.
+function syncVisualViewportHeight() {
+  const vv = window.visualViewport;
+  if (!vv) {
+    clearVisualViewportOverrides();
+    resetDocumentScroll();
+    return;
+  }
+
+  const layoutHeight = Math.max(
+    window.innerHeight || 0,
+    document.documentElement ? document.documentElement.clientHeight : 0
+  );
+  const keyboardShrink = layoutHeight - vv.height;
+  const editableFocused = isEditableElement(document.activeElement);
+
+  if (editableFocused && keyboardShrink > 110) {
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty("--app-height", `${Math.round(vv.height)}px`);
+    rootStyle.setProperty(
+      "--app-offset-top",
+      vv.offsetTop > 1 ? `${Math.round(vv.offsetTop)}px` : "0px"
+    );
+  } else {
+    clearVisualViewportOverrides();
+  }
+
+  resetDocumentScroll();
+}
+
+let viewportResetTimers = [];
+function scheduleViewportReset() {
+  viewportResetTimers.forEach((id) => clearTimeout(id));
+  viewportResetTimers = [];
+  requestAnimationFrame(syncVisualViewportHeight);
+  [80, 220, 420].forEach((delay) => {
+    viewportResetTimers.push(setTimeout(syncVisualViewportHeight, delay));
+  });
 }
 
 if (window.visualViewport) {
@@ -624,6 +703,20 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("scroll", syncVisualViewportHeight);
   syncVisualViewportHeight();
 }
+
+document.addEventListener("focusin", (e) => {
+  if (!isEditableElement(e.target)) return;
+  syncVisualViewportHeight();
+  setTimeout(syncVisualViewportHeight, 120);
+});
+
+document.addEventListener("focusout", () => {
+  scheduleViewportReset();
+});
+
+window.addEventListener("resize", scheduleViewportReset);
+window.addEventListener("orientationchange", scheduleViewportReset);
+window.addEventListener("pageshow", scheduleViewportReset);
 
 function playTone(ctx, freq, startOffset, duration, type = "sine", gainPeak = 0.08) {
   const osc = ctx.createOscillator();
@@ -887,8 +980,10 @@ function normalizeTurkish(str) {
 }
 
 function showView(viewEl) {
+  blurActiveEditable();
   [loadingView, authView, mainView, chatView].forEach((v) => v && v.classList.remove("active"));
   if (viewEl) viewEl.classList.add("active");
+  scheduleViewportReset();
 }
 
 function pushBackState(tag) {
@@ -901,6 +996,7 @@ function pushBackState(tag) {
 
 function closeActiveChatWithAnimation() {
   if (!chatView.classList.contains("active")) return;
+  blurActiveEditable();
   cleanupActiveRoomListeners();
   state.activeRoom = null;
   chatView.classList.add("leaving");
@@ -2694,7 +2790,6 @@ function setReplyTarget(replyObj) {
     messageInput.focus();
     setTimeout(() => {
       syncVisualViewportHeight();
-      if (messageForm) messageForm.scrollIntoView({ block: "end" });
       if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, 120);
   }
@@ -2712,10 +2807,13 @@ if (cancelReplyBtn) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && state.activeRoom && state.db && state.user) {
-    const now = Date.now();
-    state.roomReadBy[state.user.id] = now;
-    state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
+  if (document.visibilityState === "visible") {
+    scheduleViewportReset();
+    if (state.activeRoom && state.db && state.user) {
+      const now = Date.now();
+      state.roomReadBy[state.user.id] = now;
+      state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
+    }
   }
 });
 
@@ -2786,6 +2884,10 @@ function applyChatSearch(jumpToLatest = true) {
 }
 
 function closeChatSearch() {
+  if (chatSearchInput && document.activeElement === chatSearchInput) {
+    chatSearchInput.blur();
+    scheduleViewportReset();
+  }
   state.chatSearchQuery = "";
   state.chatSearchMatches = [];
   state.chatSearchIndex = -1;
