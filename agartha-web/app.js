@@ -310,7 +310,10 @@ const state = {
   liveLocRoomId: null,
   liveLocMsgKey: null,
   lastLocUpdateAt: 0,
-  preloadedChats: {}
+  preloadedChats: {},
+  chatSearchQuery: "",
+  chatSearchMatches: [],
+  chatSearchIndex: -1
 };
 
 // DOM Elemanları
@@ -372,6 +375,13 @@ const aiList = document.getElementById("ai-list");
 
 const chatBackBtn = document.getElementById("chat-back-btn");
 const chatBgLayer = document.getElementById("chat-bg-layer");
+const chatSearchBtn = document.getElementById("chat-search-btn");
+const chatSearchBar = document.getElementById("chat-search-bar");
+const chatSearchInput = document.getElementById("chat-search-input");
+const chatSearchCount = document.getElementById("chat-search-count");
+const chatSearchPrev = document.getElementById("chat-search-prev");
+const chatSearchNext = document.getElementById("chat-search-next");
+const chatSearchClose = document.getElementById("chat-search-close");
 const chatRoomHeaderInfo = document.getElementById("chat-room-header-info");
 const chatRoomAvatar = document.getElementById("chat-room-avatar");
 const chatRoomTitle = document.getElementById("chat-room-title");
@@ -601,6 +611,29 @@ function linkifyText(str) {
   );
 }
 
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function formatMessageTextWithSearch(str, query) {
+  const raw = String(str || "");
+  if (!query) return linkifyText(raw);
+
+  const re = new RegExp(`(${escapeRegExp(query)})`, "gi");
+  const urlSplitRe = /(https?:\/\/[^\s]+)/g;
+  return raw
+    .split(urlSplitRe)
+    .map((part) => {
+      if (/^https?:\/\/[^\s]+$/.test(part)) {
+        const safeUrl = escapeHtml(part);
+        const label = safeUrl.replace(re, '<mark class="search-hit">$1</mark>');
+        return `<a class="msg-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      }
+      return escapeHtml(part).replace(re, '<mark class="search-hit">$1</mark>');
+    })
+    .join("");
+}
+
 function formatTime(ts) {
   if (!ts) return "";
   const d = new Date(ts);
@@ -687,8 +720,12 @@ window.addEventListener("popstate", () => {
     return;
   }
 
-  // 2. Sohbet odası açıksa ana ekrana dön
+  // 2. Sohbet odası açıksa (arama açıksa önce aramayı kapat, değilse ana ekrana dön)
   if (chatView.classList.contains("active")) {
+    if (chatSearchBar && !chatSearchBar.classList.contains("hidden")) {
+      closeChatSearch();
+      return;
+    }
     closeActiveChatWithAnimation();
     return;
   }
@@ -1778,7 +1815,9 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             </div>
           `;
         }
-        const textHtml = m.text ? `<div class="msg-text">${linkifyText(m.text)}</div>` : "";
+        const textHtml = m.text
+          ? `<div class="msg-text" data-raw-text="${escapeHtml(m.text)}">${formatMessageTextWithSearch(m.text, state.chatSearchQuery)}</div>`
+          : "";
         const senderAvatarHtml = !isMe
           ? senderUser && senderUser.avatarData
             ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderUser.avatarData)}" alt=""${senderRingStyle(senderUser)} />`
@@ -1840,7 +1879,11 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       });
     });
 
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (state.chatSearchQuery) {
+      applyChatSearch(false);
+    } else {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
   }
 
   function senderRingStyle(senderUser) {
@@ -1891,9 +1934,136 @@ function cleanupActiveRoomListeners() {
   clearPendingPhoto();
   stopActiveRecording(true);
   clearPendingAudio();
+  closeChatSearch();
   messageInput.value = "";
   resizeMessageInput();
   updateMicVisibility();
+}
+
+function focusSearchMatch(index) {
+  state.chatSearchMatches.forEach((row) => row.classList.remove("search-active-msg"));
+  if (state.chatSearchMatches.length === 0) {
+    state.chatSearchIndex = -1;
+    if (chatSearchCount) {
+      chatSearchCount.textContent = state.chatSearchQuery ? "0" : "";
+    }
+    return;
+  }
+  const total = state.chatSearchMatches.length;
+  state.chatSearchIndex = ((index % total) + total) % total;
+  const activeRow = state.chatSearchMatches[state.chatSearchIndex];
+  activeRow.classList.add("search-active-msg");
+  activeRow.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (chatSearchCount) {
+    chatSearchCount.textContent = `${state.chatSearchIndex + 1}/${total}`;
+  }
+}
+
+function applyChatSearch(jumpToLatest = true) {
+  const q = state.chatSearchQuery;
+  const qLower = q.toLocaleLowerCase("tr-TR");
+  const rows = Array.from(messagesContainer.querySelectorAll(".msg-row"));
+  state.chatSearchMatches = [];
+
+  rows.forEach((row) => {
+    row.classList.remove("search-active-msg");
+    const textEl = row.querySelector(".msg-text");
+    if (textEl) {
+      const raw = textEl.dataset.rawText || textEl.textContent || "";
+      textEl.innerHTML = formatMessageTextWithSearch(raw, q);
+    }
+    if (!q) return;
+
+    const rawText = textEl ? (textEl.dataset.rawText || textEl.textContent || "") : "";
+    const senderEl = row.querySelector(".msg-sender");
+    const senderText = senderEl ? senderEl.textContent || "" : "";
+    const locEl = row.querySelector(".loc-card-title");
+    const locText = locEl ? locEl.textContent || "" : "";
+
+    const matched =
+      rawText.toLocaleLowerCase("tr-TR").includes(qLower) ||
+      senderText.toLocaleLowerCase("tr-TR").includes(qLower) ||
+      locText.toLocaleLowerCase("tr-TR").includes(qLower);
+
+    if (matched) {
+      state.chatSearchMatches.push(row);
+    }
+  });
+
+  if (!q) {
+    state.chatSearchIndex = -1;
+    if (chatSearchCount) chatSearchCount.textContent = "";
+    return;
+  }
+
+  if (jumpToLatest) {
+    focusSearchMatch(state.chatSearchMatches.length - 1);
+  } else if (state.chatSearchMatches.length > 0) {
+    const idx = Math.min(Math.max(state.chatSearchIndex, 0), state.chatSearchMatches.length - 1);
+    focusSearchMatch(idx);
+  } else {
+    focusSearchMatch(-1);
+  }
+}
+
+function closeChatSearch() {
+  state.chatSearchQuery = "";
+  state.chatSearchMatches = [];
+  state.chatSearchIndex = -1;
+  if (chatSearchInput) chatSearchInput.value = "";
+  if (chatSearchCount) chatSearchCount.textContent = "";
+  if (chatSearchBar) chatSearchBar.classList.add("hidden");
+  applyChatSearch(false);
+}
+
+if (chatSearchBtn && chatSearchBar) {
+  chatSearchBtn.addEventListener("click", () => {
+    const opening = chatSearchBar.classList.contains("hidden");
+    if (opening) {
+      chatSearchBar.classList.remove("hidden");
+      pushBackState("chat-search");
+      if (chatSearchInput) chatSearchInput.focus();
+    } else {
+      closeChatSearch();
+    }
+  });
+}
+
+if (chatSearchInput) {
+  chatSearchInput.addEventListener("input", () => {
+    state.chatSearchQuery = chatSearchInput.value.trim();
+    applyChatSearch(true);
+  });
+  chatSearchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (state.chatSearchMatches.length > 0) {
+        focusSearchMatch(state.chatSearchIndex - 1);
+      }
+    } else if (e.key === "Escape") {
+      closeChatSearch();
+    }
+  });
+}
+
+if (chatSearchPrev) {
+  chatSearchPrev.addEventListener("click", () => {
+    if (state.chatSearchMatches.length > 0) {
+      focusSearchMatch(state.chatSearchIndex - 1);
+    }
+  });
+}
+
+if (chatSearchNext) {
+  chatSearchNext.addEventListener("click", () => {
+    if (state.chatSearchMatches.length > 0) {
+      focusSearchMatch(state.chatSearchIndex + 1);
+    }
+  });
+}
+
+if (chatSearchClose) {
+  chatSearchClose.addEventListener("click", closeChatSearch);
 }
 
 function resizeMessageInput() {
