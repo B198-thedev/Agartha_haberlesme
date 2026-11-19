@@ -1449,3 +1449,43 @@ input:-webkit-autofill:focus {
   }
 }
 
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 140ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.settings-item:active {
+  transform: scale(0.98);
+}
+
+.settings-item.danger {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+@media (hover: hover) {
+  .settings-item:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+  }
+}
+

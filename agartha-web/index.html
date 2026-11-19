@@ -80,10 +80,10 @@
           </div>
         </div>
         <div class="top-bar-actions">
-          <button id="open-profile-btn" class="icon-btn" title="Profil &amp; Baloncuk Rengi">Profil</button>
-          <button id="notify-btn" class="icon-btn" title="Bildirimleri Aç">Bildirim</button>
-          <button id="open-admin-btn" class="icon-btn hidden" title="Yetki Yönetimi">Yetkiler</button>
-          <button id="logout-btn" class="icon-btn danger" title="Çıkış Yap">Çıkış</button>
+          <button id="open-settings-btn" class="icon-btn media-btn" title="Ayarlar" style="gap:6px;">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z"/></svg>
+            <span>Ayarlar</span>
+          </button>
         </div>
       </header>
 
@@ -240,6 +240,36 @@
           <div class="stack-form">
             <button id="send-static-loc-btn" type="button" class="btn-primary">Anlık Konum Gönder</button>
             <button id="start-live-loc-btn" type="button" class="icon-btn" style="padding:12px; font-weight:600; border-color:rgba(34,197,94,0.5); color:#86efac;">Canlı Konum Başlat</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AYARLAR MODALI -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Ayarlar</h2>
+          <button id="close-settings-btn" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-list">
+            <button id="open-profile-btn" type="button" class="settings-item">
+              <span>Profil</span>
+              <span class="user-sub">Fotoğraf, takma ad, renkler</span>
+            </button>
+            <button id="notify-btn" type="button" class="settings-item">
+              <span>Bildirimler</span>
+              <span id="notify-status-label" class="user-sub">Kapalı</span>
+            </button>
+            <button id="open-admin-btn" type="button" class="settings-item hidden">
+              <span>Yetkiler</span>
+              <span class="user-sub">Davet kodları, üyeler, Drive</span>
+            </button>
+            <button id="logout-btn" type="button" class="settings-item danger">
+              <span>Çıkış Yap</span>
+              <span class="user-sub">Oturumu kapat</span>
+            </button>
           </div>
         </div>
       </div>

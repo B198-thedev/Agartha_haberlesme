@@ -60,10 +60,14 @@ const regInvite = document.getElementById("reg-invite");
 const registerError = document.getElementById("register-error");
 
 const profileTrigger = document.getElementById("profile-trigger");
+const openSettingsBtn = document.getElementById("open-settings-btn");
+const settingsModal = document.getElementById("settings-modal");
+const closeSettingsBtn = document.getElementById("close-settings-btn");
 const openProfileBtn = document.getElementById("open-profile-btn");
 const headerAvatar = document.getElementById("header-avatar");
 const currentUserLabel = document.getElementById("current-user-label");
 const notifyBtn = document.getElementById("notify-btn");
+const notifyStatusLabel = document.getElementById("notify-status-label");
 const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
@@ -282,6 +286,10 @@ window.addEventListener("popstate", () => {
       state.invitesRef.off();
       state.invitesRef = null;
     }
+    return;
+  }
+  if (settingsModal && !settingsModal.classList.contains("hidden")) {
+    settingsModal.classList.add("hidden");
     return;
   }
 
@@ -879,12 +887,14 @@ function updateNotifyButton() {
     return;
   }
   if (Notification.permission === "granted") {
-    notifyBtn.textContent = "Bildirim: Açık";
+    if (notifyStatusLabel) notifyStatusLabel.textContent = "Açık";
     notifyBtn.style.borderColor = "rgba(34, 197, 94, 0.5)";
   } else if (Notification.permission === "denied") {
-    notifyBtn.textContent = "Bildirim: Engelli";
+    if (notifyStatusLabel) notifyStatusLabel.textContent = "Engelli";
+    notifyBtn.style.borderColor = "";
   } else {
-    notifyBtn.textContent = "Bildirim Aç";
+    if (notifyStatusLabel) notifyStatusLabel.textContent = "Kapalı (Açmak için dokun)";
+    notifyBtn.style.borderColor = "";
   }
 }
 
@@ -1955,12 +1965,36 @@ if (saveProfileDetailsBtn) {
   });
 }
 
+if (openSettingsBtn && settingsModal) {
+  openSettingsBtn.addEventListener("click", () => {
+    settingsModal.classList.remove("hidden");
+    pushBackState("settings-modal");
+  });
+}
+
+if (closeSettingsBtn && settingsModal) {
+  closeSettingsBtn.addEventListener("click", () => {
+    settingsModal.classList.add("hidden");
+  });
+}
+
+if (settingsModal) {
+  settingsModal.addEventListener("click", (e) => {
+    if (e.target === settingsModal) {
+      settingsModal.classList.add("hidden");
+    }
+  });
+}
+
 if (profileTrigger) {
   profileTrigger.addEventListener("click", openProfileModal);
 }
 
 if (openProfileBtn) {
-  openProfileBtn.addEventListener("click", openProfileModal);
+  openProfileBtn.addEventListener("click", () => {
+    if (settingsModal) settingsModal.classList.add("hidden");
+    openProfileModal();
+  });
 }
 
 if (profileColorInput) {
@@ -2196,6 +2230,7 @@ function listenAiRecommendations() {
 
 // Admin Paneli
 openAdminBtn.addEventListener("click", () => {
+  if (settingsModal) settingsModal.classList.add("hidden");
   adminModal.classList.remove("hidden");
   pushBackState("admin-modal");
   driveUrlInput.value = state.driveConfig.url || "";
