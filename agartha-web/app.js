@@ -3604,10 +3604,19 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         if (!bubble || !msgKey) return;
         const existingPop = bubble.querySelector(".reaction-picker-pop");
         messagesContainer.querySelectorAll(".reaction-picker-pop").forEach((p) => p.remove());
+        messagesContainer.querySelectorAll(".msg-row.has-reaction-pop").forEach((r) => r.classList.remove("has-reaction-pop"));
         if (existingPop) return;
+
+        const row = bubble.closest(".msg-row");
+        if (row) row.classList.add("has-reaction-pop");
 
         const pop = document.createElement("div");
         pop.className = "reaction-picker-pop";
+        const bRect = bubble.getBoundingClientRect();
+        const cRect = messagesContainer.getBoundingClientRect();
+        if (bRect.top - cRect.top < 60) {
+          pop.classList.add("open-below");
+        }
         const emojis = getActiveReactionEmojis();
         pop.innerHTML = emojis
           .map((em) => `<button type="button" class="reaction-pick-emoji" data-pick-emoji="${escapeHtml(em)}">${escapeHtml(em)}</button>`)
@@ -3617,6 +3626,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             ev.stopPropagation();
             const em = pickBtn.dataset.pickEmoji;
             pop.remove();
+            if (row) row.classList.remove("has-reaction-pop");
             toggleMessageReaction(msgKey, emojiToKey(em));
           });
         });
@@ -4583,6 +4593,7 @@ if (attachPlusBtn) {
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".reaction-picker-pop") && !e.target.closest("[data-react-open]")) {
     document.querySelectorAll(".reaction-picker-pop").forEach((p) => p.remove());
+    document.querySelectorAll(".msg-row.has-reaction-pop").forEach((r) => r.classList.remove("has-reaction-pop"));
   }
   if (!attachMenu || !attachMenu.classList.contains("open")) return;
   if (e.target.closest("#attach-menu") || e.target.closest("#attach-plus-btn")) return;
@@ -6300,6 +6311,11 @@ function renderAdminUsers(users) {
 // DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v61)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "v62",
+    title: "Mesaj Tepki Penceresi Düzeltmesi",
+    desc: "Mesaj balonundaki gülen yüz tepki menüsünün taşma (overflow: hidden) nedeniyle görünmemesi düzeltildi; en üstteki mesajlarda aşağı açılma eklendi."
+  },
   {
     v: "v61",
     title: "Kişisel Arkadaş Sistemi & Gizli Davetler",
