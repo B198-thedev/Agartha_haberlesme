@@ -261,6 +261,37 @@
             <div id="ai-drafts-list" class="list-stack"></div>
           </div>
 
+          <details id="ai-training-details" class="card ai-memory-card">
+            <summary class="ai-memory-summary">
+              <span>AI Eğitim Verisi (Önceki Gittiğin Yerler)</span>
+              <span id="ai-training-count" class="ai-status-pill">0 yer</span>
+            </summary>
+            <div class="ai-memory-body">
+              <p class="muted" style="margin-top:8px;">
+                Daha önce gittiğiniz ve sevdiğiniz/sevmediğiniz yerleri buraya ekle. AI bunlardan zevkini öğrenip aynı yerleri tekrarlamak yerine tarzına uyan yeni mekanlar önerir.
+              </p>
+              <form id="ai-training-add-form" class="stack-form" style="margin-top:8px;">
+                <input id="ai-train-name" type="text" maxlength="80" placeholder="Mekan adı (Örn. Kronotrop, Moda Sahili)" required />
+                <input id="ai-train-area" type="text" maxlength="60" placeholder="Semt / Şehir (Örn. Kadıköy, İstanbul)" required />
+                <select id="ai-train-score" aria-label="Deneyim Puanı">
+                  <option value="5">5/5 — Bayıldık (Kesinlikle bu tarz)</option>
+                  <option value="4" selected>4/5 — Çok Güzel (Sevdik)</option>
+                  <option value="3">3/5 — İdare Eder</option>
+                  <option value="2">2/5 — Pek Sevmedik</option>
+                  <option value="1">1/5 — Hiç Beğenmedik (Bu tarzı önerme)</option>
+                </select>
+                <input id="ai-train-note" type="text" maxlength="140" placeholder="Neden sevdik / sevmedik? (Örn. Sessiz, sohbetlik, kahvesi iyi)" />
+                <button type="submit" class="btn-primary">Eğitim Verisine Ekle</button>
+              </form>
+
+              <div id="ai-training-list" class="list-stack" style="margin-top:10px;"></div>
+
+              <div class="section-label" style="margin-top:12px;">Toplu Not / Serbest Liste (İsteğe Bağlı)</div>
+              <textarea id="ai-train-bulk-input" class="ai-bulk-textarea" rows="3" maxlength="2000" placeholder="Örn:&#10;- Bebek Kahve: Manzara harika ama hafta sonu çok kalabalık&#10;- Akşamları gürültülü bar yerine sakin mekan seviyoruz"></textarea>
+              <button id="save-ai-train-bulk-btn" type="button" class="icon-btn" style="margin-top:6px;width:100%;">Toplu Notu Kaydet</button>
+            </div>
+          </details>
+
           <div class="section-label">Ortak AI Önerileri</div>
           <div id="ai-list" class="list-stack">
             <div class="empty-hint">Henüz ortak AI önerisi yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>

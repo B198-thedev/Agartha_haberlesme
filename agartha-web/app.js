@@ -402,6 +402,8 @@ const state = {
   aiConfig: { ollamaUrl: "http://localhost:11434", model: "qwen2.5:7b" },
   aiBridgeStatus: { online: false, lastSeen: 0, model: "" },
   aiAnalysisBusy: false,
+  aiTrainingItems: {},
+  aiTrainingBulk: "",
   decryptedCache: {},
   pendingLoginSecret: ""
 };
@@ -482,6 +484,15 @@ const aiAnalyzeBtn = document.getElementById("ai-analyze-btn");
 const aiStatusMsg = document.getElementById("ai-status-msg");
 const aiDraftsSection = document.getElementById("ai-drafts-section");
 const aiDraftsList = document.getElementById("ai-drafts-list");
+const aiTrainingCount = document.getElementById("ai-training-count");
+const aiTrainingAddForm = document.getElementById("ai-training-add-form");
+const aiTrainName = document.getElementById("ai-train-name");
+const aiTrainArea = document.getElementById("ai-train-area");
+const aiTrainScore = document.getElementById("ai-train-score");
+const aiTrainNote = document.getElementById("ai-train-note");
+const aiTrainingList = document.getElementById("ai-training-list");
+const aiTrainBulkInput = document.getElementById("ai-train-bulk-input");
+const saveAiTrainBulkBtn = document.getElementById("save-ai-train-bulk-btn");
 const aiList = document.getElementById("ai-list");
 
 const chatBackBtn = document.getElementById("chat-back-btn");
@@ -2645,6 +2656,7 @@ async function enterMainApp() {
   listenAiBridgeStatus();
   listenAiRecommendations();
   listenPersonalAiDrafts();
+  listenAiTrainingMemory();
   listenAnnouncements();
   watchOwnAccess();
   listenIncomingCalls();
@@ -7285,7 +7297,7 @@ async function tryDirectLocalOllama(contextText, promptHint) {
     const chatCtrl = new AbortController();
     const chatTimer = setTimeout(() => chatCtrl.abort(), 55000);
     const systemPrompt =
-      'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, puanlara ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.';
+      'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.';
     const userMsg = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
 
     const chatRes = await fetch(`${baseUrl}/api/chat`, {
@@ -7494,6 +7506,103 @@ function listenPersonalAiDrafts() {
   });
 }
 
+function renderAiTrainingList() {
+  const entries = Object.entries(state.aiTrainingItems || {}).sort(
+    (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
+  );
+  if (aiTrainingCount) {
+    aiTrainingCount.textContent = `${entries.length} yer`;
+  }
+  if (!aiTrainingList) return;
+  if (entries.length === 0) {
+    aiTrainingList.innerHTML = `<div class="empty-hint">Henüz eğitim verisi eklenmedi.</div>`;
+    return;
+  }
+  aiTrainingList.innerHTML = entries
+    .map(([key, item]) => {
+      const scoreLabel = `${Number(item.score || 4)}/5`;
+      const notePart = item.note ? ` • ${escapeHtml(item.note)}` : "";
+      return `
+        <div class="ai-train-row">
+          <div>
+            <div class="place-title" style="font-size:13px;">${escapeHtml(item.name || "")} (${scoreLabel})</div>
+            <div class="user-sub">${escapeHtml(item.area || "")}${notePart}</div>
+          </div>
+          <button type="button" class="icon-btn danger" data-del-train="${escapeHtml(key)}" style="padding:4px 8px;font-size:11px;">Sil</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  aiTrainingList.querySelectorAll("[data-del-train]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!state.db || !state.user) return;
+      state.db.ref(`aiTraining/${state.user.id}/items/${btn.dataset.delTrain}`).remove();
+    });
+  });
+}
+
+function listenAiTrainingMemory() {
+  if (!state.db || !state.user) return;
+  state.db.ref(`aiTraining/${state.user.id}`).on("value", (snap) => {
+    const val = snap.val() || {};
+    state.aiTrainingItems = val.items && typeof val.items === "object" ? val.items : {};
+    state.aiTrainingBulk = String(val.bulkText || "");
+    if (aiTrainBulkInput && document.activeElement !== aiTrainBulkInput) {
+      aiTrainBulkInput.value = state.aiTrainingBulk;
+    }
+    renderAiTrainingList();
+  });
+}
+
+function buildTrainingSummaryForAi() {
+  const lines = [];
+  Object.values(state.aiTrainingItems || {})
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 30)
+    .forEach((item) => {
+      if (!item || !item.name) return;
+      const sc = Number(item.score || 4);
+      const nt = item.note ? ` — ${item.note}` : "";
+      lines.push(`- ${item.name} (${item.area || "?"}): ${sc}/5${nt}`);
+    });
+  const bulk = String(state.aiTrainingBulk || "").trim();
+  if (bulk) lines.push(bulk.slice(0, 1200));
+  return lines.join("\n").slice(0, 2200);
+}
+
+if (aiTrainingAddForm) {
+  aiTrainingAddForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.db || !state.user) return;
+    const name = aiTrainName ? aiTrainName.value.trim().slice(0, 80) : "";
+    const area = aiTrainArea ? aiTrainArea.value.trim().slice(0, 60) : "";
+    const score = Math.min(5, Math.max(1, Number(aiTrainScore ? aiTrainScore.value : 4) || 4));
+    const note = aiTrainNote ? aiTrainNote.value.trim().slice(0, 140) : "";
+    if (!name || !area) return;
+    await state.db.ref(`aiTraining/${state.user.id}/items`).push({
+      name,
+      area,
+      score,
+      note,
+      timestamp: Date.now()
+    });
+    if (aiTrainName) aiTrainName.value = "";
+    if (aiTrainArea) aiTrainArea.value = "";
+    if (aiTrainNote) aiTrainNote.value = "";
+  });
+}
+
+if (saveAiTrainBulkBtn) {
+  saveAiTrainBulkBtn.addEventListener("click", async () => {
+    if (!state.db || !state.user || !aiTrainBulkInput) return;
+    const text = aiTrainBulkInput.value.trim().slice(0, 2000);
+    await state.db.ref(`aiTraining/${state.user.id}/bulkText`).set(text);
+    saveAiTrainBulkBtn.textContent = "Kaydedildi ✓";
+    setTimeout(() => (saveAiTrainBulkBtn.textContent = "Toplu Notu Kaydet"), 1200);
+  });
+}
+
 if (aiAnalyzeForm) {
   aiAnalyzeForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -7541,8 +7650,12 @@ if (aiAnalyzeForm) {
         }
       }
 
+      const trainingSummary = buildTrainingSummaryForAi();
       const placesSummary = includePlaces ? buildPlacesSummaryForAi(20) : "";
       const parts = [];
+      if (trainingSummary) {
+        parts.push(`Önceki Gidilen Mekanlar ve Zevk Profili (Eğitim Verisi):\n${trainingSummary}`);
+      }
       if (chatLines.length > 0) {
         parts.push(`Sohbet (${roomMeta.title}):\n${chatLines.join("\n").slice(-3200)}`);
       }

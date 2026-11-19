@@ -2947,5 +2947,48 @@ html.anim-off *::after {
   vertical-align: middle;
 }
 
+.ai-memory-card {
+  margin-top: 10px;
+}
+
+.ai-memory-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  list-style: none;
+}
+
+.ai-memory-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-train-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid var(--border);
+}
+
+.ai-bulk-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 10px;
+  font: inherit;
+  font-size: 12.5px;
+  resize: vertical;
+}
+
 
 
