@@ -998,10 +998,51 @@ function normalizeTurkish(str) {
     .replace(/^_|_$/g, "");
 }
 
+let iosTopPocketNudged = false;
+function nudgeIosStandaloneTopPocket() {
+  if (iosTopPocketNudged) return;
+  const isStandalone = Boolean(
+    window.navigator.standalone ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+  );
+  if (!isStandalone || !isIosDevice() || !document.body) return;
+  iosTopPocketNudged = true;
+
+  const cover = document.createElement("div");
+  cover.setAttribute("aria-hidden", "true");
+  cover.style.cssText =
+    "position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,0.01);pointer-events:none;opacity:0;transition:opacity 240ms ease;";
+  const panel = document.createElement("div");
+  panel.setAttribute("aria-hidden", "true");
+  panel.style.cssText =
+    "position:fixed;top:0;right:0;bottom:0;width:90%;height:100%;z-index:2147483647;background:rgba(0,0,0,0.01);pointer-events:none;transform:translateX(110%);transition:transform 260ms ease;";
+  document.body.append(cover, panel);
+  void panel.offsetWidth;
+  requestAnimationFrame(() => {
+    cover.style.opacity = "1";
+    panel.style.transform = "translateX(0%)";
+    setTimeout(() => {
+      cover.style.opacity = "0";
+      panel.style.transform = "translateX(110%)";
+      setTimeout(() => {
+        cover.remove();
+        panel.remove();
+      }, 280);
+    }, 320);
+  });
+}
+
 function showView(viewEl) {
   blurActiveEditable();
   [loadingView, authView, mainView, chatView].forEach((v) => v && v.classList.remove("active"));
   if (viewEl) viewEl.classList.add("active");
+  document.documentElement.classList.toggle(
+    "is-auth-surface",
+    viewEl === authView || viewEl === loadingView
+  );
+  if (viewEl === mainView || viewEl === chatView) {
+    nudgeIosStandaloneTopPocket();
+  }
   scheduleViewportReset();
 }
 

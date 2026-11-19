@@ -297,16 +297,79 @@ input:-webkit-autofill:focus {
 }
 
 /* TOP BAR */
+.status-bar-cap {
+  display: none;
+}
+
 .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
   padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
-  background: var(--surface);
+  background-color: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+@media (display-mode: standalone) {
+  .status-bar-cap {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-width: 540px;
+    margin: 0 auto;
+    height: max(env(safe-area-inset-top, 0px), 12px);
+    background-color: var(--surface);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    z-index: 25;
+  }
+
+  html.is-auth-surface .status-bar-cap {
+    background-color: var(--bg);
+  }
+
+  .top-bar {
+    padding-top: calc(34px + env(safe-area-inset-top));
+  }
+
+  .update-banner {
+    top: calc(34px + env(safe-area-inset-top));
+  }
+}
+
+html.is-standalone .status-bar-cap {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  max-width: 540px;
+  margin: 0 auto;
+  height: max(env(safe-area-inset-top, 0px), 12px);
+  background-color: var(--surface);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  z-index: 25;
+}
+
+html.is-standalone.is-auth-surface .status-bar-cap {
+  background-color: var(--bg);
+}
+
+html.is-standalone .top-bar {
+  padding-top: calc(34px + env(safe-area-inset-top));
+}
+
+html.is-standalone .update-banner {
+  top: calc(34px + env(safe-area-inset-top));
 }
 
 .top-bar-left {
@@ -764,12 +827,14 @@ input:-webkit-autofill:focus {
   .modal {
     height: var(--app-height, 100vh);
     height: var(--app-height, 100lvh);
+    padding: calc(34px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
   }
 }
 
 html.is-standalone .modal {
   height: var(--app-height, 100vh);
   height: var(--app-height, 100lvh);
+  padding: calc(34px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
 }
 
 #call-modal {
@@ -1133,7 +1198,12 @@ html.is-standalone .modal {
   overflow: hidden;
 }
 
-#chat-view > .top-bar,
+#chat-view > .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
 #chat-view > .chat-search-bar,
 #chat-view > .messages-container,
 #chat-view > .typing-indicator,
@@ -1160,6 +1230,16 @@ html.is-standalone .modal {
   flex-wrap: nowrap;
   gap: 8px;
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+}
+
+@media (display-mode: standalone) {
+  .chat-top-bar {
+    padding-top: calc(32px + env(safe-area-inset-top));
+  }
+}
+
+html.is-standalone .chat-top-bar {
+  padding-top: calc(32px + env(safe-area-inset-top));
 }
 
 .chat-header-left {
