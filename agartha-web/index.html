@@ -233,6 +233,11 @@
         <span id="photo-preview-name" class="user-sub"></span>
         <button id="cancel-photo-btn" type="button" class="icon-btn danger">&times;</button>
       </div>
+      <div id="video-preview-bar" class="photo-preview-bar hidden">
+        <video id="video-preview-player" class="video-preview-thumb" muted playsinline preload="metadata"></video>
+        <span id="video-preview-name" class="user-sub"></span>
+        <button id="cancel-video-btn" type="button" class="icon-btn danger">&times;</button>
+      </div>
       <div id="audio-preview-bar" class="photo-preview-bar hidden">
         <audio id="audio-preview-player" controls></audio>
         <button id="cancel-audio-btn" type="button" class="icon-btn danger">&times;</button>
@@ -250,8 +255,8 @@
       </div>
 
       <form id="message-form" class="message-input-bar">
-        <input id="photo-input" type="file" accept="image/*" class="hidden" />
-        <button id="photo-btn" type="button" class="icon-btn media-btn" title="Fotoğraf Seç" aria-label="Fotoğraf Seç">
+        <input id="photo-input" type="file" accept="image/*,video/*" class="hidden" />
+        <button id="photo-btn" type="button" class="icon-btn media-btn" title="Fotoğraf / Video Seç" aria-label="Fotoğraf / Video Seç">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-4 4-2-2-5 5"/></svg>
         </button>
         <button id="mic-btn" type="button" class="icon-btn media-btn" title="Sesli Mesaj" aria-label="Sesli Mesaj">

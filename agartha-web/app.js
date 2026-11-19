@@ -356,6 +356,8 @@ const state = {
   pendingRegAvatar: "",
   pendingPhotoFile: null,
   pendingPhotoUrl: "",
+  pendingVideoFile: null,
+  pendingVideoUrl: "",
   mediaRecorder: null,
   audioStream: null,
   audioChunks: [],
@@ -469,6 +471,10 @@ const photoPreviewBar = document.getElementById("photo-preview-bar");
 const photoPreviewImg = document.getElementById("photo-preview-img");
 const photoPreviewName = document.getElementById("photo-preview-name");
 const cancelPhotoBtn = document.getElementById("cancel-photo-btn");
+const videoPreviewBar = document.getElementById("video-preview-bar");
+const videoPreviewPlayer = document.getElementById("video-preview-player");
+const videoPreviewName = document.getElementById("video-preview-name");
+const cancelVideoBtn = document.getElementById("cancel-video-btn");
 const micBtn = document.getElementById("mic-btn");
 const audioPreviewBar = document.getElementById("audio-preview-bar");
 const audioPreviewPlayer = document.getElementById("audio-preview-player");
@@ -1120,11 +1126,37 @@ async function uploadBlobToGoogleDrive(blob, fileName, mimeType) {
   return data;
 }
 
+async function uploadVideoToGoogleDrive(file) {
+  if (!file.type || !file.type.startsWith("video/")) {
+    throw new Error("Sadece video dosyaları yüklenebilir");
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    throw new Error("Video boyutu en fazla 25 MB olabilir");
+  }
+  const base64 = await fileToRawBase64(file);
+  const res = await fetch(state.driveConfig.url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      secret: state.driveConfig.secret || "",
+      fileName: file.name || ("agartha_video_" + Date.now() + ".mp4"),
+      mimeType: file.type || "video/mp4",
+      base64
+    })
+  });
+  const data = await res.json();
+  if (!data || !data.ok || !data.id) {
+    throw new Error((data && data.error) || "Drive video yükleme hatası");
+  }
+  return data;
+}
+
 function extractDriveFileIds(msg) {
   if (!msg) return [];
   const ids = [];
   if (msg.driveFileId) ids.push(msg.driveFileId);
   if (msg.audioDriveFileId) ids.push(msg.audioDriveFileId);
+  if (msg.videoDriveFileId) ids.push(msg.videoDriveFileId);
   if (!msg.driveFileId && msg.imageUrl) {
     const match = String(msg.imageUrl).match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (match) ids.push(match[1]);
@@ -1975,6 +2007,8 @@ function listenUsers() {
             msg.text ||
               (msg.imageUrl || msg.imageData
                 ? "Fotoğraf gönderdi"
+                : msg.videoDriveFileId || msg.videoUrl || msg.videoData
+                ? "Video gönderdi"
                 : msg.audioUrl || msg.audioData
                 ? "Sesli mesaj"
                 : msg.location
@@ -2009,6 +2043,8 @@ function listenMainGroupPreview() {
         msg.text ||
         (msg.imageUrl || msg.imageData
           ? "Fotoğraf"
+          : msg.videoDriveFileId || msg.videoUrl || msg.videoData
+          ? "Video"
           : msg.audioUrl || msg.audioData
           ? "Sesli mesaj"
           : msg.location
@@ -2146,6 +2182,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   function getReplySnippet(m) {
     if (m.text) return m.text.slice(0, 80);
     if (m.imageUrl || m.imageData) return "Fotoğraf";
+    if (m.videoDriveFileId || m.videoUrl || m.videoData) return "Video";
     if (m.audioUrl || m.audioData) return "Sesli mesaj";
     if (m.location) return m.location.live ? "Canlı Konum" : "Konum";
     if (m.callLog) return "Sesli arama";
@@ -2222,6 +2259,23 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const imgHtml = fullImgSrc
           ? `<img class="msg-image" src="${escapeHtml(thumbImgSrc)}" data-full="${escapeHtml(fullImgSrc)}" data-download="${escapeHtml(m.downloadUrl || "")}" alt="Fotoğraf" loading="lazy" />`
           : "";
+        let videoHtml = "";
+        if (m.videoDriveFileId) {
+          const previewSrc = `https://drive.google.com/file/d/${encodeURIComponent(m.videoDriveFileId)}/preview`;
+          const dlSrc = m.videoUrl || `https://drive.google.com/uc?export=download&id=${encodeURIComponent(m.videoDriveFileId)}`;
+          videoHtml = `
+            <div class="msg-video-wrap">
+              <iframe class="msg-video-frame" src="${previewSrc}" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+              <a class="msg-video-link" href="${escapeHtml(dlSrc)}" target="_blank" rel="noopener noreferrer">Videoyu İndir / Aç</a>
+            </div>
+          `;
+        } else if (m.videoData) {
+          videoHtml = `
+            <div class="msg-video-wrap">
+              <video class="msg-video" controls playsinline preload="metadata" src="${escapeHtml(m.videoData)}"></video>
+            </div>
+          `;
+        }
         const audioSrc = m.audioUrl || m.audioData;
         const audioHtml = audioSrc
           ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
@@ -2282,6 +2336,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
               ${senderHtml}
               ${replyQuoteHtml}
               ${imgHtml}
+              ${videoHtml}
               ${audioHtml}
               ${locHtml}
               ${callLogHtml}
@@ -2532,6 +2587,7 @@ function cleanupActiveRoomListeners() {
   }
   clearTimeout(state.typingTimeout);
   clearPendingPhoto();
+  clearPendingVideo();
   stopActiveRecording(true);
   clearPendingAudio();
   clearReplyTarget();
@@ -3278,6 +3334,21 @@ function clearPendingPhoto() {
   photoPreviewBar.classList.add("hidden");
 }
 
+function clearPendingVideo() {
+  state.pendingVideoFile = null;
+  if (state.pendingVideoUrl) {
+    URL.revokeObjectURL(state.pendingVideoUrl);
+    state.pendingVideoUrl = "";
+  }
+  if (videoPreviewPlayer) {
+    videoPreviewPlayer.pause();
+    videoPreviewPlayer.removeAttribute("src");
+    videoPreviewPlayer.load();
+  }
+  if (videoPreviewName) videoPreviewName.textContent = "";
+  if (videoPreviewBar) videoPreviewBar.classList.add("hidden");
+}
+
 messageInput.addEventListener("focus", () => {
   setTimeout(() => {
     syncVisualViewportHeight();
@@ -3362,10 +3433,11 @@ messageForm.addEventListener("submit", async (e) => {
   const targetRoomId = state.activeRoom.id;
   const text = messageInput.value.trim();
   const file = state.pendingPhotoFile;
+  const videoFile = state.pendingVideoFile;
   const audioBlob = state.pendingAudioBlob;
   const audioMime = state.pendingAudioMime;
   const replyTo = state.replyTo ? { ...state.replyTo } : null;
-  if (!text && !file && !audioBlob) {
+  if (!text && !file && !videoFile && !audioBlob) {
     messageInput.focus({ preventScroll: true });
     return;
   }
@@ -3383,7 +3455,7 @@ messageForm.addEventListener("submit", async (e) => {
   sendBtn.classList.add("sending");
   playMessageSound("send");
 
-  if (!file && !audioBlob) {
+  if (!file && !videoFile && !audioBlob) {
     const msgObj = {
       senderId: state.user.id,
       senderName: getDisplayName(state.user),
@@ -3396,6 +3468,7 @@ messageForm.addEventListener("submit", async (e) => {
   }
 
   clearPendingPhoto();
+  clearPendingVideo();
   clearPendingAudio();
   sendBtn.disabled = true;
   sendBtn.textContent = "Yükleniyor...";
@@ -3418,6 +3491,19 @@ messageForm.addEventListener("submit", async (e) => {
         payload.driveFileId = uploaded.id;
       } else {
         payload.imageData = await compressImageToBase64(file, 900, 0.72);
+      }
+    }
+
+    if (videoFile) {
+      if (state.driveConfig && state.driveConfig.url) {
+        const uploadedVideo = await uploadVideoToGoogleDrive(videoFile);
+        payload.videoUrl = uploadedVideo.downloadUrl;
+        payload.videoDriveFileId = uploadedVideo.id;
+      } else {
+        if (videoFile.size > 4 * 1024 * 1024) {
+          throw new Error("Drive bağlı değilken en fazla 4 MB video gönderilebilir");
+        }
+        payload.videoData = await blobToDataUrl(videoFile);
       }
     }
 
@@ -3457,6 +3543,25 @@ photoInput.addEventListener("change", () => {
   photoInput.value = "";
   if (!file || !state.activeRoom) return;
 
+  if (file.type && file.type.startsWith("video/")) {
+    const maxBytes = state.driveConfig && state.driveConfig.url ? 25 * 1024 * 1024 : 4 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      alert(`Video boyutu en fazla ${Math.round(maxBytes / (1024 * 1024))} MB olabilir.`);
+      return;
+    }
+    clearPendingPhoto();
+    clearPendingVideo();
+    state.pendingVideoFile = file;
+    state.pendingVideoUrl = URL.createObjectURL(file);
+    if (videoPreviewPlayer) videoPreviewPlayer.src = state.pendingVideoUrl;
+    const mb = (file.size / (1024 * 1024)).toFixed(1);
+    if (videoPreviewName) videoPreviewName.textContent = `${file.name || "Video"} (${mb} MB)`;
+    if (videoPreviewBar) videoPreviewBar.classList.remove("hidden");
+    messageInput.focus();
+    return;
+  }
+
+  clearPendingVideo();
   clearPendingPhoto();
   state.pendingPhotoFile = file;
   state.pendingPhotoUrl = URL.createObjectURL(file);
@@ -3467,6 +3572,7 @@ photoInput.addEventListener("change", () => {
 });
 
 cancelPhotoBtn.addEventListener("click", clearPendingPhoto);
+if (cancelVideoBtn) cancelVideoBtn.addEventListener("click", clearPendingVideo);
 cancelAudioBtn.addEventListener("click", clearPendingAudio);
 
 // Konum & Canlı Konum Paylaşımı
