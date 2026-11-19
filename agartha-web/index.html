@@ -238,6 +238,13 @@
         <span class="live-status-text"><span class="live-pulse-dot"></span>Canlı konum paylaşılıyor</span>
         <button id="stop-live-loc-btn" type="button" class="icon-btn danger">Durdur</button>
       </div>
+      <div id="reply-preview-bar" class="reply-preview-bar hidden">
+        <div class="reply-preview-body">
+          <div id="reply-preview-sender" class="reply-preview-sender"></div>
+          <div id="reply-preview-text" class="user-sub"></div>
+        </div>
+        <button id="cancel-reply-btn" type="button" class="icon-btn danger">&times;</button>
+      </div>
 
       <form id="message-form" class="message-input-bar">
         <input id="photo-input" type="file" accept="image/*" class="hidden" />
@@ -300,6 +307,19 @@
               <span>Bildirimler</span>
               <span id="notify-status-label" class="user-sub">Kapalı</span>
             </button>
+            <div class="settings-item">
+              <div>
+                <div>Mesaj Sesleri</div>
+                <div class="user-sub">Gelen ve giden mesaj efektleri</div>
+              </div>
+              <select id="sound-style-select" class="settings-select" aria-label="Mesaj Sesi Seç">
+                <option value="chime">Klasik Çan</option>
+                <option value="pop">Soft Pop</option>
+                <option value="crystal">Kristal</option>
+                <option value="retro">Retro Bip</option>
+                <option value="off">Sessiz</option>
+              </select>
+            </div>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yetkiler</span>
               <span class="user-sub">Davet kodları, üyeler, Drive</span>

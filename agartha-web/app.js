@@ -50,6 +50,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 
 const SESSION_KEY = "agartha_session_v1";
 const THEME_STORAGE_KEY = "agartha_theme_v1";
+const SOUND_STORAGE_KEY = "agartha_sound_v1";
 
 const APP_THEMES = {
   midnight: {
@@ -329,6 +330,7 @@ const state = {
   user: null, // { id, name, isAdmin }
   activeRoom: null, // { id, title, isGroup, otherId }
   chatRef: null,
+  readByRef: null,
   typingRef: null,
   invitesRef: null,
   typingTimeout: null,
@@ -358,7 +360,12 @@ const state = {
   preloadedChats: {},
   chatSearchQuery: "",
   chatSearchMatches: [],
-  chatSearchIndex: -1
+  chatSearchIndex: -1,
+  replyTo: null,
+  roomReadBy: {},
+  lastRenderedMsgKey: null,
+  soundStyle: localStorage.getItem(SOUND_STORAGE_KEY) || "chime",
+  audioCtx: null
 };
 
 // DOM Elemanları
@@ -396,6 +403,7 @@ const headerAvatar = document.getElementById("header-avatar");
 const currentUserLabel = document.getElementById("current-user-label");
 const notifyBtn = document.getElementById("notify-btn");
 const notifyStatusLabel = document.getElementById("notify-status-label");
+const soundStyleSelect = document.getElementById("sound-style-select");
 const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const themeGrid = document.getElementById("theme-grid");
@@ -455,6 +463,10 @@ const locationModal = document.getElementById("location-modal");
 const closeLocBtn = document.getElementById("close-loc-btn");
 const sendStaticLocBtn = document.getElementById("send-static-loc-btn");
 const startLiveLocBtn = document.getElementById("start-live-loc-btn");
+const replyPreviewBar = document.getElementById("reply-preview-bar");
+const replyPreviewSender = document.getElementById("reply-preview-sender");
+const replyPreviewText = document.getElementById("reply-preview-text");
+const cancelReplyBtn = document.getElementById("cancel-reply-btn");
 
 const imageModal = document.getElementById("image-modal");
 const imageModalImg = document.getElementById("image-modal-img");
@@ -506,6 +518,81 @@ const driveSecretInput = document.getElementById("drive-secret-input");
 
 const MIC_ICON_HTML =
   '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg>';
+
+const SINGLE_CHECK_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+const DOUBLE_CHECK_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13l4 4L15 8"/><path d="M9 15l2.5 2.5L22 7"/></svg>';
+
+function ensureAudioContext() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!state.audioCtx) {
+    state.audioCtx = new Ctx();
+  }
+  if (state.audioCtx.state === "suspended") {
+    state.audioCtx.resume().catch(() => {});
+  }
+  return state.audioCtx;
+}
+
+document.addEventListener("pointerdown", () => ensureAudioContext(), { once: true, passive: true });
+
+function playTone(ctx, freq, startOffset, duration, type = "sine", gainPeak = 0.08) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ctx.currentTime + startOffset);
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime + startOffset);
+  gain.gain.exponentialRampToValueAtTime(gainPeak, ctx.currentTime + startOffset + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startOffset + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(ctx.currentTime + startOffset);
+  osc.stop(ctx.currentTime + startOffset + duration + 0.02);
+}
+
+function playMessageSound(direction = "receive") {
+  const style = state.soundStyle || "chime";
+  if (style === "off") return;
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (style === "chime") {
+      if (direction === "send") {
+        playTone(ctx, 520, 0, 0.09, "sine", 0.05);
+        playTone(ctx, 680, 0.05, 0.11, "sine", 0.05);
+      } else {
+        playTone(ctx, 587, 0, 0.12, "sine", 0.08);
+        playTone(ctx, 880, 0.08, 0.18, "sine", 0.08);
+      }
+    } else if (style === "pop") {
+      if (direction === "send") {
+        playTone(ctx, 420, 0, 0.07, "triangle", 0.07);
+      } else {
+        playTone(ctx, 640, 0, 0.09, "triangle", 0.08);
+        playTone(ctx, 780, 0.05, 0.09, "triangle", 0.06);
+      }
+    } else if (style === "crystal") {
+      if (direction === "send") {
+        playTone(ctx, 740, 0, 0.1, "sine", 0.045);
+      } else {
+        playTone(ctx, 987, 0, 0.16, "sine", 0.06);
+        playTone(ctx, 1318, 0.07, 0.22, "sine", 0.06);
+      }
+    } else if (style === "retro") {
+      if (direction === "send") {
+        playTone(ctx, 440, 0, 0.06, "square", 0.03);
+      } else {
+        playTone(ctx, 523, 0, 0.07, "square", 0.035);
+        playTone(ctx, 784, 0.07, 0.09, "square", 0.035);
+      }
+    }
+  } catch {
+    // Ses oynatılamazsa sessiz geç
+  }
+}
 
 // Yardımcılar
 function isConfigured() {
@@ -999,6 +1086,16 @@ async function deleteFromGoogleDrive(fileId) {
 // Başlatma
 function init() {
   loadSavedTheme();
+  if (soundStyleSelect) {
+    soundStyleSelect.value = state.soundStyle;
+    soundStyleSelect.addEventListener("change", () => {
+      state.soundStyle = soundStyleSelect.value;
+      localStorage.setItem(SOUND_STORAGE_KEY, state.soundStyle);
+      if (state.soundStyle !== "off") {
+        playMessageSound("receive");
+      }
+    });
+  }
   try {
     if (typeof firebase === "undefined") {
       showError("Firebase kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.");
@@ -1460,6 +1557,8 @@ async function showIncomingNotification(title, body, uniqueKey) {
   if (uniqueKey && state.notifiedMsgKeys.has(uniqueKey)) return;
   if (uniqueKey) state.notifiedMsgKeys.add(uniqueKey);
 
+  playMessageSound("receive");
+
   if (navigator.vibrate) {
     navigator.vibrate([120, 60, 120]);
   }
@@ -1766,6 +1865,8 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   if (!isGroup) renderContactsList();
 
   state.activeRoom = { id: roomId, title, isGroup, otherId };
+  state.roomReadBy = {};
+  state.lastRenderedMsgKey = null;
   chatRoomTitle.textContent = title;
   if (isGroup) {
     chatRoomAvatar.src = "./icon-192.png";
@@ -1801,7 +1902,40 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   showView(chatView);
   pushBackState("chat");
 
-  function renderRoomMessages(data) {
+  function getMessageReadState(msg) {
+    if (!state.activeRoom) return { isRead: false, count: 0 };
+    const ts = msg.timestamp || 0;
+    if (!state.activeRoom.isGroup && state.activeRoom.otherId) {
+      const otherTs = state.roomReadBy[state.activeRoom.otherId] || 0;
+      const isRead = otherTs >= ts;
+      return { isRead, count: isRead ? 1 : 0 };
+    }
+    const count = Object.entries(state.roomReadBy).filter(
+      ([uid, readTs]) => uid !== state.user.id && (readTs || 0) >= ts
+    ).length;
+    return { isRead: count > 0, count };
+  }
+
+  function markRoomAsRead(latestTs) {
+    if (!state.activeRoom || state.activeRoom.id !== roomId) return;
+    if (document.visibilityState !== "visible") return;
+    const targetTs = Math.max(latestTs || 0, Date.now());
+    const prevTs = state.roomReadBy[state.user.id] || 0;
+    if (targetTs > prevTs) {
+      state.roomReadBy[state.user.id] = targetTs;
+      state.db.ref(`chats/${roomId}/readBy/${state.user.id}`).set(targetTs).catch(() => {});
+    }
+  }
+
+  function getReplySnippet(m) {
+    if (m.text) return m.text.slice(0, 80);
+    if (m.imageUrl || m.imageData) return "Fotoğraf";
+    if (m.audioUrl || m.audioData) return "Sesli mesaj";
+    if (m.location) return m.location.live ? "Canlı Konum" : "Konum";
+    return "Mesaj";
+  }
+
+  function renderRoomMessages(data, isLiveUpdate = false) {
     state.preloadedChats[roomId] = data;
     const entries = Object.entries(data).sort(
       (a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0)
@@ -1811,6 +1945,22 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       messagesContainer.innerHTML = `<div class="empty-hint">Henüz mesaj yok. İlk mesajı sen yaz!</div>`;
       return;
     }
+
+    const lastEntry = entries[entries.length - 1];
+    const [lastKey, lastMsg] = lastEntry;
+    if (
+      isLiveUpdate &&
+      state.lastRenderedMsgKey &&
+      lastKey !== state.lastRenderedMsgKey &&
+      lastMsg &&
+      lastMsg.senderId !== state.user.id &&
+      (lastMsg.timestamp || 0) > state.startedAt
+    ) {
+      playMessageSound("receive");
+    }
+    state.lastRenderedMsgKey = lastKey;
+
+    markRoomAsRead(lastMsg ? lastMsg.timestamp : Date.now());
 
     messagesContainer.innerHTML = entries
       .map(([msgKey, m]) => {
@@ -1830,9 +1980,28 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           !isMe && isGroup
             ? `<div class="msg-sender"${senderColorStyle}>${escapeHtml(liveSenderName)}</div>`
             : "";
+        const replyQuoteHtml = m.replyTo
+          ? `<div class="reply-quote" data-jump-msg="${escapeHtml(m.replyTo.msgKey || "")}">
+              <div class="reply-quote-sender">${escapeHtml(m.replyTo.senderName || "")}</div>
+              <div class="reply-quote-text">${escapeHtml(m.replyTo.preview || "")}</div>
+            </div>`
+          : "";
+        const replyBtnHtml = `<button class="msg-reply-btn" data-reply-msg="${escapeHtml(msgKey)}" title="Yanıtla">Yanıtla</button>`;
         const delHtml = canDelete
           ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
           : "";
+        let tickHtml = "";
+        if (isMe) {
+          const rState = getMessageReadState(m);
+          const readTitle = isGroup
+            ? rState.count > 0
+              ? `${rState.count} kişi gördü`
+              : "Gönderildi"
+            : rState.isRead
+            ? "Görüldü"
+            : "Gönderildi";
+          tickHtml = `<span class="msg-tick ${rState.isRead ? "read" : ""}" data-msg-ts="${m.timestamp || 0}" title="${readTitle}">${rState.isRead ? DOUBLE_CHECK_SVG : SINGLE_CHECK_SVG}</span>`;
+        }
         const fullImgSrc = m.imageUrl || m.imageData;
         const thumbImgSrc =
           m.imageUrl && m.imageUrl.includes("lh3.googleusercontent.com/d/")
@@ -1873,17 +2042,20 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             : `<div class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}"${senderRingStyle(senderUser)}>${escapeHtml(liveSenderName.charAt(0).toUpperCase())}</div>`
           : "";
         return `
-          <div class="msg-row ${isMe ? "me" : "other"}">
+          <div class="msg-row ${isMe ? "me" : "other"}" data-msg-key="${escapeHtml(msgKey)}">
             ${senderAvatarHtml}
             <div class="msg-bubble ${isMe ? "me" : "other"}"${customStyle}>
               ${senderHtml}
+              ${replyQuoteHtml}
               ${imgHtml}
               ${audioHtml}
               ${locHtml}
               ${textHtml}
               <div class="msg-footer">
+                ${replyBtnHtml}
                 ${delHtml}
                 <span class="msg-time">${formatTime(m.timestamp)}</span>
+                ${tickHtml}
               </div>
             </div>
           </div>
@@ -1908,6 +2080,35 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
     messagesContainer.querySelectorAll("[data-view-user]").forEach((el) => {
       el.addEventListener("click", () => openUserProfileCard(el.dataset.viewUser));
+    });
+
+    messagesContainer.querySelectorAll("[data-reply-msg]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const msgKey = btn.dataset.replyMsg;
+        const target = data[msgKey];
+        if (!target) return;
+        const sUser = state.usersCache[target.senderId];
+        const sName = sUser ? getDisplayName(sUser) : (target.senderName || "?");
+        setReplyTarget({
+          msgKey,
+          senderName: sName,
+          preview: getReplySnippet(target)
+        });
+      });
+    });
+
+    messagesContainer.querySelectorAll("[data-jump-msg]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const key = el.dataset.jumpMsg;
+        if (!key) return;
+        const targetRow = messagesContainer.querySelector(`.msg-row[data-msg-key="${CSS.escape(key)}"]`);
+        if (targetRow) {
+          targetRow.classList.remove("search-active-msg");
+          targetRow.classList.add("search-active-msg");
+          targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(() => targetRow.classList.remove("search-active-msg"), 1500);
+        }
+      });
     });
 
     messagesContainer.querySelectorAll("[data-del-msg]").forEach((btn) => {
@@ -1935,6 +2136,22 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     }
   }
 
+  function refreshReadTicks() {
+    messagesContainer.querySelectorAll(".msg-tick").forEach((tickEl) => {
+      const ts = Number(tickEl.dataset.msgTs || 0);
+      const rState = getMessageReadState({ timestamp: ts });
+      tickEl.classList.toggle("read", rState.isRead);
+      tickEl.innerHTML = rState.isRead ? DOUBLE_CHECK_SVG : SINGLE_CHECK_SVG;
+      tickEl.title = isGroup
+        ? rState.count > 0
+          ? `${rState.count} kişi gördü`
+          : "Gönderildi"
+        : rState.isRead
+        ? "Görüldü"
+        : "Gönderildi";
+    });
+  }
+
   function senderRingStyle(senderUser) {
     return senderUser && isValidHexColor(senderUser.bannerColor)
       ? ` style="border-color:${senderUser.bannerColor};border-width:2px;cursor:pointer;"`
@@ -1942,12 +2159,18 @@ function openChatRoom(roomId, title, isGroup, otherId) {
   }
 
   if (state.preloadedChats[roomId]) {
-    renderRoomMessages(state.preloadedChats[roomId]);
+    renderRoomMessages(state.preloadedChats[roomId], false);
   }
+
+  state.readByRef = state.db.ref(`chats/${roomId}/readBy`);
+  state.readByRef.on("value", (snap) => {
+    state.roomReadBy = snap.val() || {};
+    refreshReadTicks();
+  });
 
   state.chatRef = state.db.ref(`chats/${roomId}/messages`).limitToLast(100);
   state.chatRef.on("value", (snap) => {
-    renderRoomMessages(snap.val() || {});
+    renderRoomMessages(snap.val() || {}, true);
   });
 
   // Yazıyor... (Typing) dinleyicisi
@@ -1972,6 +2195,10 @@ function cleanupActiveRoomListeners() {
     state.chatRef.off();
     state.chatRef = null;
   }
+  if (state.readByRef) {
+    state.readByRef.off();
+    state.readByRef = null;
+  }
   if (state.typingRef) {
     state.typingRef.off();
     state.typingRef = null;
@@ -1983,11 +2210,39 @@ function cleanupActiveRoomListeners() {
   clearPendingPhoto();
   stopActiveRecording(true);
   clearPendingAudio();
+  clearReplyTarget();
   closeChatSearch();
   messageInput.value = "";
   resizeMessageInput();
   updateMicVisibility();
 }
+
+function setReplyTarget(replyObj) {
+  state.replyTo = replyObj;
+  if (replyPreviewSender) replyPreviewSender.textContent = replyObj.senderName || "";
+  if (replyPreviewText) replyPreviewText.textContent = replyObj.preview || "";
+  if (replyPreviewBar) replyPreviewBar.classList.remove("hidden");
+  if (messageInput) messageInput.focus({ preventScroll: true });
+}
+
+function clearReplyTarget() {
+  state.replyTo = null;
+  if (replyPreviewSender) replyPreviewSender.textContent = "";
+  if (replyPreviewText) replyPreviewText.textContent = "";
+  if (replyPreviewBar) replyPreviewBar.classList.add("hidden");
+}
+
+if (cancelReplyBtn) {
+  cancelReplyBtn.addEventListener("click", clearReplyTarget);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.activeRoom && state.db && state.user) {
+    const now = Date.now();
+    state.roomReadBy[state.user.id] = now;
+    state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
+  }
+});
 
 function focusSearchMatch(index) {
   state.chatSearchMatches.forEach((row) => row.classList.remove("search-active-msg"));
@@ -2244,6 +2499,7 @@ messageForm.addEventListener("submit", async (e) => {
   const file = state.pendingPhotoFile;
   const audioBlob = state.pendingAudioBlob;
   const audioMime = state.pendingAudioMime;
+  const replyTo = state.replyTo ? { ...state.replyTo } : null;
   if (!text && !file && !audioBlob) {
     messageInput.focus({ preventScroll: true });
     return;
@@ -2252,6 +2508,7 @@ messageForm.addEventListener("submit", async (e) => {
   messageInput.value = "";
   resizeMessageInput();
   updateMicVisibility();
+  clearReplyTarget();
   messageInput.focus({ preventScroll: true });
   clearTimeout(state.typingTimeout);
   state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`).remove();
@@ -2259,14 +2516,17 @@ messageForm.addEventListener("submit", async (e) => {
   sendBtn.classList.remove("sending");
   void sendBtn.offsetWidth;
   sendBtn.classList.add("sending");
+  playMessageSound("send");
 
   if (!file && !audioBlob) {
-    await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
+    const msgObj = {
       senderId: state.user.id,
       senderName: getDisplayName(state.user),
       text,
       timestamp: Date.now()
-    });
+    };
+    if (replyTo) msgObj.replyTo = replyTo;
+    await state.db.ref(`chats/${state.activeRoom.id}/messages`).push(msgObj);
     return;
   }
 
@@ -2283,6 +2543,7 @@ messageForm.addEventListener("submit", async (e) => {
       text,
       timestamp: Date.now()
     };
+    if (replyTo) payload.replyTo = replyTo;
 
     if (file) {
       if (state.driveConfig && state.driveConfig.url) {
