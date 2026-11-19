@@ -1011,24 +1011,22 @@ function nudgeIosStandaloneTopPocket() {
   const cover = document.createElement("div");
   cover.setAttribute("aria-hidden", "true");
   cover.style.cssText =
-    "position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,0.01);pointer-events:none;opacity:0;transition:opacity 240ms ease;";
+    "display:none;position:fixed;inset:0;z-index:2147483646;background:rgba(255,255,255,0.01);pointer-events:none;opacity:0;transition:opacity 260ms ease;";
   const panel = document.createElement("div");
   panel.setAttribute("aria-hidden", "true");
   panel.style.cssText =
-    "position:fixed;top:0;right:0;bottom:0;width:90%;height:100%;z-index:2147483647;background:rgba(0,0,0,0.01);pointer-events:none;transform:translateX(110%);transition:transform 260ms ease;";
+    "position:fixed;top:0;right:0;bottom:0;width:90%;height:100%;z-index:2147483647;background:rgba(255,255,255,0.01);pointer-events:none;transform:translateX(110%);transition:transform 280ms ease;";
   document.body.append(cover, panel);
   void panel.offsetWidth;
   requestAnimationFrame(() => {
+    cover.style.display = "block";
     cover.style.opacity = "1";
     panel.style.transform = "translateX(0%)";
     setTimeout(() => {
       cover.style.opacity = "0";
+      cover.style.display = "none";
       panel.style.transform = "translateX(110%)";
-      setTimeout(() => {
-        cover.remove();
-        panel.remove();
-      }, 280);
-    }, 320);
+    }, 450);
   });
 }
 

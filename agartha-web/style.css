@@ -335,14 +335,6 @@ input:-webkit-autofill:focus {
   html.is-auth-surface .status-bar-cap {
     background-color: var(--bg);
   }
-
-  .top-bar {
-    padding-top: calc(34px + env(safe-area-inset-top));
-  }
-
-  .update-banner {
-    top: calc(34px + env(safe-area-inset-top));
-  }
 }
 
 html.is-standalone .status-bar-cap {
@@ -362,14 +354,6 @@ html.is-standalone .status-bar-cap {
 
 html.is-standalone.is-auth-surface .status-bar-cap {
   background-color: var(--bg);
-}
-
-html.is-standalone .top-bar {
-  padding-top: calc(34px + env(safe-area-inset-top));
-}
-
-html.is-standalone .update-banner {
-  top: calc(34px + env(safe-area-inset-top));
 }
 
 .top-bar-left {
@@ -827,14 +811,12 @@ html.is-standalone .update-banner {
   .modal {
     height: var(--app-height, 100vh);
     height: var(--app-height, 100lvh);
-    padding: calc(34px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
   }
 }
 
 html.is-standalone .modal {
   height: var(--app-height, 100vh);
   height: var(--app-height, 100lvh);
-  padding: calc(34px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
 }
 
 #call-modal {
@@ -1230,16 +1212,6 @@ html.is-standalone .modal {
   flex-wrap: nowrap;
   gap: 8px;
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
-}
-
-@media (display-mode: standalone) {
-  .chat-top-bar {
-    padding-top: calc(32px + env(safe-area-inset-top));
-  }
-}
-
-html.is-standalone .chat-top-bar {
-  padding-top: calc(32px + env(safe-area-inset-top));
 }
 
 .chat-header-left {
