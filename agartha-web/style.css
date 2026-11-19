@@ -807,6 +807,112 @@ html.is-standalone.is-auth-surface .status-bar-cap {
   height: 40px;
 }
 
+.input-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.message-input-bar .circle-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.message-input-bar .circle-btn.mic-recording {
+  width: auto;
+  min-width: 56px;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+.plus-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.plus-icon {
+  transition: transform 180ms ease;
+}
+
+#plus-btn.is-open {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#plus-btn.is-open .plus-icon {
+  transform: rotate(45deg);
+}
+
+.input-more-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 30;
+  animation: barSlideUp 150ms ease-out;
+}
+
+.input-more-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.input-more-item:active {
+  background: var(--surface-2);
+}
+
+@media (hover: hover) {
+  .input-more-item:hover {
+    background: var(--surface-2);
+  }
+}
+
+@media (max-width: 420px) {
+  .message-input-bar {
+    gap: 6px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  .input-actions-wrap {
+    gap: 5px;
+  }
+  .message-input-bar .circle-btn {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+  }
+  .send-btn {
+    height: 38px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+}
+
 .msg-text {
   white-space: pre-wrap;
 }
@@ -1223,10 +1329,14 @@ html.is-standalone .modal {
 #chat-view > .typing-indicator,
 #chat-view > .reply-preview-bar,
 #chat-view > .photo-preview-bar,
-#chat-view > .live-loc-bar,
-#chat-view > .message-input-bar {
+#chat-view > .live-loc-bar {
   position: relative;
   z-index: 1;
+}
+
+#chat-view > .message-input-bar {
+  position: relative;
+  z-index: 6;
 }
 
 .chat-bg-layer {

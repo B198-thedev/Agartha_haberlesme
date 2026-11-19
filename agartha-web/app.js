@@ -480,6 +480,8 @@ const videoPreviewPlayer = document.getElementById("video-preview-player");
 const videoPreviewName = document.getElementById("video-preview-name");
 const cancelVideoBtn = document.getElementById("cancel-video-btn");
 const micBtn = document.getElementById("mic-btn");
+const plusBtn = document.getElementById("plus-btn");
+const inputMoreMenu = document.getElementById("input-more-menu");
 const audioPreviewBar = document.getElementById("audio-preview-bar");
 const audioPreviewPlayer = document.getElementById("audio-preview-player");
 const cancelAudioBtn = document.getElementById("cancel-audio-btn");
@@ -1054,6 +1056,7 @@ function pushBackState(tag) {
 
 function closeActiveChatWithAnimation() {
   if (!chatView.classList.contains("active")) return;
+  closeInputMoreMenu();
   blurActiveEditable();
   cleanupActiveRoomListeners();
   state.activeRoom = null;
@@ -3722,6 +3725,8 @@ messageForm.addEventListener("submit", async (e) => {
   sendBtn.textContent = "Yükleniyor...";
   photoBtn.disabled = true;
   micBtn.disabled = true;
+  if (plusBtn) plusBtn.disabled = true;
+  closeInputMoreMenu();
   try {
     const payload = {
       senderId: state.user.id,
@@ -3778,11 +3783,13 @@ messageForm.addEventListener("submit", async (e) => {
     sendBtn.textContent = "Gönder";
     photoBtn.disabled = false;
     micBtn.disabled = false;
+    if (plusBtn) plusBtn.disabled = false;
   }
 });
 
 photoBtn.addEventListener("click", () => {
   if (!state.activeRoom) return;
+  closeInputMoreMenu();
   photoInput.click();
 });
 
@@ -3841,8 +3848,38 @@ function stopLiveLocation(skipRemoteUpdate = false) {
   if (liveLocBar) liveLocBar.classList.add("hidden");
 }
 
+function closeInputMoreMenu() {
+  if (inputMoreMenu) inputMoreMenu.classList.add("hidden");
+  if (plusBtn) {
+    plusBtn.classList.remove("is-open");
+    plusBtn.setAttribute("aria-expanded", "false");
+  }
+}
+
+if (plusBtn && inputMoreMenu) {
+  plusBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!state.activeRoom) return;
+    const isHidden = inputMoreMenu.classList.contains("hidden");
+    inputMoreMenu.classList.toggle("hidden", !isHidden);
+    plusBtn.classList.toggle("is-open", isHidden);
+    plusBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!inputMoreMenu.classList.contains("hidden") && !e.target.closest(".plus-menu-wrap")) {
+      closeInputMoreMenu();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeInputMoreMenu();
+  });
+}
+
 if (locBtn && locationModal) {
   locBtn.addEventListener("click", () => {
+    closeInputMoreMenu();
     if (!state.activeRoom) return;
     locationModal.classList.remove("hidden");
     pushBackState("location-modal");
@@ -3978,6 +4015,7 @@ if (startLiveLocBtn) {
 
 micBtn.addEventListener("click", async () => {
   if (!state.activeRoom) return;
+  closeInputMoreMenu();
   if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
     stopActiveRecording(false);
     return;
