@@ -31,7 +31,11 @@ const state = {
   pendingAudioBlob: null,
   pendingAudioMime: "",
   pendingAudioPreviewUrl: "",
-  pendingAudioData: ""
+  pendingAudioData: "",
+  liveLocWatchId: null,
+  liveLocRoomId: null,
+  liveLocMsgKey: null,
+  lastLocUpdateAt: 0
 };
 
 // DOM Elemanları
@@ -99,6 +103,13 @@ const micBtn = document.getElementById("mic-btn");
 const audioPreviewBar = document.getElementById("audio-preview-bar");
 const audioPreviewPlayer = document.getElementById("audio-preview-player");
 const cancelAudioBtn = document.getElementById("cancel-audio-btn");
+const locBtn = document.getElementById("loc-btn");
+const liveLocBar = document.getElementById("live-loc-bar");
+const stopLiveLocBtn = document.getElementById("stop-live-loc-btn");
+const locationModal = document.getElementById("location-modal");
+const closeLocBtn = document.getElementById("close-loc-btn");
+const sendStaticLocBtn = document.getElementById("send-static-loc-btn");
+const startLiveLocBtn = document.getElementById("start-live-loc-btn");
 
 const imageModal = document.getElementById("image-modal");
 const imageModalImg = document.getElementById("image-modal-img");
@@ -1036,7 +1047,16 @@ function listenUsers() {
         if (!(isViewingThis && document.visibilityState === "visible")) {
           showIncomingNotification(
             `${msg.senderName || u.name} (Özel)`,
-            msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf gönderdi" : msg.audioUrl || msg.audioData ? "🎤 Sesli mesaj" : ""),
+            msg.text ||
+              (msg.imageUrl || msg.imageData
+                ? "📷 Fotoğraf gönderdi"
+                : msg.audioUrl || msg.audioData
+                ? "🎤 Sesli mesaj"
+                : msg.location
+                ? msg.location.live
+                  ? "🟢 Canlı konum başlattı"
+                  : "📍 Konum paylaştı"
+                : ""),
             msgSnap.key
           );
         }
@@ -1057,7 +1077,17 @@ function listenMainGroupPreview() {
         return;
       }
       const [key, msg] = Object.entries(val)[0];
-      const previewText = msg.text || (msg.imageUrl || msg.imageData ? "📷 Fotoğraf" : msg.audioUrl || msg.audioData ? "🎤 Sesli mesaj" : "");
+      const previewText =
+        msg.text ||
+        (msg.imageUrl || msg.imageData
+          ? "📷 Fotoğraf"
+          : msg.audioUrl || msg.audioData
+          ? "🎤 Sesli mesaj"
+          : msg.location
+          ? msg.location.live
+            ? "🟢 Canlı Konum"
+            : "📍 Konum"
+          : "");
       mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
 
@@ -1161,6 +1191,25 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const audioHtml = audioSrc
           ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
           : "";
+        let locHtml = "";
+        if (m.location && typeof m.location.lat === "number" && typeof m.location.lng === "number") {
+          const latStr = m.location.lat.toFixed(5);
+          const lngStr = m.location.lng.toFixed(5);
+          const mapsUrl = `https://www.google.com/maps?q=${m.location.lat},${m.location.lng}`;
+          const titleLabel = m.location.live
+            ? m.location.active
+              ? "🟢 Canlı Konum (Aktif)"
+              : "📍 Canlı Konum (Sona erdi)"
+            : "📍 Anlık Konum";
+          const updatedInfo = m.location.updatedAt ? ` • ${formatTime(m.location.updatedAt)}` : "";
+          locHtml = `
+            <div class="loc-card">
+              <div class="loc-card-title">${titleLabel}</div>
+              <div class="loc-card-coords">${latStr}, ${lngStr}${updatedInfo}</div>
+              <a class="loc-card-link" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Haritada Aç</a>
+            </div>
+          `;
+        }
         const textHtml = m.text ? `<div>${linkifyText(m.text)}</div>` : "";
         const senderRingStyle =
           senderUser && isValidHexColor(senderUser.bannerColor)
@@ -1178,6 +1227,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
               ${senderHtml}
               ${imgHtml}
               ${audioHtml}
+              ${locHtml}
               ${textHtml}
               <div class="msg-footer">
                 ${delHtml}
@@ -1435,6 +1485,146 @@ photoInput.addEventListener("change", () => {
 
 cancelPhotoBtn.addEventListener("click", clearPendingPhoto);
 cancelAudioBtn.addEventListener("click", clearPendingAudio);
+
+// Konum & Canlı Konum Paylaşımı
+function stopLiveLocation() {
+  if (state.liveLocWatchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(state.liveLocWatchId);
+    state.liveLocWatchId = null;
+  }
+  if (state.liveLocRoomId && state.liveLocMsgKey && state.db) {
+    state.db
+      .ref(`chats/${state.liveLocRoomId}/messages/${state.liveLocMsgKey}/location`)
+      .update({ active: false, updatedAt: Date.now() })
+      .catch(() => {});
+  }
+  state.liveLocRoomId = null;
+  state.liveLocMsgKey = null;
+  if (liveLocBar) liveLocBar.classList.add("hidden");
+}
+
+if (locBtn && locationModal) {
+  locBtn.addEventListener("click", () => {
+    if (!state.activeRoom) return;
+    locationModal.classList.remove("hidden");
+  });
+}
+
+if (closeLocBtn && locationModal) {
+  closeLocBtn.addEventListener("click", () => {
+    locationModal.classList.add("hidden");
+  });
+}
+
+if (stopLiveLocBtn) {
+  stopLiveLocBtn.addEventListener("click", stopLiveLocation);
+}
+
+if (sendStaticLocBtn) {
+  sendStaticLocBtn.addEventListener("click", () => {
+    if (!state.activeRoom) return;
+    if (!navigator.geolocation) {
+      alert("Bu tarayıcı konum paylaşımını desteklemiyor.");
+      return;
+    }
+    sendStaticLocBtn.disabled = true;
+    sendStaticLocBtn.textContent = "Konum alınıyor...";
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const now = Date.now();
+        await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
+          senderId: state.user.id,
+          senderName: getDisplayName(state.user),
+          text: "",
+          location: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            live: false,
+            active: false,
+            updatedAt: now
+          },
+          timestamp: now
+        });
+        sendStaticLocBtn.disabled = false;
+        sendStaticLocBtn.textContent = "📍 Anlık Konum Gönder";
+        locationModal.classList.add("hidden");
+      },
+      (err) => {
+        sendStaticLocBtn.disabled = false;
+        sendStaticLocBtn.textContent = "📍 Anlık Konum Gönder";
+        alert("Konum alınamadı: " + (err.message || "İzin verilmedi"));
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  });
+}
+
+if (startLiveLocBtn) {
+  startLiveLocBtn.addEventListener("click", () => {
+    if (!state.activeRoom) return;
+    if (!navigator.geolocation) {
+      alert("Bu tarayıcı konum paylaşımını desteklemiyor.");
+      return;
+    }
+    stopLiveLocation();
+    startLiveLocBtn.disabled = true;
+    startLiveLocBtn.textContent = "Başlatılıyor...";
+
+    const roomId = state.activeRoom.id;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const now = Date.now();
+        const msgRef = await state.db.ref(`chats/${roomId}/messages`).push({
+          senderId: state.user.id,
+          senderName: getDisplayName(state.user),
+          text: "",
+          location: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            live: true,
+            active: true,
+            updatedAt: now
+          },
+          timestamp: now
+        });
+
+        state.liveLocRoomId = roomId;
+        state.liveLocMsgKey = msgRef.key;
+        state.lastLocUpdateAt = now;
+
+        const locNodeRef = state.db.ref(`chats/${roomId}/messages/${msgRef.key}/location`);
+        locNodeRef.onDisconnect().update({ active: false });
+
+        state.liveLocWatchId = navigator.geolocation.watchPosition(
+          (nextPos) => {
+            const ts = Date.now();
+            if (ts - state.lastLocUpdateAt < 3000) return;
+            state.lastLocUpdateAt = ts;
+            locNodeRef.update({
+              lat: nextPos.coords.latitude,
+              lng: nextPos.coords.longitude,
+              active: true,
+              updatedAt: ts
+            });
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+        );
+
+        if (liveLocBar) liveLocBar.classList.remove("hidden");
+        startLiveLocBtn.disabled = false;
+        startLiveLocBtn.textContent = "🟢 Canlı Konum Başlat";
+        locationModal.classList.add("hidden");
+      },
+      (err) => {
+        startLiveLocBtn.disabled = false;
+        startLiveLocBtn.textContent = "🟢 Canlı Konum Başlat";
+        alert("Canlı konum başlatılamadı: " + (err.message || "İzin verilmedi"));
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  });
+}
 
 micBtn.addEventListener("click", async () => {
   if (!state.activeRoom) return;
