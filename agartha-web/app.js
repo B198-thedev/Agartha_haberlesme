@@ -1858,6 +1858,8 @@ function listenUsers() {
                 ? msg.location.live
                   ? "Canlı konum başlattı"
                   : "Konum paylaştı"
+                : msg.callLog
+                ? "Sesli arama başlattı"
                 : ""),
             msgSnap.key
           );
@@ -2018,6 +2020,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     if (m.imageUrl || m.imageData) return "Fotoğraf";
     if (m.audioUrl || m.audioData) return "Sesli mesaj";
     if (m.location) return m.location.live ? "Canlı Konum" : "Konum";
+    if (m.callLog) return "Sesli arama";
     return "Mesaj";
   }
 
@@ -2116,6 +2119,28 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const textHtml = m.text
           ? `<div class="msg-text" data-raw-text="${escapeHtml(m.text)}">${formatMessageTextWithSearch(m.text, state.chatSearchQuery)}</div>`
           : "";
+        let callLogHtml = "";
+        if (m.callLog) {
+          const st = m.callLog.state || "ringing";
+          const isMissed = st === "missed" || st === "rejected";
+          const dur = m.callLog.duration ? ` • ${escapeHtml(m.callLog.duration)}` : "";
+          const label =
+            st === "ringing"
+              ? "Sesli arama başlatıldı..."
+              : st === "connected"
+              ? "Sesli görüşme devam ediyor..."
+              : st === "ended"
+              ? `Sesli arama${dur}`
+              : st === "rejected"
+              ? "Arama reddedildi"
+              : "Cevapsız sesli arama";
+          callLogHtml = `
+            <div class="call-log-card${isMissed ? " missed" : ""}">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+              <span>${label}</span>
+            </div>
+          `;
+        }
         const senderAvatarHtml = !isMe
           ? senderUser && senderUser.avatarData
             ? `<img class="msg-avatar" data-view-user="${escapeHtml(m.senderId)}" src="${escapeHtml(senderUser.avatarData)}" alt=""${senderRingStyle(senderUser)} />`
@@ -2130,6 +2155,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
               ${imgHtml}
               ${audioHtml}
               ${locHtml}
+              ${callLogHtml}
               ${textHtml}
               <div class="msg-footer">
                 ${replyBtnHtml}
@@ -2556,20 +2582,27 @@ const RTC_CONFIG = {
 function startRingtone(kind = "incoming") {
   stopRingtone();
   const ringOnce = () => {
+    if (kind === "incoming" && navigator.vibrate) {
+      navigator.vibrate([260, 140, 260]);
+    }
     if (state.soundStyle === "off") return;
     const ctx = ensureAudioContext();
     if (!ctx) return;
     try {
       if (kind === "incoming") {
-        playTone(ctx, 660, 0, 0.18, "sine", 0.08);
-        playTone(ctx, 880, 0.2, 0.22, "sine", 0.08);
+        // Klasik telefon zil melodisi
+        playTone(ctx, 784, 0, 0.14, "sine", 0.1);
+        playTone(ctx, 987, 0.15, 0.14, "sine", 0.1);
+        playTone(ctx, 784, 0.32, 0.14, "sine", 0.1);
+        playTone(ctx, 987, 0.47, 0.22, "sine", 0.1);
       } else {
-        playTone(ctx, 440, 0, 0.35, "sine", 0.045);
+        // Arayan taraf için çalma sesi ("dıııt...")
+        playTone(ctx, 425, 0, 0.85, "sine", 0.05);
       }
     } catch {}
   };
   ringOnce();
-  state.ringtoneInterval = setInterval(ringOnce, kind === "incoming" ? 2000 : 2600);
+  state.ringtoneInterval = setInterval(ringOnce, kind === "incoming" ? 2100 : 2800);
 }
 
 function stopRingtone() {
@@ -2622,6 +2655,9 @@ function showIncomingCallPrompt(incoming) {
   callActiveControls.classList.add("hidden");
   callModal.classList.remove("hidden");
   startRingtone("incoming");
+  if (document.visibilityState !== "visible") {
+    showIncomingNotification(peerName, "Sesli arama geliyor...", "call_" + incoming.callId);
+  }
 
   state.activeCall.callRef.child("status").on("value", (snap) => {
     const st = snap.val();
@@ -2649,6 +2685,21 @@ async function startOutgoingVoiceCall(peerId, peerName) {
 
     const callRef = state.db.ref(`calls/${callId}`);
     const incomingRef = state.db.ref(`incomingCalls/${peerId}`);
+    const dmRoomId = getDmRoomId(state.user.id, peerId);
+    const now = Date.now();
+
+    const logMsgRef = await state.db.ref(`chats/${dmRoomId}/messages`).push({
+      senderId: state.user.id,
+      senderName: getDisplayName(state.user),
+      text: "",
+      callLog: {
+        callId,
+        state: "ringing",
+        duration: ""
+      },
+      timestamp: now
+    });
+    const logRef = logMsgRef.child("callLog");
 
     state.activeCall = {
       callId,
@@ -2660,8 +2711,10 @@ async function startOutgoingVoiceCall(peerId, peerName) {
       muted: false,
       timerId: null,
       timeoutId: null,
+      connectedAt: 0,
       callRef,
       incomingRef,
+      logRef,
       iceRef: callRef.child("calleeIce"),
       pendingIce: []
     };
@@ -2814,6 +2867,10 @@ function wirePeerConnectionEvents(pc, callRef, localIceChild) {
     if (st === "connected" && state.activeCall) {
       stopRingtone();
       callStatusText.textContent = "Bağlandı (P2P Ses)";
+      state.activeCall.connectedAt = Date.now();
+      if (state.activeCall.logRef) {
+        state.activeCall.logRef.update({ state: "connected" }).catch(() => {});
+      }
       startCallTimer();
     } else if (st === "failed" || st === "disconnected" || st === "closed") {
       if (state.activeCall) {
@@ -2875,6 +2932,19 @@ function endCurrentCall(notifyRemote = true, reasonText = "") {
       call.callRef.update({ status: "ended" }).catch(() => {});
     }
   }
+  if (call.role === "caller" && call.logRef) {
+    if (call.connectedAt) {
+      const totalSecs = Math.max(1, Math.round((Date.now() - call.connectedAt) / 1000));
+      const m = String(Math.floor(totalSecs / 60)).padStart(2, "0");
+      const s = String(totalSecs % 60).padStart(2, "0");
+      call.logRef.update({ state: "ended", duration: `${m}:${s}` }).catch(() => {});
+    } else if (reasonText === "Arama reddedildi") {
+      call.logRef.update({ state: "rejected", duration: "" }).catch(() => {});
+    } else {
+      call.logRef.update({ state: "missed", duration: "" }).catch(() => {});
+    }
+  }
+
   if (call.role === "caller" && call.incomingRef) {
     call.incomingRef.remove().catch(() => {});
   } else if (call.role === "callee" && state.db && state.user) {
