@@ -398,6 +398,10 @@ const state = {
   customGroupActiveKeyIds: {},
   customGroupListeners: {},
   customGroupKeyRefs: {},
+  placesCache: [],
+  aiConfig: { ollamaUrl: "http://localhost:11434", model: "qwen2.5:7b" },
+  aiBridgeStatus: { online: false, lastSeen: 0, model: "" },
+  aiAnalysisBusy: false,
   decryptedCache: {},
   pendingLoginSecret: ""
 };
@@ -469,6 +473,15 @@ const placeAreaInput = document.getElementById("place-area");
 const placeCategoryInput = document.getElementById("place-category");
 const placeNoteInput = document.getElementById("place-note");
 const placesList = document.getElementById("places-list");
+const aiBridgeStatus = document.getElementById("ai-bridge-status");
+const aiAnalyzeForm = document.getElementById("ai-analyze-form");
+const aiRoomSelect = document.getElementById("ai-room-select");
+const aiIncludePlaces = document.getElementById("ai-include-places");
+const aiPromptInput = document.getElementById("ai-prompt-input");
+const aiAnalyzeBtn = document.getElementById("ai-analyze-btn");
+const aiStatusMsg = document.getElementById("ai-status-msg");
+const aiDraftsSection = document.getElementById("ai-drafts-section");
+const aiDraftsList = document.getElementById("ai-drafts-list");
 const aiList = document.getElementById("ai-list");
 
 const chatBackBtn = document.getElementById("chat-back-btn");
@@ -645,6 +658,9 @@ const driveUrlInput = document.getElementById("drive-url-input");
 const driveSecretInput = document.getElementById("drive-secret-input");
 const turnConfigForm = document.getElementById("turn-config-form");
 const turnApiUrlInput = document.getElementById("turn-api-url-input");
+const aiConfigForm = document.getElementById("ai-config-form");
+const aiOllamaUrlInput = document.getElementById("ai-ollama-url-input");
+const aiOllamaModelInput = document.getElementById("ai-ollama-model-input");
 
 const authAnnouncementsBtn = document.getElementById("auth-announcements-btn");
 const homeAnnouncementsBtn = document.getElementById("home-announcements-btn");
@@ -2625,7 +2641,10 @@ async function enterMainApp() {
   listenCustomGroups();
   listenFriendRequests();
   listenPlaces();
+  listenAiConfig();
+  listenAiBridgeStatus();
   listenAiRecommendations();
+  listenPersonalAiDrafts();
   listenAnnouncements();
   watchOwnAccess();
   listenIncomingCalls();
@@ -3206,6 +3225,7 @@ function listenUsers() {
     applyMainGroupVisibility();
 
     renderContactsList();
+    refreshAiRoomSelect();
 
     // Aktif özel sohbette karşı tarafın çevrimiçi durumunu güncelle
     if (state.activeRoom && !state.activeRoom.isGroup && state.activeRoom.otherId) {
@@ -3260,6 +3280,7 @@ function listenUsers() {
         if (!isVisibleViewing) {
           state.unreadRooms.add(dmId);
           renderContactsList();
+    refreshAiRoomSelect();
           let decodedText = msg.text || "";
           if (msg.e2ee) {
             const dec = await decryptMessageRecord(msgSnap.key, msg, otherId);
@@ -3566,6 +3587,7 @@ function listenCustomGroups() {
     });
 
     renderCustomGroupsList();
+    refreshAiRoomSelect();
   });
 }
 
@@ -3676,6 +3698,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
     renderCustomGroupsList();
   } else if (!isGroup) {
     renderContactsList();
+    refreshAiRoomSelect();
   }
 
   state.activeRoom = { id: roomId, title, isGroup, otherId };
@@ -6797,6 +6820,7 @@ function listenPlaces() {
     const entries = Object.entries(data).sort(
       (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
     );
+    state.placesCache = entries;
 
     if (entries.length === 0) {
       placesList.innerHTML = `<div class="empty-hint">Henüz mekan eklenmemiş.</div>`;
@@ -6926,28 +6950,587 @@ function listenPlaces() {
   });
 }
 
-// AI Önerileri Sekmesi
+// AI V2: Yerel Ollama Analiz + Kişisel Taslaklar & Ortak Öneriler
+function isAiBridgeAlive() {
+  const st = state.aiBridgeStatus || {};
+  return Boolean(st.bridgeOnline && st.lastSeen && Date.now() - st.lastSeen < 40000);
+}
+
+function updateAiBridgeStatusUI() {
+  if (!aiBridgeStatus) return;
+  const st = state.aiBridgeStatus || {};
+  const alive = isAiBridgeAlive();
+  if (state.aiAnalysisBusy) {
+    aiBridgeStatus.textContent = "Analiz Ediliyor...";
+    aiBridgeStatus.className = "ai-status-pill busy";
+  } else if (alive && st.ollamaOnline) {
+    aiBridgeStatus.textContent = st.model ? `PC AI Aktif (${st.model})` : "PC AI Aktif";
+    aiBridgeStatus.className = "ai-status-pill online";
+  } else if (alive && !st.ollamaOnline) {
+    aiBridgeStatus.textContent = "Ollama Kapalı (AG-AI-MODEL-02)";
+    aiBridgeStatus.className = "ai-status-pill warn";
+  } else {
+    aiBridgeStatus.textContent = "PC Çevrimdışı (AG-AI-OFFLINE-01)";
+    aiBridgeStatus.className = "ai-status-pill offline";
+  }
+}
+
+function listenAiConfig() {
+  if (!state.db) return;
+  state.db.ref("config/ai").on("value", (snap) => {
+    const val = snap.val() || {};
+    state.aiConfig = {
+      ollamaUrl: String(val.ollamaUrl || "http://localhost:11434").trim().replace(/\/+$/, ""),
+      model: String(val.model || "qwen2.5:7b").trim() || "qwen2.5:7b"
+    };
+  });
+}
+
+function listenAiBridgeStatus() {
+  if (!state.db) return;
+  state.db.ref("config/aiBridgeStatus").on("value", (snap) => {
+    const val = snap.val() || {};
+    state.aiBridgeStatus = {
+      bridgeOnline: Boolean(val.bridgeOnline !== undefined ? val.bridgeOnline : val.online),
+      ollamaOnline: Boolean(val.ollamaOnline !== undefined ? val.ollamaOnline : val.online),
+      lastSeen: Number(val.lastSeen || 0),
+      model: String(val.model || "")
+    };
+    updateAiBridgeStatusUI();
+  });
+  setInterval(updateAiBridgeStatusUI, 15000);
+}
+
+function refreshAiRoomSelect() {
+  if (!aiRoomSelect || !state.user) return;
+  const prevVal = aiRoomSelect.value;
+  const opts = [];
+
+  if (state.user.inMainGroup !== false) {
+    const gName = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
+    opts.push({ value: "main_group", label: `Ana Grup: ${gName}` });
+  }
+
+  Object.entries(state.customGroups || {})
+    .filter(([, g]) => g && g.members && g.members[state.user.id])
+    .sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || ""), "tr"))
+    .forEach(([gid, g]) => {
+      opts.push({ value: gid, label: `Özel Grup: ${g.name || "Grup"}` });
+    });
+
+  const myFriends = state.user.friends || {};
+  Object.entries(state.usersCache || {})
+    .filter(([uid, u]) => uid !== state.user.id && u && u.active !== false && Boolean(myFriends[uid]))
+    .sort(([, a], [, b]) => getDisplayName(a).localeCompare(getDisplayName(b), "tr"))
+    .forEach(([uid, u]) => {
+      const dmId = getDmRoomId(state.user.id, uid);
+      opts.push({ value: dmId, label: `Özel Sohbet: ${getDisplayName(u)}`, otherId: uid });
+    });
+
+  opts.push({ value: "__places_only__", label: "Sadece Mekanlar (Sohbet Seçmeden)" });
+
+  aiRoomSelect.innerHTML = opts
+    .map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
+    .join("");
+
+  if (prevVal && opts.some((o) => o.value === prevVal)) {
+    aiRoomSelect.value = prevVal;
+  }
+}
+
+function getRoomMetaById(roomId) {
+  if (!roomId || roomId === "__places_only__") {
+    return { roomId: "__places_only__", isGroup: false, otherId: null, title: "Sadece Mekanlar" };
+  }
+  if (roomId === "main_group") {
+    return {
+      roomId,
+      isGroup: true,
+      otherId: null,
+      title: (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup"
+    };
+  }
+  if (state.customGroups && state.customGroups[roomId]) {
+    return {
+      roomId,
+      isGroup: true,
+      otherId: null,
+      title: state.customGroups[roomId].name || "Özel Grup"
+    };
+  }
+  const myFriends = (state.user && state.user.friends) || {};
+  const otherId = Object.keys(myFriends).find((uid) => getDmRoomId(state.user.id, uid) === roomId) || null;
+  const other = otherId ? state.usersCache[otherId] : null;
+  return {
+    roomId,
+    isGroup: false,
+    otherId,
+    title: other ? getDisplayName(other) : "Özel Sohbet"
+  };
+}
+
+function buildPlacesSummaryForAi(limit = 20) {
+  const entries = (state.placesCache || []).slice(0, limit);
+  if (entries.length === 0) return "";
+  return entries
+    .map(([, p]) => {
+      const rVals = Object.values((p && p.ratings) || {})
+        .map((v) => Number(v))
+        .filter((v) => v >= 1 && v <= 5);
+      const avg = rVals.length ? (rVals.reduce((s, v) => s + v, 0) / rVals.length).toFixed(1) : "puansız";
+      const visitors = Object.values((p && p.visitedBy) || {}).filter(Boolean).slice(0, 5).join(", ");
+      const comments = Object.values((p && p.comments) || {})
+        .slice(-2)
+        .map((c) => c && c.text)
+        .filter(Boolean)
+        .join(" | ");
+      return `- ${p.name} (${p.category || "Mekan"}, ${p.area || ""}) | Puan: ${avg}${visitors ? ` | Gidenler: ${visitors}` : ""}${p.note ? ` | Not: ${p.note}` : ""}${comments ? ` | Yorumlar: ${comments}` : ""}`;
+    })
+    .join("\n");
+}
+
+function parseAiRecommendationsJson(rawText) {
+  const cleaned = String(rawText || "")
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  if (!cleaned) return [];
+  let parsed = null;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const startObj = cleaned.indexOf("{");
+    const endObj = cleaned.lastIndexOf("}");
+    const startArr = cleaned.indexOf("[");
+    const endArr = cleaned.lastIndexOf("]");
+    try {
+      if (startArr !== -1 && (startObj === -1 || startArr < startObj) && endArr > startArr) {
+        parsed = JSON.parse(cleaned.slice(startArr, endArr + 1));
+      } else if (startObj !== -1 && endObj > startObj) {
+        parsed = JSON.parse(cleaned.slice(startObj, endObj + 1));
+      }
+    } catch {}
+  }
+  const arr = Array.isArray(parsed)
+    ? parsed
+    : parsed && Array.isArray(parsed.recommendations)
+    ? parsed.recommendations
+    : [];
+  return arr
+    .filter((item) => item && (item.title || item.name))
+    .slice(0, 5)
+    .map((item) => ({
+      title: String(item.title || item.name).trim().slice(0, 80),
+      area: String(item.area || item.district || "Önerilen Bölge").trim().slice(0, 60),
+      category: String(item.category || "Kafe").trim().slice(0, 40),
+      reason: String(item.reason || item.description || "").trim().slice(0, 260)
+    }));
+}
+
+async function saveAiDraftsList(items, meta) {
+  if (!state.db || !state.user || !items.length) return 0;
+  const baseRef = state.db.ref(`aiDrafts/${state.user.id}`);
+  const now = Date.now();
+  await Promise.all(
+    items.map((item, idx) =>
+      baseRef.push({
+        title: item.title,
+        area: item.area,
+        category: item.category,
+        reason: item.reason,
+        sourceRoomId: meta.roomId || "",
+        sourceRoomTitle: meta.roomTitle || "",
+        model: meta.model || "",
+        timestamp: now + idx
+      })
+    )
+  );
+  return items.length;
+}
+
+async function tryDirectLocalOllama(contextText, promptHint) {
+  const baseUrl = ((state.aiConfig && state.aiConfig.ollamaUrl) || "http://localhost:11434").replace(/\/+$/, "");
+  const model = (state.aiConfig && state.aiConfig.model) || "qwen2.5:7b";
+
+  const pingCtrl = new AbortController();
+  const pingTimer = setTimeout(() => pingCtrl.abort(), 2200);
+  try {
+    const pingRes = await fetch(`${baseUrl}/api/tags`, { signal: pingCtrl.signal });
+    clearTimeout(pingTimer);
+    if (!pingRes.ok) return { reachable: false };
+    const tagsData = await pingRes.json().catch(() => ({}));
+    const availableModels = Array.isArray(tagsData.models) ? tagsData.models.map((m) => m.name) : [];
+    const chosenModel =
+      availableModels.length === 0 || availableModels.includes(model)
+        ? model
+        : availableModels[0];
+
+    const chatCtrl = new AbortController();
+    const chatTimer = setTimeout(() => chatCtrl.abort(), 55000);
+    const systemPrompt =
+      'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete ve puanlara dayalı kısa Türkçe gerekçe"}]}. En fazla 3 özgün öneri ver, uydurma telefon/adres yazma.';
+    const userMsg = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}`;
+
+    const chatRes = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: chatCtrl.signal,
+      body: JSON.stringify({
+        model: chosenModel,
+        stream: false,
+        format: "json",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMsg }
+        ]
+      })
+    });
+    clearTimeout(chatTimer);
+    if (!chatRes.ok) throw new Error(`Ollama hata kodu: ${chatRes.status}`);
+    const chatData = await chatRes.json();
+    const content = chatData && chatData.message ? chatData.message.content : "";
+    const recs = parseAiRecommendationsJson(content);
+    return { reachable: true, model: chosenModel, recs };
+  } catch (err) {
+    clearTimeout(pingTimer);
+    if (err && (err.name === "AbortError" || err.name === "TypeError")) {
+      return { reachable: false };
+    }
+    throw err;
+  }
+}
+
+async function sendAiRequestToBridge({ roomId, roomTitle, contextText, promptHint }) {
+  const model = (state.aiConfig && state.aiConfig.model) || "qwen2.5:7b";
+  const reqRef = state.db.ref("aiRequests").push();
+  const reqId = reqRef.key;
+  await reqRef.set({
+    requesterId: state.user.id,
+    requesterName: getDisplayName(state.user),
+    sourceRoomId: roomId || "",
+    sourceRoomTitle: roomTitle || "",
+    model,
+    promptHint: promptHint || "",
+    contextText,
+    status: "pending",
+    createdAt: Date.now()
+  });
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reqRef.off();
+      reqRef.remove().catch(() => {});
+      reject(new Error("[AG-AI-TIMEOUT-03] Yerel AI 45 saniye içinde yanıt vermedi (bilgisayar kapanmış veya meşgul olabilir)."));
+    }, 45000);
+
+    reqRef.on("value", (snap) => {
+      if (settled) return;
+      const val = snap.val();
+      if (!val) return;
+      if (val.status === "done") {
+        settled = true;
+        clearTimeout(timeoutId);
+        reqRef.off();
+        reqRef.remove().catch(() => {});
+        resolve({ count: Number(val.count || 0), model: val.model || model });
+      } else if (val.status === "error") {
+        settled = true;
+        clearTimeout(timeoutId);
+        reqRef.off();
+        const errMsg = val.error || "[AG-AI-ERR-05] Yerel Ollama analizi başarısız oldu.";
+        reqRef.remove().catch(() => {});
+        reject(new Error(errMsg));
+      }
+    });
+  });
+}
+
+async function sendRecommendationToRoom(rec, fallbackRoomId) {
+  const roomMeta = getRoomMetaById(fallbackRoomId);
+  let targetMeta = roomMeta;
+  if (!targetMeta || targetMeta.roomId === "__places_only__") {
+    if (state.user.inMainGroup !== false) {
+      targetMeta = getRoomMetaById("main_group");
+    } else {
+      alert("Göndermek için yukarıdan bir sohbet seçmelisin.");
+      return;
+    }
+  }
+  const text = `AI Önerisi: ${rec.title} (${rec.area || "Öneri"})\n${rec.reason || ""}`.trim();
+  const enc = await encryptOutgoingMessage({
+    isGroup: targetMeta.isGroup,
+    roomId: targetMeta.roomId,
+    otherId: targetMeta.otherId,
+    text,
+    replyTo: null
+  });
+  const msgObj = {
+    senderId: state.user.id,
+    senderName: getDisplayName(state.user),
+    text: enc.text,
+    timestamp: Date.now()
+  };
+  if (enc.e2ee) msgObj.e2ee = enc.e2ee;
+  await state.db.ref(`chats/${targetMeta.roomId}/messages`).push(msgObj);
+  alert(`Öneri "${targetMeta.title}" sohbetine gönderildi!`);
+}
+
+async function saveRecommendationAsPlace(rec) {
+  if (!state.db || !state.user) return;
+  await state.db.ref("places").push({
+    name: String(rec.title || rec.name || "Mekan").slice(0, 90),
+    area: String(rec.area || "Merkez").slice(0, 60),
+    category: rec.category || "Kafe",
+    note: String(rec.reason || "AI önerisiyle eklendi").slice(0, 100),
+    addedBy: state.user.id,
+    addedByName: getDisplayName(state.user),
+    timestamp: Date.now()
+  });
+  alert(`"${rec.title || rec.name}" Mekanlar sekmesine kaydedildi!`);
+}
+
+function listenPersonalAiDrafts() {
+  if (!state.db || !state.user || !aiDraftsList || !aiDraftsSection) return;
+  state.db.ref(`aiDrafts/${state.user.id}`).limitToLast(30).on("value", (snap) => {
+    const data = snap.val() || {};
+    const entries = Object.entries(data).sort(
+      (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
+    );
+
+    if (entries.length === 0) {
+      aiDraftsSection.classList.add("hidden");
+      aiDraftsList.innerHTML = "";
+      return;
+    }
+
+    aiDraftsSection.classList.remove("hidden");
+    aiDraftsList.innerHTML = entries
+      .map(([key, r]) => {
+        const srcTag = r.sourceRoomTitle ? ` • ${escapeHtml(r.sourceRoomTitle)}` : "";
+        return `
+          <div class="ai-card ai-draft-card">
+            <div class="place-title">${escapeHtml(r.title || r.name || "Öneri")}</div>
+            <div class="place-meta">${escapeHtml(r.category || "Öneri")} • ${escapeHtml(r.area || "")}${srcTag}</div>
+            ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
+            <div class="ai-card-actions">
+              <button type="button" class="icon-btn" data-publish-draft="${escapeHtml(key)}">Ortak AI'ya Paylaş</button>
+              <button type="button" class="icon-btn" data-place-draft="${escapeHtml(key)}">Mekanlara Ekle</button>
+              <button type="button" class="icon-btn" data-chat-draft="${escapeHtml(key)}">Sohbete Gönder</button>
+              <button type="button" class="icon-btn danger" data-del-draft="${escapeHtml(key)}">Sil</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    aiDraftsList.querySelectorAll("[data-publish-draft]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const dKey = btn.dataset.publishDraft;
+        const r = data[dKey];
+        if (!r) return;
+        await state.db.ref("recommendations").push({
+          title: r.title || r.name || "Öneri",
+          area: r.area || "Öneri",
+          category: r.category || "Diğer",
+          reason: r.reason || "",
+          sharedBy: state.user.id,
+          sharedByName: getDisplayName(state.user),
+          timestamp: Date.now()
+        });
+        alert("Öneri ortak AI Önerileri listesine paylaşıldı!");
+      });
+    });
+
+    aiDraftsList.querySelectorAll("[data-place-draft]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const r = data[btn.dataset.placeDraft];
+        if (r) saveRecommendationAsPlace(r);
+      });
+    });
+
+    aiDraftsList.querySelectorAll("[data-chat-draft]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const r = data[btn.dataset.chatDraft];
+        if (!r) return;
+        const targetRoomId = r.sourceRoomId || (aiRoomSelect ? aiRoomSelect.value : "main_group");
+        sendRecommendationToRoom(r, targetRoomId);
+      });
+    });
+
+    aiDraftsList.querySelectorAll("[data-del-draft]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.db.ref(`aiDrafts/${state.user.id}/${btn.dataset.delDraft}`).remove();
+      });
+    });
+  });
+}
+
+if (aiAnalyzeForm) {
+  aiAnalyzeForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.db || !state.user || state.aiAnalysisBusy) return;
+
+    const selectedRoomId = aiRoomSelect ? aiRoomSelect.value : "__places_only__";
+    const roomMeta = getRoomMetaById(selectedRoomId);
+    const includePlaces = aiIncludePlaces ? aiIncludePlaces.checked : true;
+    const promptHint = aiPromptInput ? aiPromptInput.value.trim() : "";
+
+    const showStatus = (msg, isError = false) => {
+      if (!aiStatusMsg) return;
+      aiStatusMsg.textContent = msg;
+      aiStatusMsg.classList.remove("hidden");
+      aiStatusMsg.style.color = isError ? "#f87171" : "#38bdf8";
+    };
+
+    state.aiAnalysisBusy = true;
+    if (aiAnalyzeBtn) aiAnalyzeBtn.disabled = true;
+    updateAiBridgeStatusUI();
+    showStatus("Seçilen sohbet ve mekanlar hazırlanıyor...");
+
+    try {
+      let chatLines = [];
+      if (roomMeta.roomId !== "__places_only__") {
+        const snap = await state.db
+          .ref(`chats/${roomMeta.roomId}/messages`)
+          .limitToLast(45)
+          .once("value");
+        const rawMsgs = snap.val() || {};
+        const sorted = Object.entries(rawMsgs).sort(
+          (a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0)
+        );
+        for (const [mKey, m] of sorted) {
+          if (!m || m.callLog || m.viewOnce) continue;
+          let txt = m.text || "";
+          if (m.e2ee) {
+            const dec = await decryptMessageRecord(mKey, m, roomMeta.otherId, roomMeta.roomId);
+            txt = dec.text || "";
+          }
+          if (!txt || txt === "[Şifreli mesaj çözülemedi]") continue;
+          const sUser = state.usersCache[m.senderId];
+          const sName = sUser ? getDisplayName(sUser) : m.senderName || "Üye";
+          chatLines.push(`${sName}: ${txt}`);
+        }
+      }
+
+      const placesSummary = includePlaces ? buildPlacesSummaryForAi(20) : "";
+      const parts = [];
+      if (chatLines.length > 0) {
+        parts.push(`Sohbet (${roomMeta.title}):\n${chatLines.join("\n").slice(-3200)}`);
+      }
+      if (placesSummary) {
+        parts.push(`Kayıtlı Mekanlar ve Puanlar:\n${placesSummary.slice(0, 2200)}`);
+      }
+
+      const contextText = parts.join("\n\n");
+      if (!contextText && !promptHint) {
+        showStatus("[AG-AI-EMPTY-04] Analiz için en az birkaç metin mesajı, mekan kaydı veya istek notu gerekli.", true);
+        return;
+      }
+
+      showStatus("PC'deki yerel Ollama aranıyor...");
+      const direct = await tryDirectLocalOllama(contextText || promptHint, promptHint);
+      if (direct.reachable) {
+        if (!direct.recs || direct.recs.length === 0) {
+          showStatus("[AG-AI-EMPTY-04] Ollama geçerli öneri üretemedi, isteği biraz daha netleştirip tekrar dene.", true);
+          return;
+        }
+        const savedCount = await saveAiDraftsList(direct.recs, {
+          roomId: roomMeta.roomId,
+          roomTitle: roomMeta.title,
+          model: direct.model
+        });
+        showStatus(`Tamamlandı! ${savedCount} öneri taslaklarına eklendi (${direct.model}).`);
+        if (aiPromptInput) aiPromptInput.value = "";
+        return;
+      }
+
+      const bridgeAlive = isAiBridgeAlive();
+      const st = state.aiBridgeStatus || {};
+      if (!bridgeAlive) {
+        showStatus(
+          "[AG-AI-OFFLINE-01] Bilgisayar / AI Köprüsü şu an kapalı veya oyun için durdurulmuş. AI analizi için PC'de köprüyü açmalısın.",
+          true
+        );
+        return;
+      }
+      if (!st.ollamaOnline) {
+        showStatus(
+          "[AG-AI-MODEL-02] PC Köprüsü açık ama Ollama kapalı görünüyor. Bilgisayardan Ollama'yı başlatıp tekrar dene.",
+          true
+        );
+        return;
+      }
+
+      showStatus("PC Köprüsü'ne istek gönderildi, yerel Ollama yanıtı bekleniyor...");
+      const bridgeRes = await sendAiRequestToBridge({
+        roomId: roomMeta.roomId,
+        roomTitle: roomMeta.title,
+        contextText: contextText || promptHint,
+        promptHint
+      });
+      if (!bridgeRes.count) {
+        showStatus("[AG-AI-EMPTY-04] Ollama geçerli öneri üretemedi, farklı bir istek notu ile dene.", true);
+        return;
+      }
+      showStatus(`Tamamlandı! ${bridgeRes.count} öneri taslaklarına eklendi (${bridgeRes.model}).`);
+      if (aiPromptInput) aiPromptInput.value = "";
+    } catch (err) {
+      const msg = err && err.message ? err.message : "AI analizi sırasında bir hata oluştu.";
+      showStatus(msg.startsWith("[AG-AI-") ? msg : `[AG-AI-ERR-05] ${msg}`, true);
+    } finally {
+      state.aiAnalysisBusy = false;
+      if (aiAnalyzeBtn) aiAnalyzeBtn.disabled = false;
+      updateAiBridgeStatusUI();
+    }
+  });
+}
+
 function listenAiRecommendations() {
   state.db.ref("recommendations").limitToLast(30).on("value", (snap) => {
     const data = snap.val() || {};
-    const list = Object.values(data).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const list = Object.entries(data)
+      .map(([id, val]) => ({ id, ...(val || {}) }))
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     if (list.length === 0) {
-      aiList.innerHTML = `<div class="empty-hint">Henüz AI önerisi yok. Bilgisayarınız analiz yaptığında öneriler burada görünecek.</div>`;
+      aiList.innerHTML = `<div class="empty-hint">Henüz ortak AI önerisi yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>`;
       return;
     }
 
     aiList.innerHTML = list
-      .map(
-        (r) => `
+      .map((r) => {
+        const canDel = state.user && (state.user.isAdmin || r.sharedBy === state.user.id);
+        const byStr = r.sharedByName ? ` • Paylaşan: ${escapeHtml(r.sharedByName)}` : "";
+        return `
         <div class="ai-card">
           <div class="place-title">${escapeHtml(r.title || r.name)}</div>
-          <div class="place-meta">${escapeHtml(r.area || "Öneri")}</div>
+          <div class="place-meta">${escapeHtml(r.category ? r.category + " • " : "")}${escapeHtml(r.area || "Öneri")}${byStr}</div>
           ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
+          <div class="ai-card-actions">
+            <button type="button" class="icon-btn" data-place-pub="${escapeHtml(r.id)}">Mekanlara Ekle</button>
+            ${canDel ? `<button type="button" class="icon-btn danger" data-del-pub="${escapeHtml(r.id)}">Sil</button>` : ""}
+          </div>
         </div>
-      `
-      )
+      `;
+      })
       .join("");
+
+    aiList.querySelectorAll("[data-place-pub]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const rec = data[btn.dataset.placePub];
+        if (rec) saveRecommendationAsPlace(rec);
+      });
+    });
+
+    aiList.querySelectorAll("[data-del-pub]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Bu ortak öneri silinsin mi?")) return;
+        state.db.ref("recommendations/" + btn.dataset.delPub).remove();
+      });
+    });
   });
 }
 
@@ -6959,6 +7542,8 @@ openAdminBtn.addEventListener("click", () => {
   driveUrlInput.value = state.driveConfig.url || "";
   driveSecretInput.value = state.driveConfig.secret || "";
   if (turnApiUrlInput) turnApiUrlInput.value = (state.turnConfig && state.turnConfig.apiUrl) || "";
+  if (aiOllamaUrlInput) aiOllamaUrlInput.value = (state.aiConfig && state.aiConfig.ollamaUrl) || "http://localhost:11434";
+  if (aiOllamaModelInput) aiOllamaModelInput.value = (state.aiConfig && state.aiConfig.model) || "qwen2.5:7b";
   listenInvites();
   renderAdminUsers(state.usersCache);
 });
@@ -6977,6 +7562,16 @@ if (turnConfigForm) {
     const apiUrl = turnApiUrlInput ? turnApiUrlInput.value.trim() : "";
     await state.db.ref("config/turn").set({ apiUrl });
     alert(apiUrl ? "TURN sunucusu ayarı kaydedildi." : "TURN ayarı temizlendi.");
+  });
+}
+
+if (aiConfigForm) {
+  aiConfigForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const ollamaUrl = (aiOllamaUrlInput && aiOllamaUrlInput.value.trim().replace(/\/+$/, "")) || "http://localhost:11434";
+    const model = (aiOllamaModelInput && aiOllamaModelInput.value.trim().slice(0, 60)) || "qwen2.5:7b";
+    await state.db.ref("config/ai").set({ ollamaUrl, model });
+    alert(`Yerel AI ayarı kaydedildi (${model}).`);
   });
 }
 
@@ -7136,9 +7731,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v63)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – AI V2)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "AI V2",
+    title: "Yapay Zeka Bağlanmaya Başlandı!",
+    desc: "AI Önerileri sekmesinin temelleri atıldı! Artık kendi yetkili sohbetlerinden birini ve Mekanlar sekmesindeki puan/yorumları seçerek bilgisayarındaki yerel Ollama modeliyle mekan & buluşma analizi yapabilirsin. Üretilen öneriler önce sadece sana özel Taslaklar bölümüne düşer; beğendiklerini tek tıkla Ortak AI Önerileri listesine, Mekanlar'a veya bir sohbete gönderebilirsin. Bilgisayar kapalıyken veya köprü durdurulduğunda anında AG-AI-OFFLINE-01 / AG-AI-MODEL-02 hata kodlarıyla bilgilendirir."
+  },
   {
     v: "v63",
     title: "Bir Kez Görüntüle, Mesaj Düzenleme, Özel Gruplar, Sabitleme & Mekan Puanları",

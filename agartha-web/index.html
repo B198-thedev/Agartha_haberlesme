@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (v63)
+          Duyurular &amp; Sürüm Geçmişi (AI V2)
         </button>
       </div>
     </section>
@@ -146,9 +146,9 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">v63</span>
+                <span id="home-announcement-version" class="exp-badge">AI V2</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">v63: 5 büyük yenilik! Bir Kez Görüntüle fotoğraf, mesaj düzenleme, özel arkadaş grupları, sohbet sabitleme/sessize alma ve mekan puanlama &amp; yorumlar.</div>
+              <div id="home-announcement-summary" class="chat-preview">AI V2: Yapay Zeka Bağlanmaya Başlandı! Yerel Ollama ile seçtiğin sohbet ve mekan analizi aktif.</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
@@ -237,14 +237,33 @@
         <!-- SEKME 3: AI MEKAN ÖNERİLERİ -->
         <div id="tab-ai" class="tab-pane" role="tabpanel" aria-labelledby="nav-ai" tabindex="0">
           <div class="card ai-banner">
-            <h3>Yapay Zeka Mekan Önerileri</h3>
-            <p class="muted">
-              Bilgisayarınızdaki açık kaynaklı AI modeli konuşmaları ve gidilen yerleri analiz edip buraya öneri gönderir.
+            <div class="section-row-header">
+              <h3>Yapay Zeka Mekan Önerileri</h3>
+              <span id="ai-bridge-status" class="ai-status-pill">Köprü Kontrol Ediliyor</span>
+            </div>
+            <p class="muted" style="margin-top:6px;">
+              Seçtiğin sohbetin gizli (E2EE çözülmüş) özeti ve Mekanlar sekmesini bilgisayarındaki yerel Ollama modeliyle analiz eder; öneriler önce sadece sana özel oluşur.
             </p>
+            <form id="ai-analyze-form" class="stack-form" style="margin-top:10px;">
+              <select id="ai-room-select" aria-label="Analiz edilecek sohbet"></select>
+              <label class="member-check-row" style="padding:6px 10px;">
+                <input id="ai-include-places" type="checkbox" checked />
+                <span class="user-sub" style="color:var(--text);">Mekanlar sekmesini (puan, gidenler ve yorumları) analize kat</span>
+              </label>
+              <input id="ai-prompt-input" type="text" maxlength="160" placeholder="İstek veya semt notu (Örn. Kadıköy'de sakin kafe, akşam buluşması)" />
+              <button id="ai-analyze-btn" type="submit" class="btn-primary">Analiz Et &amp; Öner</button>
+              <div id="ai-status-msg" class="user-sub hidden"></div>
+            </form>
           </div>
 
+          <div id="ai-drafts-section" class="hidden">
+            <div class="section-label">Sana Özel AI Önerilerin (Taslaklar)</div>
+            <div id="ai-drafts-list" class="list-stack"></div>
+          </div>
+
+          <div class="section-label">Ortak AI Önerileri</div>
           <div id="ai-list" class="list-stack">
-            <div class="empty-hint">Henüz AI önerisi yok. Bilgisayarınız analiz yaptığında öneriler burada görünecek.</div>
+            <div class="empty-hint">Henüz ortak AI önerisi yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>
           </div>
         </div>
       </main>
@@ -445,7 +464,7 @@
             </div>
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – v63 tüm güncellemeler</span>
+              <span class="user-sub">v1 – AI V2 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yetkiler</span>
@@ -466,7 +485,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">v63</span>
+            <span id="announcements-modal-ver" class="exp-badge">AI V2</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -485,7 +504,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – v63)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – AI V2)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -866,6 +885,16 @@
             <form id="turn-config-form" class="stack-form">
               <input id="turn-api-url-input" type="url" placeholder="https://uygulaman.metered.live/api/v1/turn/credentials?apiKey=..." />
               <button type="submit" class="btn-primary">TURN Ayarını Kaydet</button>
+            </form>
+          </div>
+
+          <div class="section-label">Yerel AI (Ollama) Ayarı</div>
+          <div class="card">
+            <p class="muted">Bilgisayarında çalışan Ollama adresi ve modeli. Telefondan istek atıldığında PC Köprüsü bu modeli kullanır.</p>
+            <form id="ai-config-form" class="stack-form">
+              <input id="ai-ollama-url-input" type="url" placeholder="http://localhost:11434" />
+              <input id="ai-ollama-model-input" type="text" maxlength="60" placeholder="qwen2.5:7b" />
+              <button type="submit" class="btn-primary">AI Ayarını Kaydet</button>
             </form>
           </div>
         </div>
