@@ -50,6 +50,7 @@ const regAvatarPreview = document.getElementById("reg-avatar-preview");
 const regAvatarInput = document.getElementById("reg-avatar-input");
 const regAvatarBtn = document.getElementById("reg-avatar-btn");
 const regUsername = document.getElementById("reg-username");
+const regNickname = document.getElementById("reg-nickname");
 const regPassword = document.getElementById("reg-password");
 const regInvite = document.getElementById("reg-invite");
 const registerError = document.getElementById("register-error");
@@ -112,6 +113,7 @@ const profileNamePreview = document.getElementById("profile-name-preview");
 const profileBioPreview = document.getElementById("profile-bio-preview");
 const profileAvatarInput = document.getElementById("profile-avatar-input");
 const profileAvatarBtn = document.getElementById("profile-avatar-btn");
+const profileNicknameInput = document.getElementById("profile-nickname-input");
 const profileEmojiInput = document.getElementById("profile-emoji-input");
 const profileBioInput = document.getElementById("profile-bio-input");
 const emojiPresets = document.getElementById("emoji-presets");
@@ -157,6 +159,12 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function getDisplayName(u) {
+  if (!u) return "?";
+  const nick = String(u.nickname || "").trim();
+  return nick || String(u.name || "").trim() || "?";
 }
 
 function isValidHexColor(hex) {
@@ -481,6 +489,7 @@ function verifyAndEnter(sessionUser) {
       state.user = {
         id: sessionUser.id,
         name: data.name,
+        nickname: data.nickname || "",
         isAdmin: Boolean(data.isAdmin),
         avatarData: data.avatarData || "",
         bubbleColor: data.bubbleColor || "",
@@ -511,6 +520,7 @@ function waitForReactivation(sessionUser) {
       state.user = {
         id: sessionUser.id,
         name: data.name,
+        nickname: data.nickname || "",
         isAdmin: Boolean(data.isAdmin),
         avatarData: data.avatarData || "",
         bubbleColor: data.bubbleColor || "",
@@ -556,12 +566,14 @@ loginForm.addEventListener("submit", async (e) => {
       const existingAdminSnap = await state.db.ref("users/" + userId).once("value");
       const existingAdmin = existingAdminSnap.val();
       const avatarData = (existingAdmin && existingAdmin.avatarData) || "";
+      const nickname = (existingAdmin && existingAdmin.nickname) || "";
       const bubbleColor = (existingAdmin && existingAdmin.bubbleColor) || "";
       const bio = (existingAdmin && existingAdmin.bio) || "";
       const statusEmoji = (existingAdmin && existingAdmin.statusEmoji) || "";
       const bannerColor = (existingAdmin && existingAdmin.bannerColor) || "";
       await state.db.ref("users/" + userId).set({
         name: username,
+        nickname,
         isAdmin: true,
         active: existingAdmin ? existingAdmin.active !== false : true,
         online: true,
@@ -572,7 +584,7 @@ loginForm.addEventListener("submit", async (e) => {
         bannerColor,
         joinedAt: (existingAdmin && existingAdmin.joinedAt) || Date.now()
       });
-      state.user = { id: userId, name: username, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor };
+      state.user = { id: userId, name: username, nickname, isAdmin: true, avatarData, bubbleColor, bio, statusEmoji, bannerColor };
       localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: true }));
       enterMainApp();
       return;
@@ -601,6 +613,7 @@ loginForm.addEventListener("submit", async (e) => {
       state.user = {
         id: existingId,
         name: existingUser.name,
+        nickname: existingUser.nickname || "",
         isAdmin: Boolean(existingUser.isAdmin),
         avatarData: existingUser.avatarData || "",
         bubbleColor: existingUser.bubbleColor || "",
@@ -638,6 +651,7 @@ registerForm.addEventListener("submit", async (e) => {
   }
 
   const username = regUsername.value.trim();
+  const nickname = regNickname ? regNickname.value.trim() : "";
   const password = regPassword.value.trim();
   const code = regInvite.value.trim();
   if (!username || !password || !code) return;
@@ -663,9 +677,11 @@ registerForm.addEventListener("submit", async (e) => {
     const passwordHash = await sha256(password);
     const userId = slugifyId(username);
     const avatarData = state.pendingRegAvatar || "";
+    const finalNickname = nickname || username;
 
     await state.db.ref("users/" + userId).set({
       name: username,
+      nickname: finalNickname,
       isAdmin: false,
       active: true,
       online: true,
@@ -677,7 +693,7 @@ registerForm.addEventListener("submit", async (e) => {
 
     await state.db.ref("invites/" + code).update({
       active: false,
-      usedBy: username,
+      usedBy: finalNickname,
       claimedByUserId: userId,
       usedAt: Date.now()
     });
@@ -685,9 +701,13 @@ registerForm.addEventListener("submit", async (e) => {
     state.user = {
       id: userId,
       name: username,
+      nickname: finalNickname,
       isAdmin: false,
       avatarData,
-      bubbleColor: ""
+      bubbleColor: "",
+      bio: "",
+      statusEmoji: "",
+      bannerColor: ""
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: false }));
     enterMainApp();
@@ -698,9 +718,10 @@ registerForm.addEventListener("submit", async (e) => {
 
 function updateHeaderIdentity() {
   const emojiPrefix = state.user.statusEmoji ? `${state.user.statusEmoji} ` : "";
+  const disp = getDisplayName(state.user);
   currentUserLabel.textContent = state.user.isAdmin
-    ? `${emojiPrefix}${state.user.name} (Admin)`
-    : `${emojiPrefix}${state.user.name}`;
+    ? `${emojiPrefix}${disp} (Admin)`
+    : `${emojiPrefix}${disp}`;
   headerAvatar.src = state.user.avatarData || "./icon-192.png";
   headerAvatar.style.border = isValidHexColor(state.user.bannerColor)
     ? `2px solid ${state.user.bannerColor}`
@@ -830,6 +851,7 @@ function watchOwnAccess() {
       showView(mainView);
     }
     const nextAdmin = Boolean(data.isAdmin);
+    state.user.nickname = data.nickname || "";
     state.user.avatarData = data.avatarData || "";
     state.user.bubbleColor = data.bubbleColor || "";
     state.user.bio = data.bio || "";
@@ -922,7 +944,8 @@ function renderContactsList() {
 
   contactsList.innerHTML = others
     .map(([id, u]) => {
-      const initial = escapeHtml((u.name || "?").charAt(0).toUpperCase());
+      const dispName = getDisplayName(u);
+      const initial = escapeHtml(dispName.charAt(0).toUpperCase());
       const role = u.isAdmin ? " • Yönetici" : "";
       const dmId = getDmRoomId(state.user.id, id);
       const unreadHtml = state.unreadRooms.has(dmId) ? `<span class="unread-dot"></span>` : "";
@@ -939,18 +962,18 @@ function renderContactsList() {
         : "";
 
       const avatarHtml = u.avatarData
-        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="${escapeHtml(u.name)}"${ringStyle} />`
+        ? `<img class="avatar-img" src="${escapeHtml(u.avatarData)}" alt="${escapeHtml(dispName)}"${ringStyle} />`
         : `<div class="avatar"${ringStyle}>${initial}</div>`;
 
       return `
-        <button class="chat-item" data-dm-id="${escapeHtml(id)}" data-dm-name="${escapeHtml(u.name)}">
+        <button class="chat-item" data-dm-id="${escapeHtml(id)}" data-dm-name="${escapeHtml(dispName)}">
           <div class="avatar-wrap">
             ${avatarHtml}
             ${onlineDot}
           </div>
           <div class="chat-item-body">
             <div class="chat-item-top">
-              <span class="chat-name">${emojiPrefix}${escapeHtml(u.name)}${unreadHtml}</span>
+              <span class="chat-name">${emojiPrefix}${escapeHtml(dispName)}${unreadHtml}</span>
             </div>
             <div class="chat-preview">${statusText}${bioSuffix}${role}</div>
           </div>
@@ -1110,6 +1133,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const isMe = m.senderId === state.user.id;
         const canDelete = isMe || state.user.isAdmin;
         const senderUser = state.usersCache[m.senderId];
+        const liveSenderName = senderUser ? getDisplayName(senderUser) : (m.senderName || "?");
         const customColor =
           senderUser && isValidHexColor(senderUser.bubbleColor)
             ? senderUser.bubbleColor
@@ -1120,7 +1144,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const senderColorStyle = customColor ? ` style="color:inherit;opacity:0.9;"` : "";
         const senderHtml =
           !isMe && isGroup
-            ? `<div class="msg-sender"${senderColorStyle}>${escapeHtml(m.senderName)}</div>`
+            ? `<div class="msg-sender"${senderColorStyle}>${escapeHtml(liveSenderName)}</div>`
             : "";
         const delHtml = canDelete
           ? `<button class="msg-delete-btn" data-del-msg="${escapeHtml(msgKey)}" title="Mesajı sil">&times;</button>`
@@ -1279,7 +1303,7 @@ messageInput.addEventListener("input", () => {
   if (!state.activeRoom || !state.db || !state.user) return;
   const myTypingRef = state.db.ref(`chats/${state.activeRoom.id}/typing/${state.user.id}`);
   if (messageInput.value.trim()) {
-    myTypingRef.set(state.user.name);
+    myTypingRef.set(getDisplayName(state.user));
     myTypingRef.onDisconnect().remove();
     clearTimeout(state.typingTimeout);
     state.typingTimeout = setTimeout(() => {
@@ -1332,7 +1356,7 @@ messageForm.addEventListener("submit", async (e) => {
   if (!file && !audioBlob) {
     await state.db.ref(`chats/${state.activeRoom.id}/messages`).push({
       senderId: state.user.id,
-      senderName: state.user.name,
+      senderName: getDisplayName(state.user),
       text,
       timestamp: Date.now()
     });
@@ -1348,7 +1372,7 @@ messageForm.addEventListener("submit", async (e) => {
   try {
     const payload = {
       senderId: state.user.id,
-      senderName: state.user.name,
+      senderName: getDisplayName(state.user),
       text,
       timestamp: Date.now()
     };
@@ -1510,15 +1534,17 @@ function updateColorPreview(hex) {
 }
 
 function updateProfilePreviewCard() {
+  const nick = profileNicknameInput ? profileNicknameInput.value.trim() : getDisplayName(state.user);
   const emoji = profileEmojiInput ? profileEmojiInput.value.trim() : state.user.statusEmoji || "";
   const bio = profileBioInput ? profileBioInput.value.trim() : state.user.bio || "";
   const banner = profileBannerInput ? profileBannerInput.value : state.user.bannerColor || "#38bdf8";
 
   if (profileNamePreview) {
-    profileNamePreview.textContent = `${emoji ? emoji + " " : ""}${state.user.name}`;
+    const shownName = nick || state.user.name;
+    profileNamePreview.textContent = `${emoji ? emoji + " " : ""}${shownName}`;
   }
   if (profileBioPreview) {
-    profileBioPreview.textContent = bio || "Henüz durum yazısı yok";
+    profileBioPreview.textContent = bio || `@${state.user.name}`;
   }
   if (profileBannerPreview && isValidHexColor(banner)) {
     profileBannerPreview.style.background = `linear-gradient(135deg, ${banner}, #1e293b)`;
@@ -1530,6 +1556,7 @@ function updateProfilePreviewCard() {
 
 function openProfileModal() {
   profileAvatarPreview.src = state.user.avatarData || "./icon-192.png";
+  if (profileNicknameInput) profileNicknameInput.value = state.user.nickname || state.user.name || "";
   if (profileEmojiInput) profileEmojiInput.value = state.user.statusEmoji || "";
   if (profileBioInput) profileBioInput.value = state.user.bio || "";
   if (profileBannerInput) {
@@ -1554,15 +1581,17 @@ function openUserProfileCard(uid) {
   const u = state.usersCache[uid];
   if (!u || !userProfileModal) return;
   const banner = isValidHexColor(u.bannerColor) ? u.bannerColor : "#38bdf8";
+  const dispName = getDisplayName(u);
   viewUserBanner.style.background = `linear-gradient(135deg, ${banner}, #1e293b)`;
   viewUserAvatar.src = u.avatarData || "./icon-192.png";
   viewUserAvatar.style.borderColor = banner;
-  viewUserName.textContent = `${u.statusEmoji ? u.statusEmoji + " " : ""}${u.name || ""}`;
-  viewUserStatus.textContent = u.online
+  viewUserName.textContent = `${u.statusEmoji ? u.statusEmoji + " " : ""}${dispName}`;
+  const statusStr = u.online
     ? "Çevrimiçi"
     : u.lastSeen
     ? `Son görülme ${formatTime(u.lastSeen)}`
     : "Üye";
+  viewUserStatus.textContent = `@${u.name || ""} • ${statusStr}`;
   viewUserBio.textContent = u.bio || "Durum yazısı eklenmemiş.";
   userProfileModal.classList.remove("hidden");
 }
@@ -1582,6 +1611,7 @@ if (chatRoomHeaderInfo) {
   });
 }
 
+if (profileNicknameInput) profileNicknameInput.addEventListener("input", updateProfilePreviewCard);
 if (profileEmojiInput) profileEmojiInput.addEventListener("input", updateProfilePreviewCard);
 if (profileBioInput) profileBioInput.addEventListener("input", updateProfilePreviewCard);
 if (profileBannerInput) profileBannerInput.addEventListener("input", updateProfilePreviewCard);
@@ -1598,6 +1628,7 @@ if (emojiPresets) {
 if (saveProfileDetailsBtn) {
   saveProfileDetailsBtn.addEventListener("click", async () => {
     if (!state.user) return;
+    const nickname = profileNicknameInput ? profileNicknameInput.value.trim().slice(0, 24) : "";
     const statusEmoji = profileEmojiInput ? profileEmojiInput.value.trim().slice(0, 4) : "";
     const bio = profileBioInput ? profileBioInput.value.trim().slice(0, 80) : "";
     const bannerColor =
@@ -1605,10 +1636,12 @@ if (saveProfileDetailsBtn) {
         ? profileBannerInput.value
         : "";
     await state.db.ref("users/" + state.user.id).update({
+      nickname,
       statusEmoji,
       bio,
       bannerColor
     });
+    state.user.nickname = nickname;
     state.user.statusEmoji = statusEmoji;
     state.user.bio = bio;
     state.user.bannerColor = bannerColor;
@@ -1933,7 +1966,7 @@ function renderAdminUsers(users) {
       return `
         <div class="admin-row">
           <div>
-            <div class="place-title">${escapeHtml(u.name)}</div>
+            <div class="place-title">${escapeHtml(getDisplayName(u))} <span class="user-sub">(@${escapeHtml(u.name)})</span></div>
             <div class="user-sub">${u.isAdmin ? "Admin" : "Üye"} • ${badge}</div>
           </div>
           <div class="admin-row-actions">${actionBtn}</div>

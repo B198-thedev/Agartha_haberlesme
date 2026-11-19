@@ -51,8 +51,11 @@
             <button id="reg-avatar-btn" type="button" class="icon-btn">Profil Fotoğrafı Seç (Opsiyonel)</button>
           </div>
 
-          <label for="reg-username">Kullanıcı Adı</label>
-          <input id="reg-username" type="text" placeholder="Örn. Arda" maxlength="24" autocomplete="username" required />
+          <label for="reg-username">Kullanıcı Adı (Giriş İçin)</label>
+          <input id="reg-username" type="text" placeholder="Örn. arda34" maxlength="24" autocomplete="username" required />
+
+          <label for="reg-nickname">Takma Ad (Sohbette Görünecek)</label>
+          <input id="reg-nickname" type="text" placeholder="Örn. Arda" maxlength="24" autocomplete="nickname" required />
 
           <label for="reg-password">Şifre Belirle</label>
           <input id="reg-password" type="text" placeholder="Kendi şifreni oluştur" minlength="3" maxlength="40" autocomplete="new-password" required />
@@ -231,8 +234,9 @@
           </div>
 
           <div class="card">
-            <h3>Durum &amp; Hakkında</h3>
+            <h3>Takma Ad, Durum &amp; Hakkında</h3>
             <div class="stack-form">
+              <input id="profile-nickname-input" type="text" maxlength="24" placeholder="Takma Ad (Sohbette görünecek)" />
               <div class="inline-form">
                 <input id="profile-emoji-input" type="text" maxlength="4" placeholder="😊" style="width:68px; text-align:center;" />
                 <input id="profile-bio-input" type="text" maxlength="80" placeholder="Durum / Bio (Örn. Kahveye müsait)" />
