@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.15";
+const CURRENT_APP_CACHE = "agartha-V2.16";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -8655,9 +8655,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.15)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.16)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.16",
+    title: "PC Köprüsü Canlı Donanım & İstek Paneli",
+    desc: "Bilgisayardaki AI köprüsüne anlık CPU, RAM, GPU/VRAM kullanımı, bellekte yüklü model durumu, son 5 istek ve verilen son 5 öneri cevabı canlı paneli eklendi."
+  },
   {
     v: "V2.15",
     title: "Uygulama İçi Bildirim Kartı (iOS & Android)",
