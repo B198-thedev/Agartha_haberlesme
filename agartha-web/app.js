@@ -478,7 +478,14 @@ const state = {
   customGroupListeners: {},
   customGroupKeyRefs: {},
   placesCache: [],
-  aiConfig: { provider: "ollama", ollamaUrl: "http://localhost:11434", model: "qwen2.5:7b", apiKey: "" },
+  aiConfig: {
+    provider: "ollama",
+    ollamaUrl: "http://localhost:11434",
+    model: "qwen2.5:7b",
+    apiKey: "",
+    persona: "friendly",
+    personaPrompt: ""
+  },
   aiBridgeStatus: { online: false, lastSeen: 0, model: "" },
   aiAnalysisBusy: false,
   aiTrainingItems: {},
@@ -755,6 +762,8 @@ const aiProviderSelect = document.getElementById("ai-provider-select");
 const aiOllamaUrlInput = document.getElementById("ai-ollama-url-input");
 const aiOllamaModelInput = document.getElementById("ai-ollama-model-input");
 const aiApiKeyInput = document.getElementById("ai-api-key-input");
+const aiPersonaSelect = document.getElementById("ai-persona-select");
+const aiPersonaInput = document.getElementById("ai-persona-input");
 
 const authAnnouncementsBtn = document.getElementById("auth-announcements-btn");
 const homeAnnouncementsBtn = document.getElementById("home-announcements-btn");
@@ -7091,6 +7100,22 @@ function updateAiBridgeStatusUI() {
   }
 }
 
+const AI_PERSONA_PRESETS = {
+  friendly: "Arkadaş grubundan biri gibi sıcak, samimi ve doğal Türkçe konuş.",
+  funny: "Enerjik, esprili ve kanka gibi hafif takılmalı ama kısa ve net cümlelerle gerekçe yaz.",
+  concise: "Gereksiz giriş-çıkış cümleleri kurma; sadece ortam, kalite ve uyum hakkında kısa net bilgi ver.",
+  explorer: "Popüler kalabalık zincirler yerine gizli kalmış, özgün ve atmosferi güçlü mekanları öne çıkar."
+};
+
+function getActiveAiPersonaInstruction() {
+  const cfg = state.aiConfig || {};
+  const key = cfg.persona || "friendly";
+  if (key === "custom" && cfg.personaPrompt && String(cfg.personaPrompt).trim()) {
+    return String(cfg.personaPrompt).trim().slice(0, 400);
+  }
+  return AI_PERSONA_PRESETS[key] || AI_PERSONA_PRESETS.friendly;
+}
+
 function listenAiConfig() {
   if (!state.db) return;
   state.db.ref("config/ai").on("value", (snap) => {
@@ -7099,7 +7124,9 @@ function listenAiConfig() {
       provider: String(val.provider || "ollama").trim() || "ollama",
       ollamaUrl: String(val.ollamaUrl || "http://localhost:11434").trim().replace(/\/+$/, ""),
       model: String(val.model || "qwen2.5:7b").trim() || "qwen2.5:7b",
-      apiKey: String(val.apiKey || "").trim()
+      apiKey: String(val.apiKey || "").trim(),
+      persona: String(val.persona || "friendly").trim() || "friendly",
+      personaPrompt: String(val.personaPrompt || "").trim()
     };
     updateAiBridgeStatusUI();
   });
@@ -7462,7 +7489,7 @@ async function runCloudAiProvider(contextText, promptHint) {
     : "";
 
   const systemPrompt =
-    'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.';
+    `Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Kişilik ve üslup: ${getActiveAiPersonaInstruction()} Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.`;
   const userPrompt = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
 
   const rawContent = await callCloudModelRaw({
@@ -7517,7 +7544,7 @@ async function tryDirectLocalOllama(contextText, promptHint) {
     const chatCtrl = new AbortController();
     const chatTimer = setTimeout(() => chatCtrl.abort(), 55000);
     const systemPrompt =
-      'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.';
+      `Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Kişilik ve üslup: ${getActiveAiPersonaInstruction()} Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.`;
     const userMsg = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
 
     const chatRes = await fetch(`${baseUrl}/api/chat`, {
@@ -7568,6 +7595,7 @@ async function sendAiRequestToBridge({ roomId, roomTitle, contextText, promptHin
     sourceRoomTitle: roomTitle || "",
     model,
     promptHint: promptHint || "",
+    personaPrompt: getActiveAiPersonaInstruction(),
     contextText,
     status: "pending",
     createdAt: Date.now()
@@ -8093,6 +8121,9 @@ function syncAiProviderFormUI() {
     };
     aiOllamaModelInput.placeholder = `Model adı (Örn. ${defaults[provider] || "qwen2.5:7b"})`;
   }
+  if (aiPersonaSelect && aiPersonaInput) {
+    aiPersonaInput.classList.toggle("hidden", aiPersonaSelect.value !== "custom");
+  }
 }
 
 openAdminBtn.addEventListener("click", () => {
@@ -8106,6 +8137,8 @@ openAdminBtn.addEventListener("click", () => {
   if (aiOllamaUrlInput) aiOllamaUrlInput.value = (state.aiConfig && state.aiConfig.ollamaUrl) || "http://localhost:11434";
   if (aiOllamaModelInput) aiOllamaModelInput.value = (state.aiConfig && state.aiConfig.model) || "qwen2.5:7b";
   if (aiApiKeyInput) aiApiKeyInput.value = (state.aiConfig && state.aiConfig.apiKey) || "";
+  if (aiPersonaSelect) aiPersonaSelect.value = (state.aiConfig && state.aiConfig.persona) || "friendly";
+  if (aiPersonaInput) aiPersonaInput.value = (state.aiConfig && state.aiConfig.personaPrompt) || "";
   syncAiProviderFormUI();
   listenInvites();
   renderAdminUsers(state.usersCache);
@@ -8148,6 +8181,10 @@ if (aiProviderSelect) {
   });
 }
 
+if (aiPersonaSelect) {
+  aiPersonaSelect.addEventListener("change", syncAiProviderFormUI);
+}
+
 if (aiConfigForm) {
   aiConfigForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -8172,12 +8209,19 @@ if (aiConfigForm) {
       defaultModels[provider];
     const apiKey =
       provider === "ollama" ? "" : (aiApiKeyInput && aiApiKeyInput.value.trim()) || "";
+    const persona = (aiPersonaSelect && aiPersonaSelect.value) || "friendly";
+    const personaPrompt =
+      persona === "custom" && aiPersonaInput ? aiPersonaInput.value.trim().slice(0, 400) : "";
     if (provider !== "ollama" && !apiKey) {
       alert("Bulut AI sağlayıcısı için API anahtarı girmelisin.");
       return;
     }
-    await state.db.ref("config/ai").set({ provider, ollamaUrl, model, apiKey });
-    alert(`AI motoru kaydedildi (${provider} • ${model}).`);
+    if (persona === "custom" && !personaPrompt) {
+      alert("Özel karakter seçtiğinde modele nasıl davranacağını yazmalısın.");
+      return;
+    }
+    await state.db.ref("config/ai").set({ provider, ollamaUrl, model, apiKey, persona, personaPrompt });
+    alert(`AI motoru ve kişiliği kaydedildi (${provider} • ${model}).`);
   });
 }
 
@@ -8337,9 +8381,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.09)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.10)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.10",
+    title: "Yapay Zeka Kişilik & Karakter Sistemi",
+    desc: "Yönetici Paneli > Yapay Zeka Motoru bölümüne hazır kişilikler (Samimi Arkadaş, Esprili Kanka, Net Gurme, Gizli Köşe Kaşifi) ve istediğin karakteri kendin yazabileceğin Özel Kişilik alanı eklendi; hem yerel Ollama hem tüm bulut API modelleri aynı karakterle yanıt verir."
+  },
   {
     v: "V2.09",
     title: "Çoklu AI Motoru & API Anahtarı Altyapısı",

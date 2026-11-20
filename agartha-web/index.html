@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (V2.09)
+          Duyurular &amp; Sürüm Geçmişi (V2.10)
         </button>
       </div>
     </section>
@@ -146,9 +146,9 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">V2.09</span>
+                <span id="home-announcement-version" class="exp-badge">V2.10</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">V2.09: Çoklu AI motoru! İstediğin yerel model, Gemini, OpenAI veya Groq/OpenRouter API anahtarıyla çalışabilir.</div>
+              <div id="home-announcement-summary" class="chat-preview">V2.10: Yapay Zeka Kişilik &amp; Karakter Sistemi eklendi! Modelin üslubunu hazır profillerden seçebilir veya kendin yazabilirsin.</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
@@ -517,7 +517,7 @@
           <div class="settings-list">
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – V2.09 tüm güncellemeler</span>
+              <span class="user-sub">v1 – V2.10 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yönetici Paneli</span>
@@ -538,7 +538,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">V2.09</span>
+            <span id="announcements-modal-ver" class="exp-badge">V2.10</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -557,7 +557,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.09)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.10)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -969,6 +969,14 @@
                 <option value="llama-3.3-70b-versatile"></option>
               </datalist>
               <input id="ai-api-key-input" type="password" class="hidden" placeholder="API Anahtarı (Bulut sağlayıcı için)" autocomplete="off" />
+              <select id="ai-persona-select" class="settings-select" style="width:100%;" aria-label="AI Kişilik Profili">
+                <option value="friendly">Kişilik: Samimi Arkadaş &amp; Rehber</option>
+                <option value="funny">Kişilik: Esprili &amp; Enerjik Kanka</option>
+                <option value="concise">Kişilik: Net &amp; Kısa Gurme</option>
+                <option value="explorer">Kişilik: Gizli Köşe Kaşifi</option>
+                <option value="custom">Kişilik: Özel Karakter (Kendin Yaz)</option>
+              </select>
+              <textarea id="ai-persona-input" class="ai-bulk-textarea hidden" rows="2" maxlength="400" placeholder="Modelin nasıl konuşmasını ve nelere dikkat etmesini istiyorsun? (Örn. Sakin kahve gurmesi gibi konuş, kalabalık yer önerme.)"></textarea>
               <button type="submit" class="btn-primary">AI Ayarını Kaydet</button>
             </form>
           </div>
