@@ -478,7 +478,7 @@ const state = {
   customGroupListeners: {},
   customGroupKeyRefs: {},
   placesCache: [],
-  aiConfig: { ollamaUrl: "http://localhost:11434", model: "qwen2.5:7b" },
+  aiConfig: { provider: "ollama", ollamaUrl: "http://localhost:11434", model: "qwen2.5:7b", apiKey: "" },
   aiBridgeStatus: { online: false, lastSeen: 0, model: "" },
   aiAnalysisBusy: false,
   aiTrainingItems: {},
@@ -751,8 +751,10 @@ const driveSecretInput = document.getElementById("drive-secret-input");
 const turnConfigForm = document.getElementById("turn-config-form");
 const turnApiUrlInput = document.getElementById("turn-api-url-input");
 const aiConfigForm = document.getElementById("ai-config-form");
+const aiProviderSelect = document.getElementById("ai-provider-select");
 const aiOllamaUrlInput = document.getElementById("ai-ollama-url-input");
 const aiOllamaModelInput = document.getElementById("ai-ollama-model-input");
+const aiApiKeyInput = document.getElementById("ai-api-key-input");
 
 const authAnnouncementsBtn = document.getElementById("auth-announcements-btn");
 const homeAnnouncementsBtn = document.getElementById("home-announcements-btn");
@@ -7061,11 +7063,22 @@ function isAiBridgeAlive() {
 
 function updateAiBridgeStatusUI() {
   if (!aiBridgeStatus) return;
+  const cfg = state.aiConfig || {};
+  const provider = cfg.provider || "ollama";
   const st = state.aiBridgeStatus || {};
   const alive = isAiBridgeAlive();
   if (state.aiAnalysisBusy) {
     aiBridgeStatus.textContent = "Analiz Ediliyor...";
     aiBridgeStatus.className = "ai-status-pill busy";
+  } else if (provider !== "ollama") {
+    if (cfg.apiKey) {
+      const pLabel = provider === "gemini" ? "Gemini" : provider === "openai" ? "OpenAI" : "Bulut API";
+      aiBridgeStatus.textContent = `${pLabel} Hazır (${cfg.model || "Model"})`;
+      aiBridgeStatus.className = "ai-status-pill online";
+    } else {
+      aiBridgeStatus.textContent = "API Anahtarı Eksik (AG-AI-KEY-06)";
+      aiBridgeStatus.className = "ai-status-pill warn";
+    }
   } else if (alive && st.ollamaOnline) {
     aiBridgeStatus.textContent = st.model ? `PC AI Aktif (${st.model})` : "PC AI Aktif";
     aiBridgeStatus.className = "ai-status-pill online";
@@ -7083,9 +7096,12 @@ function listenAiConfig() {
   state.db.ref("config/ai").on("value", (snap) => {
     const val = snap.val() || {};
     state.aiConfig = {
+      provider: String(val.provider || "ollama").trim() || "ollama",
       ollamaUrl: String(val.ollamaUrl || "http://localhost:11434").trim().replace(/\/+$/, ""),
-      model: String(val.model || "qwen2.5:7b").trim() || "qwen2.5:7b"
+      model: String(val.model || "qwen2.5:7b").trim() || "qwen2.5:7b",
+      apiKey: String(val.apiKey || "").trim()
     };
+    updateAiBridgeStatusUI();
   });
 }
 
@@ -7357,6 +7373,119 @@ async function saveAiDraftsList(items, meta) {
     )
   );
   return items.length;
+}
+
+async function callCloudModelRaw({ provider, baseUrl, apiKey, model, systemPrompt, userPrompt, timeoutMs = 45000 }) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    if (provider === "gemini") {
+      const m = encodeURIComponent(model || "gemini-2.5-flash");
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        const errTxt = await res.text().catch(() => "");
+        throw new Error(`Gemini API hatası (${res.status}): ${errTxt.slice(0, 120)}`);
+      }
+      const data = await res.json();
+      return (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || "";
+    }
+
+    const endpointBase =
+      provider === "openai"
+        ? "https://api.openai.com/v1"
+        : String(baseUrl || "https://api.groq.com/openai/v1").trim().replace(/\/+$/, "");
+    const res = await fetch(`${endpointBase}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        model: model || "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ]
+      })
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      const errTxt = await res.text().catch(() => "");
+      throw new Error(`API hatası (${res.status}): ${errTxt.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    return (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runCloudAiProvider(contextText, promptHint) {
+  const cfg = state.aiConfig || {};
+  if (!cfg.apiKey) {
+    throw new Error("[AG-AI-KEY-06] Bulut AI seçili ama API anahtarı tanımlanmamış. Yönetici Paneli > Yapay Zeka Motoru bölümünden API anahtarı gir.");
+  }
+  let intent = { area: fallbackAreaFromPlaces(), type: "all" };
+  try {
+    const intentRaw = await callCloudModelRaw({
+      provider: cfg.provider,
+      baseUrl: cfg.ollamaUrl,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      timeoutMs: 12000,
+      systemPrompt:
+        'Sadece JSON döndür: {"area":"Semt ve Sehir (ornek: Kadikoy Istanbul)","type":"cafe|restaurant|park|entertainment|all"}. Kullanici istegi ve sohbetten aranan bolgeyi cikar.',
+      userPrompt: `Istek: ${promptHint || "-"}\nBaglam:\n${String(contextText || "").slice(0, 1200)}`
+    });
+    const parsedIntent = JSON.parse(String(intentRaw || "").replace(/```json/gi, "").replace(/```/g, "").trim());
+    if (parsedIntent && parsedIntent.area) intent.area = String(parsedIntent.area).trim();
+    if (parsedIntent && parsedIntent.type) intent.type = String(parsedIntent.type).trim();
+  } catch {}
+
+  const liveData = await fetchLiveOsmPlaces(intent.area, intent.type);
+  const liveListText = liveData.venues.length
+    ? `\n\nİnternetten Çekilen Güncel Gerçek Mekanlar (${liveData.area} - OpenStreetMap):\n` +
+      liveData.venues.map((v) => `- ${v.name} (${v.kind}${v.street ? ", " + v.street : ""})`).join("\n")
+    : "";
+
+  const systemPrompt =
+    'Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.';
+  const userPrompt = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
+
+  const rawContent = await callCloudModelRaw({
+    provider: cfg.provider,
+    baseUrl: cfg.ollamaUrl,
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    timeoutMs: 45000,
+    systemPrompt,
+    userPrompt
+  });
+
+  const liveNames = liveData.venues.map((v) => v.name.toLocaleLowerCase("tr-TR"));
+  const isVerifiedMatch = (title) => {
+    const t = String(title || "").toLocaleLowerCase("tr-TR").trim();
+    if (t.length < 3) return false;
+    return liveNames.some((n) => n === t || (n.length >= 4 && (n.includes(t) || t.includes(n))));
+  };
+  const recs = parseAiRecommendationsJson(rawContent).map((rec) => ({
+    ...rec,
+    verifiedOnline: isVerifiedMatch(rec.title)
+  }));
+  return { model: cfg.model || cfg.provider, recs };
 }
 
 async function tryDirectLocalOllama(contextText, promptHint) {
@@ -7805,6 +7934,25 @@ if (aiAnalyzeForm) {
         return;
       }
 
+      const activeProvider = (state.aiConfig && state.aiConfig.provider) || "ollama";
+      if (activeProvider !== "ollama") {
+        showStatus(`${state.aiConfig.model || activeProvider} ile analiz ediliyor...`);
+        const cloudRes = await runCloudAiProvider(contextText || promptHint, promptHint);
+        if (!cloudRes.recs || cloudRes.recs.length === 0) {
+          showStatus("[AG-AI-EMPTY-04] Model geçerli öneri üretemedi, isteği biraz daha netleştirip tekrar dene.", true);
+          return;
+        }
+        const savedCount = await saveAiDraftsList(cloudRes.recs, {
+          roomId: roomMeta.roomId,
+          roomTitle: roomMeta.title,
+          model: cloudRes.model
+        });
+        showStatus(`Tamamlandı! ${savedCount} öneri taslaklarına eklendi (${cloudRes.model}).`);
+        if (aiPromptInput) aiPromptInput.value = "";
+        switchAiSubPage("results");
+        return;
+      }
+
       showStatus("PC'deki yerel Ollama aranıyor...");
       const direct = await tryDirectLocalOllama(contextText || promptHint, promptHint);
       if (direct.reachable) {
@@ -7917,6 +8065,36 @@ function listenAiRecommendations() {
 }
 
 // Admin Paneli
+function syncAiProviderFormUI() {
+  const provider = aiProviderSelect ? aiProviderSelect.value : "ollama";
+  if (aiOllamaUrlInput) {
+    const showUrl = provider === "ollama" || provider === "openai_compat";
+    aiOllamaUrlInput.classList.toggle("hidden", !showUrl);
+    aiOllamaUrlInput.placeholder =
+      provider === "openai_compat"
+        ? "API URL (Örn. https://api.groq.com/openai/v1)"
+        : "http://localhost:11434";
+  }
+  if (aiApiKeyInput) {
+    aiApiKeyInput.classList.toggle("hidden", provider === "ollama");
+    aiApiKeyInput.placeholder =
+      provider === "gemini"
+        ? "Google Gemini API Anahtarı (AIza...)"
+        : provider === "openai"
+        ? "OpenAI API Anahtarı (sk-...)"
+        : "API Anahtarı";
+  }
+  if (aiOllamaModelInput) {
+    const defaults = {
+      ollama: "qwen2.5:7b",
+      gemini: "gemini-2.5-flash",
+      openai: "gpt-4o-mini",
+      openai_compat: "llama-3.3-70b-versatile"
+    };
+    aiOllamaModelInput.placeholder = `Model adı (Örn. ${defaults[provider] || "qwen2.5:7b"})`;
+  }
+}
+
 openAdminBtn.addEventListener("click", () => {
   if (settingsModal) settingsModal.classList.add("hidden");
   adminModal.classList.remove("hidden");
@@ -7924,8 +8102,11 @@ openAdminBtn.addEventListener("click", () => {
   driveUrlInput.value = state.driveConfig.url || "";
   driveSecretInput.value = state.driveConfig.secret || "";
   if (turnApiUrlInput) turnApiUrlInput.value = (state.turnConfig && state.turnConfig.apiUrl) || "";
+  if (aiProviderSelect) aiProviderSelect.value = (state.aiConfig && state.aiConfig.provider) || "ollama";
   if (aiOllamaUrlInput) aiOllamaUrlInput.value = (state.aiConfig && state.aiConfig.ollamaUrl) || "http://localhost:11434";
   if (aiOllamaModelInput) aiOllamaModelInput.value = (state.aiConfig && state.aiConfig.model) || "qwen2.5:7b";
+  if (aiApiKeyInput) aiApiKeyInput.value = (state.aiConfig && state.aiConfig.apiKey) || "";
+  syncAiProviderFormUI();
   listenInvites();
   renderAdminUsers(state.usersCache);
 });
@@ -7947,13 +8128,56 @@ if (turnConfigForm) {
   });
 }
 
+if (aiProviderSelect) {
+  aiProviderSelect.addEventListener("change", () => {
+    syncAiProviderFormUI();
+    const p = aiProviderSelect.value;
+    if (aiOllamaModelInput) {
+      if (p === "gemini") aiOllamaModelInput.value = "gemini-2.5-flash";
+      else if (p === "openai") aiOllamaModelInput.value = "gpt-4o-mini";
+      else if (p === "openai_compat") aiOllamaModelInput.value = "llama-3.3-70b-versatile";
+      else if (!aiOllamaModelInput.value || ["gemini-2.5-flash", "gpt-4o-mini", "llama-3.3-70b-versatile"].includes(aiOllamaModelInput.value)) {
+        aiOllamaModelInput.value = "qwen2.5:7b";
+      }
+    }
+    if (aiOllamaUrlInput && p === "ollama" && !aiOllamaUrlInput.value.includes("localhost")) {
+      aiOllamaUrlInput.value = "http://localhost:11434";
+    } else if (aiOllamaUrlInput && p === "openai_compat" && aiOllamaUrlInput.value.includes("localhost")) {
+      aiOllamaUrlInput.value = "https://api.groq.com/openai/v1";
+    }
+  });
+}
+
 if (aiConfigForm) {
   aiConfigForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const ollamaUrl = (aiOllamaUrlInput && aiOllamaUrlInput.value.trim().replace(/\/+$/, "")) || "http://localhost:11434";
-    const model = (aiOllamaModelInput && aiOllamaModelInput.value.trim().slice(0, 60)) || "qwen2.5:7b";
-    await state.db.ref("config/ai").set({ ollamaUrl, model });
-    alert(`Yerel AI ayarı kaydedildi (${model}).`);
+    const provider = (aiProviderSelect && aiProviderSelect.value) || "ollama";
+    const defaultUrls = {
+      ollama: "http://localhost:11434",
+      gemini: "https://generativelanguage.googleapis.com",
+      openai: "https://api.openai.com/v1",
+      openai_compat: "https://api.groq.com/openai/v1"
+    };
+    const defaultModels = {
+      ollama: "qwen2.5:7b",
+      gemini: "gemini-2.5-flash",
+      openai: "gpt-4o-mini",
+      openai_compat: "llama-3.3-70b-versatile"
+    };
+    const ollamaUrl =
+      (aiOllamaUrlInput && aiOllamaUrlInput.value.trim().replace(/\/+$/, "")) ||
+      defaultUrls[provider];
+    const model =
+      (aiOllamaModelInput && aiOllamaModelInput.value.trim().slice(0, 80)) ||
+      defaultModels[provider];
+    const apiKey =
+      provider === "ollama" ? "" : (aiApiKeyInput && aiApiKeyInput.value.trim()) || "";
+    if (provider !== "ollama" && !apiKey) {
+      alert("Bulut AI sağlayıcısı için API anahtarı girmelisin.");
+      return;
+    }
+    await state.db.ref("config/ai").set({ provider, ollamaUrl, model, apiKey });
+    alert(`AI motoru kaydedildi (${provider} • ${model}).`);
   });
 }
 
@@ -8113,9 +8337,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.08)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.09)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.09",
+    title: "Çoklu AI Motoru & API Anahtarı Altyapısı",
+    desc: "Yönetici Paneli'nden yalnızca Qwen değil istediğin yerel Ollama modelini (Llama, Gemma, Mistral vb.) seçebilir veya API anahtarıyla Google Gemini, OpenAI, Groq, OpenRouter gibi bulut modellere tek tıkla geçebilirsin."
+  },
   {
     v: "V2.08",
     title: "Canlı Güncelleme & GitHub Pending Uyarısı",

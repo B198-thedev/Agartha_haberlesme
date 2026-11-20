@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (V2.08)
+          Duyurular &amp; Sürüm Geçmişi (V2.09)
         </button>
       </div>
     </section>
@@ -146,9 +146,9 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">V2.08</span>
+                <span id="home-announcement-version" class="exp-badge">V2.09</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">V2.08: GitHub'a dosya yüklendiği anda pending aşamasında 'Güncelleme yükleniyor' uyarısı eklendi.</div>
+              <div id="home-announcement-summary" class="chat-preview">V2.09: Çoklu AI motoru! İstediğin yerel model, Gemini, OpenAI veya Groq/OpenRouter API anahtarıyla çalışabilir.</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
@@ -517,7 +517,7 @@
           <div class="settings-list">
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – V2.08 tüm güncellemeler</span>
+              <span class="user-sub">v1 – V2.09 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yönetici Paneli</span>
@@ -538,7 +538,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">V2.08</span>
+            <span id="announcements-modal-ver" class="exp-badge">V2.09</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -557,7 +557,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.08)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.09)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -947,11 +947,28 @@
           </div>
 
           <div class="card">
-            <h3>Yerel Ollama AI Bağlantısı</h3>
-            <p class="muted">Bilgisayarında çalışan Ollama adresi ve modeli. Telefondan istek atıldığında PC Köprüsü bu modeli kullanır.</p>
+            <h3>Yapay Zeka Motoru &amp; API Ayarı</h3>
+            <p class="muted">Yerel Ollama modeli (Qwen, Llama, Gemma vb.) veya API anahtarıyla Gemini / OpenAI / Groq gibi bulut modelleri seçebilirsin.</p>
             <form id="ai-config-form" class="stack-form">
+              <select id="ai-provider-select" class="settings-select" style="width:100%;" aria-label="AI Sağlayıcı">
+                <option value="ollama">Yerel Ollama (Bilgisayar / PC Köprüsü)</option>
+                <option value="gemini">Google Gemini API (Anahtarlı)</option>
+                <option value="openai">OpenAI / ChatGPT API (Anahtarlı)</option>
+                <option value="openai_compat">OpenAI Uyumlu API (Groq, OpenRouter, LM Studio)</option>
+              </select>
               <input id="ai-ollama-url-input" type="url" placeholder="http://localhost:11434" />
-              <input id="ai-ollama-model-input" type="text" maxlength="60" placeholder="qwen2.5:7b" />
+              <input id="ai-ollama-model-input" type="text" list="ai-model-suggestions" maxlength="80" placeholder="Model adı (Örn. qwen2.5:7b)" />
+              <datalist id="ai-model-suggestions">
+                <option value="qwen2.5:7b"></option>
+                <option value="qwen2.5:14b"></option>
+                <option value="llama3.1:8b"></option>
+                <option value="gemma3:12b"></option>
+                <option value="mistral"></option>
+                <option value="gemini-2.5-flash"></option>
+                <option value="gpt-4o-mini"></option>
+                <option value="llama-3.3-70b-versatile"></option>
+              </datalist>
+              <input id="ai-api-key-input" type="password" class="hidden" placeholder="API Anahtarı (Bulut sağlayıcı için)" autocomplete="off" />
               <button type="submit" class="btn-primary">AI Ayarını Kaydet</button>
             </form>
           </div>
