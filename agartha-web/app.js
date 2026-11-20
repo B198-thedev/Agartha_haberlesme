@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.20";
+const CURRENT_APP_CACHE = "agartha-V2.21";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -755,6 +755,8 @@ const bgBlurValue = document.getElementById("bg-blur-value");
 const bgBrightRange = document.getElementById("bg-bright-range");
 const bgBrightValue = document.getElementById("bg-bright-value");
 const prefBubbleStyleSelect = document.getElementById("pref-bubble-style");
+const prefLiquidGlassToggle = document.getElementById("pref-liquid-glass-toggle");
+const settingsLiquidGlassToggle = document.getElementById("settings-liquid-glass-toggle");
 const prefFontSizeSelect = document.getElementById("pref-font-size");
 const prefFontFamilySelect = document.getElementById("pref-font-family");
 const prefDensitySelect = document.getElementById("pref-density");
@@ -2772,6 +2774,7 @@ registerForm.addEventListener("submit", async (e) => {
 
 const UI_PREFS_KEY = "agartha_ui_prefs";
 const DEFAULT_UI_PREFS = {
+  liquidGlass: false,
   bubbleStyle: "rounded",
   fontSize: "normal",
   fontFamily: "modern",
@@ -2852,6 +2855,9 @@ function saveUiPrefs(nextPartial = {}) {
 
 function applyUiPrefs() {
   const root = document.documentElement;
+  const isLiquidGlass = Boolean(uiPrefs.liquidGlass);
+  root.classList.toggle("liquid-glass", isLiquidGlass);
+
   root.classList.remove("bubble-rounded", "bubble-pill", "bubble-sharp", "bubble-glass");
   root.classList.add("bubble-" + (uiPrefs.bubbleStyle || "rounded"));
 
@@ -2872,6 +2878,8 @@ function applyUiPrefs() {
 
   if (hideReadToggle) hideReadToggle.checked = Boolean(uiPrefs.hideReadReceipts);
   if (inappNotifyToggle) inappNotifyToggle.checked = uiPrefs.inAppNotifs !== false;
+  if (prefLiquidGlassToggle) prefLiquidGlassToggle.checked = isLiquidGlass;
+  if (settingsLiquidGlassToggle) settingsLiquidGlassToggle.checked = isLiquidGlass;
 
   const activeRoomId = state.activeRoom ? state.activeRoom.id : "global";
   applyActiveRoomBackground(activeRoomId);
@@ -6732,6 +6740,7 @@ function openCustomizeModal() {
   if (bgBlurValue) bgBlurValue.textContent = `${uiPrefs.bgBlur ?? 9}px`;
   if (bgBrightRange) bgBrightRange.value = String(uiPrefs.bgBrightness ?? 65);
   if (bgBrightValue) bgBrightValue.textContent = `${uiPrefs.bgBrightness ?? 65}%`;
+  if (prefLiquidGlassToggle) prefLiquidGlassToggle.checked = Boolean(uiPrefs.liquidGlass);
   if (prefBubbleStyleSelect) prefBubbleStyleSelect.value = uiPrefs.bubbleStyle || "rounded";
   if (prefFontSizeSelect) prefFontSizeSelect.value = uiPrefs.fontSize || "normal";
   if (prefFontFamilySelect) prefFontFamilySelect.value = uiPrefs.fontFamily || "modern";
@@ -7280,6 +7289,13 @@ if (bgBrightRange) {
     saveUiPrefs({ bgBrightness: val });
   });
 }
+
+function bindLiquidGlassToggle(el) {
+  if (!el) return;
+  el.addEventListener("change", () => saveUiPrefs({ liquidGlass: Boolean(el.checked) }));
+}
+bindLiquidGlassToggle(prefLiquidGlassToggle);
+bindLiquidGlassToggle(settingsLiquidGlassToggle);
 
 if (prefBubbleStyleSelect) {
   prefBubbleStyleSelect.addEventListener("change", () => saveUiPrefs({ bubbleStyle: prefBubbleStyleSelect.value }));
@@ -9114,9 +9130,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.20)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.21)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.21",
+    title: "Liquid Glass Tasarım Modu (Aç/Kapat)",
+    desc: "Ayarlar ve Tema & Tasarım menülerinden tek dokunuşla açılıp kapatılabilen Liquid Glass modu eklendi; saydam cam paneller, üst ışık yansıması, kırılmalı alt/üst çubuklar ve camsı mesaj baloncukları sunar."
+  },
   {
     v: "V2.20",
     title: "Android & Masaüstü Bildirim Sistemi Düzeltmesi",
