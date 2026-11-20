@@ -96,7 +96,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (V2.19)
+          Duyurular &amp; Sürüm Geçmişi (V2.20)
         </button>
       </div>
     </section>
@@ -154,11 +154,24 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">V2.19</span>
+                <span id="home-announcement-version" class="exp-badge">V2.20</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">V2.19: Mesaj balonları artık gönderilen mesajın uzunluğuna göre dinamik olarak küçülüp büyüyor!</div>
+              <div id="home-announcement-summary" class="chat-preview">V2.20: Android ve masaüstü bildirim sistemi düzeltildi; bildirim izni, uyanma senkronu ve bildirime tıklayınca doğrudan sohbete gitme eklendi!</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
+          </button>
+
+          <button id="home-notify-banner" type="button" class="announcement-banner notify-prompt-banner hidden">
+            <div class="announcement-banner-icon" aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </div>
+            <div class="announcement-banner-body">
+              <div class="announcement-banner-top">
+                <span class="announcement-banner-title">Bildirimler Kapalı</span>
+              </div>
+              <div id="home-notify-banner-text" class="chat-preview">Yeni mesaj geldiğinde telefonuna bildirim düşmesi için dokunup izin ver.</div>
+            </div>
+            <span class="announcement-banner-cta">Aç &rsaquo;</span>
           </button>
 
           <div id="main-group-section-label" class="section-label">Genel Sohbet</div>
@@ -532,7 +545,7 @@
           <div class="settings-list">
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – V2.19 tüm güncellemeler</span>
+              <span class="user-sub">v1 – V2.20 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yönetici Paneli</span>
@@ -553,7 +566,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">V2.19</span>
+            <span id="announcements-modal-ver" class="exp-badge">V2.20</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -572,7 +585,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.19)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.20)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "agartha-V2.19";
+const CACHE_NAME = "agartha-V2.20";
 const ASSETS = [
   "./",
   "./index.html",
@@ -48,10 +48,17 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const navData = (event.notification && event.notification.data) || {};
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       if (list.length > 0) {
-        return list[0].focus();
+        const targetClient = list[0];
+        if (navData && navData.roomId) {
+          try {
+            targetClient.postMessage({ type: "agartha_open_room", navMeta: navData });
+          } catch {}
+        }
+        return targetClient.focus();
       }
       return clients.openWindow("./index.html");
     })

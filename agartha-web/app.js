@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.19";
+const CURRENT_APP_CACHE = "agartha-V2.20";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -188,6 +188,19 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
       });
     })
     .catch(() => {});
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const payload = event && event.data;
+    if (payload && payload.type === "agartha_open_room" && payload.navMeta && payload.navMeta.roomId && state.user) {
+      const nav = payload.navMeta;
+      document.querySelectorAll(".modal:not(.hidden)").forEach((m) => {
+        if (m.id !== "call-modal") m.classList.add("hidden");
+      });
+      if (typeof openChatRoom === "function") {
+        openChatRoom(nav.roomId, nav.title || "Sohbet", Boolean(nav.isGroup), nav.otherId || null);
+      }
+    }
+  });
 }
 
 const SESSION_KEY = "agartha_session_v1";
@@ -480,8 +493,11 @@ const state = {
   usersCache: {},
   startedAt: Date.now(),
   notifiedMsgKeys: new Set(),
+  knownMsgKeys: new Set(),
+  seededNotifRooms: new Set(),
   unreadRooms: new Set(),
   dmListeners: {},
+  mainGroupNotifRef: null,
   presenceSetup: false,
   driveConfig: { url: "", secret: "" },
   turnConfig: { apiUrl: "" },
@@ -584,6 +600,8 @@ const headerAvatar = document.getElementById("header-avatar");
 const currentUserLabel = document.getElementById("current-user-label");
 const notifyBtn = document.getElementById("notify-btn");
 const notifyStatusLabel = document.getElementById("notify-status-label");
+const homeNotifyBanner = document.getElementById("home-notify-banner");
+const homeNotifyBannerText = document.getElementById("home-notify-banner-text");
 const soundStyleSelect = document.getElementById("sound-style-select");
 const openAdminBtn = document.getElementById("open-admin-btn");
 const logoutBtn = document.getElementById("logout-btn");
@@ -2992,7 +3010,9 @@ async function preloadInitialData() {
   if (state.user.inMainGroup !== false) {
     tasks.push(
       state.db.ref("chats/main_group/messages").limitToLast(100).once("value").then((snap) => {
-        state.preloadedChats["main_group"] = snap.val() || {};
+        const val = snap.val() || {};
+        state.preloadedChats["main_group"] = val;
+        seedKnownRoomMessages("main_group", val);
         markRoomDelivered("main_group");
       }).catch(() => {})
     );
@@ -3019,7 +3039,9 @@ async function preloadInitialData() {
             .limitToLast(100)
             .once("value")
             .then((dmSnap) => {
-              state.preloadedChats[dmId] = dmSnap.val() || {};
+              const val = dmSnap.val() || {};
+              state.preloadedChats[dmId] = val;
+              seedKnownRoomMessages(dmId, val);
               markRoomDelivered(dmId);
             })
             .catch(() => {});
@@ -3047,7 +3069,9 @@ async function preloadInitialData() {
             .limitToLast(100)
             .once("value")
             .then((mSnap) => {
-              state.preloadedChats[gid] = mSnap.val() || {};
+              const val = mSnap.val() || {};
+              state.preloadedChats[gid] = val;
+              seedKnownRoomMessages(gid, val);
               markRoomDelivered(gid);
             })
             .catch(() => {})
@@ -3225,26 +3249,42 @@ function updateNotifyButton() {
         : "Desteklenmiyor";
     }
     notifyBtn.style.borderColor = "";
+    if (homeNotifyBanner) homeNotifyBanner.classList.add("hidden");
     return;
   }
   if (Notification.permission === "granted") {
     if (notifyStatusLabel) notifyStatusLabel.textContent = "Açık";
     notifyBtn.style.borderColor = "rgba(34, 197, 94, 0.5)";
+    if (homeNotifyBanner) homeNotifyBanner.classList.add("hidden");
   } else if (Notification.permission === "denied") {
     if (notifyStatusLabel) notifyStatusLabel.textContent = "Engelli (Ayarlardan aç)";
     notifyBtn.style.borderColor = "";
+    if (homeNotifyBanner) {
+      if (homeNotifyBannerText) {
+        homeNotifyBannerText.textContent = isIosDevice()
+          ? "Bildirim izni engelli: iPhone Ayarlar > Bildirimler > Agartha yolundan açabilirsin."
+          : "Bildirim izni engelli: Tarayıcı / Telefon Ayarlarından bu site için Bildirimleri Aç yapmalısın.";
+      }
+      homeNotifyBanner.classList.remove("hidden");
+    }
   } else {
     if (notifyStatusLabel) notifyStatusLabel.textContent = "Kapalı (Açmak için dokun)";
     notifyBtn.style.borderColor = "";
+    if (homeNotifyBanner) {
+      if (homeNotifyBannerText) {
+        homeNotifyBannerText.textContent = "Yeni mesaj geldiğinde telefonuna bildirim düşmesi için dokunup izin ver.";
+      }
+      homeNotifyBanner.classList.remove("hidden");
+    }
   }
 }
 
-notifyBtn.addEventListener("click", async () => {
+async function requestSystemNotificationsPermission() {
   if (!("Notification" in window)) {
     if (isIosDevice() && !isStandalonePwa()) {
       alert("iPhone'da bildirim alabilmek için Safari alt menüsünden Paylaş > Ana Ekrana Ekle yapıp uygulamayı ana ekrandaki ikondan açmalısın (iOS 16.4+).");
     } else {
-      alert("Bu tarayıcı bildirimleri desteklemiyor.");
+      alert("Bu tarayıcı sistem bildirimlerini desteklemiyor.");
     }
     return;
   }
@@ -3252,14 +3292,31 @@ notifyBtn.addEventListener("click", async () => {
     const perm = await Notification.requestPermission();
     updateNotifyButton();
     if (perm === "granted") {
-      await showIncomingNotification("Agartha", "Bildirimler açıldı! Yeni mesaj geldiğinde haber vereceğiz.", "test_" + Date.now());
+      await showIncomingNotification(
+        "Agartha",
+        "Bildirimler açıldı! Yeni mesaj geldiğinde haber vereceğiz.",
+        "test_" + Date.now()
+      );
     } else if (perm === "denied") {
-      alert("Bildirim izni reddedildi. iPhone Ayarlar > Bildirimler > Agartha üzerinden açabilirsin.");
+      alert(
+        isIosDevice()
+          ? "Bildirim izni reddedildi. iPhone Ayarlar > Bildirimler > Agartha üzerinden açabilirsin."
+          : "Bildirim izni engelli. Android Chrome/uygulama Site Ayarları > Bildirimler kısmından izin ver."
+      );
     }
   } catch {
-    alert("Bildirim izni alınamadı. iPhone'da uygulamayı Ana Ekrana Ekle ile açtığından emin ol.");
+    alert(
+      isIosDevice()
+        ? "Bildirim izni alınamadı. iPhone'da uygulamayı Ana Ekrana Ekle ile açtığından emin ol."
+        : "Bildirim izni alınamadı. Tarayıcı veya cihaz bildirim ayarlarını kontrol et."
+    );
   }
-});
+}
+
+notifyBtn.addEventListener("click", requestSystemNotificationsPermission);
+if (homeNotifyBanner) {
+  homeNotifyBanner.addEventListener("click", requestSystemNotificationsPermission);
+}
 
 let inappToastTimer = null;
 let inappToastClickHandler = null;
@@ -3357,16 +3414,34 @@ async function showIncomingNotification(title, body, uniqueKey, roomId = null, n
   const iconUrl = new URL("./icon-192.png", location.href).href;
   try {
     if ("serviceWorker" in navigator) {
-      const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.ready);
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg || !reg.active) {
+        reg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((r) => setTimeout(() => r(null), 2500))
+        ]);
+      }
       if (reg && typeof reg.showNotification === "function") {
-        await reg.showNotification(title, {
-          body,
-          icon: iconUrl,
-          badge: iconUrl,
-          tag: uniqueKey || "agartha-msg",
-          renotify: true
-        });
-        return;
+        try {
+          await reg.showNotification(title, {
+            body,
+            icon: iconUrl,
+            badge: iconUrl,
+            tag: uniqueKey || "agartha-msg",
+            renotify: true,
+            vibrate: [140, 60, 140],
+            data: navMeta || {}
+          });
+          return;
+        } catch {
+          await reg.showNotification(title, {
+            body,
+            icon: iconUrl,
+            tag: uniqueKey || "agartha-msg",
+            data: navMeta || {}
+          });
+          return;
+        }
       }
     }
   } catch {
@@ -3376,7 +3451,7 @@ async function showIncomingNotification(title, body, uniqueKey, roomId = null, n
   try {
     new Notification(title, { body, icon: iconUrl });
   } catch {
-    // iOS Safari PWA'da doğrudan new Notification desteklenmeyebilir
+    // Android Chrome ve iOS PWA'da ServiceWorkerRegistration.showNotification gerekir
   }
 }
 
@@ -3663,22 +3738,16 @@ function listenFriendRequests() {
 
     friendRequestsSection.classList.remove("hidden");
     entries.forEach(([reqKey, r]) => {
-      if ((r.createdAt || 0) > state.startedAt && !state.notifiedMsgKeys.has("fr_" + reqKey)) {
-        state.notifiedMsgKeys.add("fr_" + reqKey);
+      if ((r.createdAt || 0) > state.startedAt - 60000 && !state.notifiedMsgKeys.has("fr_" + reqKey)) {
         const sender = state.usersCache[r.fromId];
         const disp = sender ? getDisplayName(sender) : (r.fromName || "Kullanıcı");
-        playMessageSound("receive");
-        triggerHaptic([100, 50, 100]);
-        showInAppToast({
-          title: disp,
-          body: "Sana arkadaşlık isteği gönderdi",
-          avatar: sender && sender.avatarData ? sender.avatarData : "",
-          onClick: () => {
-            document.querySelectorAll(".modal:not(.hidden)").forEach((m) => m.classList.add("hidden"));
-            if (chatView && chatView.classList.contains("active")) closeActiveChatWithAnimation();
-            selectBottomTab(0);
-          }
-        });
+        showIncomingNotification(
+          disp,
+          "Sana arkadaşlık isteği gönderdi",
+          "fr_" + reqKey,
+          null,
+          { avatar: sender && sender.avatarData ? sender.avatarData : "" }
+        );
       }
     });
     friendRequestsList.innerHTML = entries
@@ -3849,6 +3918,43 @@ function renderContactsList() {
   });
 }
 
+function seedKnownRoomMessages(roomId, dataObj) {
+  if (!roomId) return;
+  state.seededNotifRooms.add(roomId);
+  if (dataObj && typeof dataObj === "object") {
+    Object.keys(dataObj).forEach((k) => state.knownMsgKeys.add(k));
+  }
+}
+
+function attachRoomMessageNotifListener(roomId, onNewMsg) {
+  if (!state.db || !roomId || typeof onNewMsg !== "function") return null;
+  const ref = state.db.ref(`chats/${roomId}/messages`).limitToLast(10);
+  const attach = () => {
+    ref.on("child_added", async (msgSnap) => {
+      const msg = msgSnap.val();
+      const msgKey = msgSnap.key;
+      if (!msg || !msgKey) return;
+      if (state.knownMsgKeys.has(msgKey)) return;
+      state.knownMsgKeys.add(msgKey);
+      if ((msg.timestamp || 0) <= state.startedAt - 60000) return;
+      if (state.user && msg.senderId === state.user.id) return;
+      await onNewMsg(msgKey, msg);
+    });
+  };
+  if (state.seededNotifRooms.has(roomId)) {
+    attach();
+  } else {
+    state.seededNotifRooms.add(roomId);
+    ref.once("value").then((snap) => {
+      seedKnownRoomMessages(roomId, snap.val() || {});
+      attach();
+    }).catch(() => {
+      attach();
+    });
+  }
+  return ref;
+}
+
 // Kişiler Listesi
 function listenUsers() {
   state.db.ref("users").on("value", (snap) => {
@@ -3914,26 +4020,22 @@ function listenUsers() {
     others.forEach(([otherId, u]) => {
       const dmId = getDmRoomId(state.user.id, otherId);
       if (state.dmListeners[dmId]) return;
-      const ref = state.db.ref(`chats/${dmId}/messages`).limitToLast(1);
-      state.dmListeners[dmId] = ref;
-      ref.on("child_added", async (msgSnap) => {
-        const msg = msgSnap.val();
-        if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
-        if (msg.senderId === state.user.id) return;
+      const ref = attachRoomMessageNotifListener(dmId, async (msgKey, msg) => {
         markRoomDelivered(dmId, msg.timestamp);
         const isViewingThis = state.activeRoom && state.activeRoom.id === dmId;
         const isVisibleViewing = isViewingThis && document.visibilityState === "visible";
         if (!isVisibleViewing) {
           state.unreadRooms.add(dmId);
           renderContactsList();
-    refreshAiRoomSelect();
+          refreshAiRoomSelect();
           let decodedText = msg.text || "";
           if (msg.e2ee) {
-            const dec = await decryptMessageRecord(msgSnap.key, msg, otherId);
+            const dec = await decryptMessageRecord(msgKey, msg, otherId);
             decodedText = dec.text || "";
           }
+          const liveUser = state.usersCache[otherId] || u;
           showIncomingNotification(
-            `${msg.senderName || u.name} (Özel)`,
+            `${msg.senderName || liveUser.name} (Özel)`,
             msg.viewOnce
               ? "1 kezlik fotoğraf gönderdi"
               : decodedText ||
@@ -3950,18 +4052,38 @@ function listenUsers() {
                     : msg.callLog
                     ? "Sesli arama başlattı"
                     : "Şifreli mesaj"),
-            msgSnap.key,
+            msgKey,
             dmId,
-            { roomId: dmId, title: getDisplayName(u), isGroup: false, otherId, avatar: u.avatarData || "" }
+            { roomId: dmId, title: getDisplayName(liveUser), isGroup: false, otherId, avatar: liveUser.avatarData || "" }
           );
         }
       });
+      if (ref) state.dmListeners[dmId] = ref;
     });
   });
 }
 
+function formatGroupMsgPreview(msg, decodedText) {
+  return (
+    (msg.viewOnce ? "1 kezlik fotoğraf" : "") ||
+    decodedText ||
+    (msg.imageUrl || msg.imageData
+      ? "Fotoğraf"
+      : msg.videoDriveFileId || msg.videoUrl || msg.videoData
+      ? "Video"
+      : msg.audioUrl || msg.audioData
+      ? "Sesli mesaj"
+      : msg.location
+      ? msg.location.live
+        ? "Canlı Konum"
+        : "Konum"
+      : msg.e2ee
+      ? "Şifreli mesaj"
+      : "")
+  );
+}
+
 function listenMainGroupPreview() {
-  let lastSeenGroupKey = null;
   state.db
     .ref("chats/main_group/messages")
     .limitToLast(1)
@@ -3978,46 +4100,36 @@ function listenMainGroupPreview() {
         const dec = await decryptMessageRecord(key, msg, null);
         decodedText = dec.text || "";
       }
-      const previewText =
-        (msg.viewOnce ? "1 kezlik fotoğraf" : "") ||
-        decodedText ||
-        (msg.imageUrl || msg.imageData
-          ? "Fotoğraf"
-          : msg.videoDriveFileId || msg.videoUrl || msg.videoData
-          ? "Video"
-          : msg.audioUrl || msg.audioData
-          ? "Sesli mesaj"
-          : msg.location
-          ? msg.location.live
-            ? "Canlı Konum"
-            : "Konum"
-          : msg.e2ee
-          ? "Şifreli mesaj"
-          : "");
+      const previewText = formatGroupMsgPreview(msg, decodedText);
       mainGroupPreview.textContent = `${msg.senderName}: ${previewText}`;
       mainGroupTime.textContent = formatTime(msg.timestamp);
+    });
 
-      const isNewGroupMsg = key !== lastSeenGroupKey && !state.notifiedMsgKeys.has(key);
-      lastSeenGroupKey = key;
-
-      if (isNewGroupMsg && (msg.timestamp || 0) > state.startedAt && msg.senderId !== state.user.id) {
-        markRoomDelivered("main_group", msg.timestamp);
-        const isViewingGroup = state.activeRoom && state.activeRoom.id === "main_group";
-        const isVisibleViewing = isViewingGroup && document.visibilityState === "visible";
-        if (!isVisibleViewing) {
-          mainGroupBadge.classList.remove("hidden");
-          const mgName = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
-          const mgAv = (state.mainGroupInfo && state.mainGroupInfo.avatarData) || "";
-          showIncomingNotification(
-            mgName,
-            `${msg.senderName}: ${previewText}`,
-            key,
-            "main_group",
-            { roomId: "main_group", title: mgName, isGroup: true, otherId: null, avatar: mgAv }
-          );
+  if (!state.mainGroupNotifRef) {
+    state.mainGroupNotifRef = attachRoomMessageNotifListener("main_group", async (key, msg) => {
+      markRoomDelivered("main_group", msg.timestamp);
+      const isViewingGroup = state.activeRoom && state.activeRoom.id === "main_group";
+      const isVisibleViewing = isViewingGroup && document.visibilityState === "visible";
+      if (!isVisibleViewing) {
+        mainGroupBadge.classList.remove("hidden");
+        let decodedText = msg.text || "";
+        if (msg.e2ee) {
+          const dec = await decryptMessageRecord(key, msg, null);
+          decodedText = dec.text || "";
         }
+        const previewText = formatGroupMsgPreview(msg, decodedText);
+        const mgName = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
+        const mgAv = (state.mainGroupInfo && state.mainGroupInfo.avatarData) || "";
+        showIncomingNotification(
+          mgName,
+          `${msg.senderName}: ${previewText}`,
+          key,
+          "main_group",
+          { roomId: "main_group", title: mgName, isGroup: true, otherId: null, avatar: mgAv }
+        );
       }
     });
+  }
 }
 
 openMainGroupBtn.addEventListener("click", () => {
@@ -4241,12 +4353,7 @@ function listenCustomGroups() {
     Object.entries(myGroups).forEach(([gid, g]) => {
       listenCustomGroupKeys(gid, g.members);
       if (!state.customGroupListeners[gid]) {
-        const ref = state.db.ref(`chats/${gid}/messages`).limitToLast(1);
-        state.customGroupListeners[gid] = ref;
-        ref.on("child_added", async (msgSnap) => {
-          const msg = msgSnap.val();
-          if (!msg || (msg.timestamp || 0) <= state.startedAt) return;
-          if (msg.senderId === state.user.id) return;
+        const ref = attachRoomMessageNotifListener(gid, async (msgKey, msg) => {
           markRoomDelivered(gid, msg.timestamp);
           const isViewingThis = state.activeRoom && state.activeRoom.id === gid;
           const isVisibleViewing = isViewingThis && document.visibilityState === "visible";
@@ -4256,7 +4363,7 @@ function listenCustomGroups() {
             syncAppBadge();
             let decodedText = msg.text || "";
             if (msg.e2ee) {
-              const dec = await decryptMessageRecord(msgSnap.key, msg, null, gid);
+              const dec = await decryptMessageRecord(msgKey, msg, null, gid);
               decodedText = dec.text || "";
             }
             const curGroupObj = state.customGroups[gid] || {};
@@ -4267,12 +4374,13 @@ function listenCustomGroups() {
             showIncomingNotification(
               curGroupName,
               `${msg.senderName || "?"}: ${preview}`,
-              msgSnap.key,
+              msgKey,
               gid,
               { roomId: gid, title: curGroupName, isGroup: true, otherId: null, avatar: curGroupObj.avatarData || "" }
             );
           }
         });
+        if (ref) state.customGroupListeners[gid] = ref;
       }
     });
 
@@ -5161,16 +5269,27 @@ if (cancelReplyBtn) {
   });
 }
 
+function resumeRealtimeConnection() {
+  if (state.db) {
+    try { state.db.goOnline(); } catch {}
+  }
+  updateNotifyButton();
+  if (state.activeRoom && state.db && state.user) {
+    const now = Date.now();
+    state.roomReadBy[state.user.id] = now;
+    state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
+  }
+}
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     scheduleViewportReset();
-    if (state.activeRoom && state.db && state.user) {
-      const now = Date.now();
-      state.roomReadBy[state.user.id] = now;
-      state.db.ref(`chats/${state.activeRoom.id}/readBy/${state.user.id}`).set(now).catch(() => {});
-    }
+    resumeRealtimeConnection();
   }
 });
+
+window.addEventListener("focus", resumeRealtimeConnection);
+window.addEventListener("online", resumeRealtimeConnection);
 
 function focusSearchMatch(index) {
   state.chatSearchMatches.forEach((row) => row.classList.remove("search-active-msg"));
@@ -8995,9 +9114,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.19)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.20)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.20",
+    title: "Android & Masaüstü Bildirim Sistemi Düzeltmesi",
+    desc: "Service Worker aktif değilken Android Chrome/PWA'da sistem bildirimlerinin sessizce düşmesine yol açan hata, saat farkından mesaj atlanması, limitToLast(1) kayıpları ve uyku sonrası bağlantı kopmaları düzeltildi; ana ekrana tek dokunuşla bildirim açma kartı ve bildirime dokununca doğrudan sohbete gitme eklendi."
+  },
   {
     v: "V2.19",
     title: "Mesaj Uzunluğuna Göre Dinamik Baloncuk Boyutu",
