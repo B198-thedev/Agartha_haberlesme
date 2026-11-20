@@ -3485,9 +3485,13 @@ function renderCustomGroupsList() {
     });
 
   if (entries.length === 0) {
-    customGroupsList.innerHTML = `<div class="empty-hint">Henüz özel grubun yok. "+ Grup Kur" ile arkadaş grubu oluşturabilirsin.</div>`;
+    if (customGroupsSectionLabel) customGroupsSectionLabel.classList.add("hidden");
+    customGroupsList.classList.add("hidden");
+    customGroupsList.innerHTML = "";
     return;
   }
+  if (customGroupsSectionLabel) customGroupsSectionLabel.classList.remove("hidden");
+  customGroupsList.classList.remove("hidden");
 
   customGroupsList.innerHTML = entries
     .map(([gid, g]) => {
@@ -3613,6 +3617,7 @@ function listenCustomGroups() {
 if (openCreateGroupBtn && createGroupModal) {
   openCreateGroupBtn.addEventListener("click", () => {
     if (!state.user) return;
+    if (settingsModal) settingsModal.classList.add("hidden");
     if (createGroupError) createGroupError.classList.add("hidden");
     if (createGroupNameInput) createGroupNameInput.value = "";
     if (createGroupDescInput) createGroupDescInput.value = "";
@@ -8029,9 +8034,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.06)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.07)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.07",
+    title: "Genel Kategorileştirme, İsim Sadeleştirme & Temiz Ana Ekran",
+    desc: "Tüm menüler net kategorilere ayrıldı (Ayarlar: Hesap & Görünüm, Sohbet/Gruplar & Gizlilik, Sistem & Yönetim; Akıllı Önerici: Analiz, Öneriler, Tercihlerim; Yönetici Paneli: Üyeler & Davetler, Servis Bağlantıları). Tekrar eden başlıklar sadeleştirildi ve '+ Grup Kur' ana ekrandan kaldırılıp Ayarlar altına taşındı."
+  },
   {
     v: "V2.06",
     title: "AI Bağlantı İyileştirmeleri & Tek Tıkla Başlatma",

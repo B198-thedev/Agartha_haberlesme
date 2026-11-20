@@ -88,7 +88,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (V2.06)
+          Duyurular &amp; Sürüm Geçmişi (V2.07)
         </button>
       </div>
     </section>
@@ -146,14 +146,14 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">V2.06</span>
+                <span id="home-announcement-version" class="exp-badge">V2.07</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">V2.06: AI zaman aşımı, canlı mekan eşleşmesi, otomatik temizlik ve tek tıkla Ollama başlatma eklendi.</div>
+              <div id="home-announcement-summary" class="chat-preview">V2.07: Tüm uygulama kategorize edildi, tekrar eden isimler sadeleştirildi ve grup kurma Ayarlar altına taşındı.</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
 
-          <div id="main-group-section-label" class="section-label">Ortak Alan</div>
+          <div id="main-group-section-label" class="section-label">Genel Sohbet</div>
           <button id="open-main-group-btn" class="chat-item group-card">
             <div id="main-group-avatar" class="avatar group-avatar">#</div>
             <div class="chat-item-body">
@@ -165,14 +165,11 @@
             </div>
           </button>
 
-          <div id="custom-groups-section-label" class="section-label section-row-header">
-            <span>Özel Gruplarım</span>
-            <button id="open-create-group-btn" type="button" class="icon-btn mini-pill-btn">+ Grup Kur</button>
-          </div>
-          <div id="custom-groups-list" class="list-stack"></div>
+          <div id="custom-groups-section-label" class="section-label hidden">Grup Sohbetleri</div>
+          <div id="custom-groups-list" class="list-stack hidden"></div>
 
           <div class="section-label section-row-header">
-            <span>Arkadaşlarım (Özel Sohbet)</span>
+            <span>Kişiler</span>
             <button id="toggle-add-friend-btn" type="button" class="icon-btn mini-pill-btn">+ Arkadaş Ekle</button>
           </div>
 
@@ -203,8 +200,8 @@
         <!-- SEKME 2: ZİYARET EDİLEN MEKANLAR -->
         <div id="tab-places" class="tab-pane" role="tabpanel" aria-labelledby="nav-places" tabindex="0">
           <div class="card">
-            <h3>Mekan / Check-in Ekle</h3>
-            <p class="muted">Gittiğiniz yerleri kaydedin; bilgisayarınızdaki AI analizde bunları kullanır.</p>
+            <h3>Yeni Yer Ekle</h3>
+            <p class="muted">Gittiğiniz yerleri puanlayıp paylaşın; akıllı önerici buradan zevkinizi öğrenir.</p>
             <form id="place-form" class="stack-form">
               <input id="place-name" type="text" placeholder="Mekan adı (Örn. Walter's Coffee)" maxlength="60" required />
               <input id="place-area" type="text" placeholder="Semt / Şehir (Örn. Moda, Kadıköy)" maxlength="50" required />
@@ -224,40 +221,40 @@
                 <option value="1">1 Yıldız (Tavsiye Etmem)</option>
               </select>
               <input id="place-note" type="text" placeholder="Kısa not (Örn. Sessiz, kahvesi güzel)" maxlength="100" />
-              <button type="submit" class="btn-primary">Mekanı Kaydet</button>
+              <button type="submit" class="btn-primary">Listeye Kaydet</button>
             </form>
           </div>
 
-          <div class="section-label">Ziyaret Edilen Yerler</div>
+          <div class="section-label">Gidilen Mekanlar</div>
           <div id="places-list" class="list-stack">
             <div class="empty-hint">Henüz mekan eklenmemiş.</div>
           </div>
         </div>
 
-        <!-- SEKME 3: AI MEKAN ÖNERİLERİ -->
+        <!-- SEKME 3: AKILLI ÖNERİCİ -->
         <div id="tab-ai" class="tab-pane" role="tabpanel" aria-labelledby="nav-ai" tabindex="0">
           <div class="card ai-top-card">
             <div class="section-row-header">
-              <h3 style="margin:0;">Yapay Zeka (AI V2)</h3>
+              <h3 style="margin:0;">Akıllı Önerici (V2)</h3>
               <span id="ai-bridge-status" class="ai-status-pill">Köprü Kontrol Ediliyor</span>
             </div>
-            <div id="ai-subnav" class="ai-subnav" role="tablist" aria-label="AI Bölümleri">
-              <button type="button" class="ai-subnav-btn active" data-ai-page="analyze" role="tab" aria-selected="true">Analiz Et</button>
+            <div id="ai-subnav" class="ai-subnav" role="tablist" aria-label="Akıllı Önerici Bölümleri">
+              <button type="button" class="ai-subnav-btn active" data-ai-page="analyze" role="tab" aria-selected="true">Analiz</button>
               <button type="button" class="ai-subnav-btn" data-ai-page="results" role="tab" aria-selected="false">
                 Öneriler <span id="ai-drafts-badge" class="ai-subnav-count hidden">0</span>
               </button>
               <button type="button" class="ai-subnav-btn" data-ai-page="training" role="tab" aria-selected="false">
-                Eğitim Verisi <span id="ai-training-count" class="ai-subnav-count">0</span>
+                Tercihlerim <span id="ai-training-count" class="ai-subnav-count">0</span>
               </button>
             </div>
           </div>
 
-          <!-- AI ALT SAYFA 1: ANALİZ ET -->
+          <!-- AI ALT SAYFA 1: ANALİZ -->
           <div id="ai-page-analyze" class="ai-subpage active">
             <div class="card ai-banner">
-              <h3 style="margin-bottom:4px;">Yeni Sohbet &amp; Mekan Analizi</h3>
+              <h3 style="margin-bottom:4px;">Sohbet &amp; Zevk Analizi</h3>
               <p class="muted">
-                Seçtiğin sohbetin gizli (E2EE çözülmüş) özeti, eğitim verin ve Mekanlar sekmesi bilgisayarındaki yerel Ollama modeliyle analiz edilir.
+                Seçtiğin sohbetin gizli (E2EE çözülmüş) özeti, tercih hafızan ve kayıtlı yerler bilgisayardaki Ollama ile analiz edilir.
               </p>
               <form id="ai-analyze-form" class="stack-form" style="margin-top:12px;">
                 <select id="ai-room-select" aria-label="Analiz edilecek sohbet"></select>
@@ -272,25 +269,25 @@
             </div>
           </div>
 
-          <!-- AI ALT SAYFA 2: ÖNERİLER (TASLAKLAR + ORTAK) -->
+          <!-- AI ALT SAYFA 2: ÖNERİLER (KİŞİSEL + GRUP) -->
           <div id="ai-page-results" class="ai-subpage">
             <div id="ai-drafts-section" class="hidden">
-              <div class="section-label">Sana Özel AI Önerilerin (Taslaklar)</div>
+              <div class="section-label">Sana Özel Öneriler</div>
               <div id="ai-drafts-list" class="list-stack"></div>
             </div>
 
-            <div class="section-label">Ortak AI Önerileri</div>
+            <div class="section-label">Grup Önerileri</div>
             <div id="ai-list" class="list-stack">
-              <div class="empty-hint">Henüz ortak AI önerisi yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>
+              <div class="empty-hint">Henüz paylaşılan öneri yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>
             </div>
           </div>
 
-          <!-- AI ALT SAYFA 3: EĞİTİM VERİSİ -->
+          <!-- AI ALT SAYFA 3: TERCİHLERİM -->
           <div id="ai-page-training" class="ai-subpage">
             <div class="card">
-              <h3 style="margin-bottom:4px;">Önceki Gittiğin Yerleri Öğret</h3>
+              <h3 style="margin-bottom:4px;">Gidilen Yer Hafızası</h3>
               <p class="muted">
-                Daha önce gidip beğendiğin veya sevmediğin mekanları ekle. AI buradan zevkini öğrenip aynı yerleri tekrarlamak yerine tarzına uyan yeni yerler önerir.
+                Daha önce gidip beğendiğin veya sevmediğin yerleri ekle; önerici buradan zevkini öğrenip sana uyan yeni yerler seçer.
               </p>
               <form id="ai-training-add-form" class="stack-form" style="margin-top:10px;">
                 <input id="ai-train-name" type="text" maxlength="80" placeholder="Mekan adı (Örn. Kronotrop, Moda Sahili)" required />
@@ -303,15 +300,15 @@
                   <option value="1">1/5 — Hiç Beğenmedik (Bu tarzı önerme)</option>
                 </select>
                 <input id="ai-train-note" type="text" maxlength="140" placeholder="Neden sevdik / sevmedik? (Örn. Sessiz, sohbetlik, kahvesi iyi)" />
-                <button type="submit" class="btn-primary">Eğitim Verisine Ekle</button>
+                <button type="submit" class="btn-primary">Hafızaya Ekle</button>
               </form>
             </div>
 
-            <div class="section-label">Kayıtlı Eğitim Mekanları</div>
+            <div class="section-label">Kayıtlı Tercih Mekanları</div>
             <div id="ai-training-list" class="list-stack"></div>
 
             <div class="card" style="margin-top:12px;">
-              <h3 style="margin-bottom:4px;">Toplu Not / Serbest Liste</h3>
+              <h3 style="margin-bottom:4px;">Serbest Zevk Notları</h3>
               <p class="muted">Aklındaki mekanları veya genel tarz tercihlerini tek seferde alt alta yazabilirsin.</p>
               <textarea id="ai-train-bulk-input" class="ai-bulk-textarea" rows="4" maxlength="2000" style="margin-top:8px;" placeholder="Örn:&#10;- Bebek Kahve: Manzara harika ama hafta sonu çok kalabalık&#10;- Akşamları gürültülü bar yerine sakin mekan seviyoruz"></textarea>
               <button id="save-ai-train-bulk-btn" type="button" class="btn-primary" style="margin-top:8px;">Toplu Notu Kaydet</button>
@@ -475,17 +472,21 @@
           <div class="section-label">Hesap &amp; Görünüm</div>
           <div class="settings-list">
             <button id="open-profile-btn" type="button" class="settings-item">
-              <span>Profil</span>
+              <span>Profilim</span>
               <span class="user-sub">Fotoğraf, takma ad, durum</span>
             </button>
             <button id="open-customize-btn" type="button" class="settings-item">
-              <span>Özelleştirme</span>
-              <span class="user-sub">Tema, baloncuk rengi, arka plan</span>
+              <span>Tema &amp; Tasarım</span>
+              <span class="user-sub">Renkler, baloncuk, duvar kağıdı</span>
             </button>
           </div>
 
-          <div class="section-label">Gizlilik</div>
+          <div class="section-label">Sohbet, Gruplar &amp; Gizlilik</div>
           <div class="settings-list">
+            <button id="open-create-group-btn" type="button" class="settings-item">
+              <span>Yeni Özel Grup Kur</span>
+              <span class="user-sub">Arkadaşlarından yeni grup oluştur</span>
+            </button>
             <label class="settings-item" style="cursor:pointer;">
               <div>
                 <div>Okundu Bilgisini Gizle</div>
@@ -493,10 +494,6 @@
               </div>
               <input id="hide-read-toggle" type="checkbox" class="toggle-switch" />
             </label>
-          </div>
-
-          <div class="section-label">Uygulama &amp; Yönetim</div>
-          <div class="settings-list">
             <button id="notify-btn" type="button" class="settings-item">
               <span>Bildirimler</span>
               <span id="notify-status-label" class="user-sub">Kapalı</span>
@@ -504,7 +501,7 @@
             <div class="settings-item">
               <div>
                 <div>Mesaj Sesleri</div>
-                <div class="user-sub">Gelen ve giden mesaj efektleri</div>
+                <div class="user-sub">Gelen ve giden ses efektleri</div>
               </div>
               <select id="sound-style-select" class="settings-select" aria-label="Mesaj Sesi Seç">
                 <option value="chime">Klasik Çan</option>
@@ -514,17 +511,21 @@
                 <option value="off">Sessiz</option>
               </select>
             </div>
+          </div>
+
+          <div class="section-label">Sistem &amp; Yönetim</div>
+          <div class="settings-list">
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – V2.06 tüm güncellemeler</span>
+              <span class="user-sub">v1 – V2.07 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
-              <span>Yetkiler</span>
-              <span class="user-sub">Davet kodları, üyeler, Drive</span>
+              <span>Yönetici Paneli</span>
+              <span class="user-sub">Üyeler, davet kodları, Drive, AI</span>
             </button>
             <button id="logout-btn" type="button" class="settings-item danger">
-              <span>Çıkış Yap</span>
-              <span class="user-sub">Oturumu kapat</span>
+              <span>Oturumu Kapat</span>
+              <span class="user-sub">Hesaptan çıkış yap</span>
             </button>
           </div>
         </div>
@@ -537,7 +538,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">V2.06</span>
+            <span id="announcements-modal-ver" class="exp-badge">V2.07</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -556,7 +557,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.06)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.07)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>
@@ -567,10 +568,11 @@
     <div id="customize-modal" class="modal hidden">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Özelleştirme</h2>
+          <h2>Tema &amp; Tasarım</h2>
           <button id="close-customize-btn" class="icon-btn">Kapat</button>
         </div>
         <div class="modal-body">
+          <div class="section-label">Renkler &amp; Tema</div>
           <div class="card">
             <h3>Uygulama Renk Teması</h3>
             <p class="muted">Tüm uygulamanın görünümünü değiştir.</p>
@@ -584,7 +586,7 @@
           </div>
 
           <div class="card">
-            <h3>Sohbet Baloncuğu Rengi (Custom)</h3>
+            <h3>Mesaj Baloncuğu Rengi</h3>
             <p class="muted">Renk paletinden seç veya özel hex kodu yaz; tüm sohbetlerde bu renkle görünürsün.</p>
             <div class="color-picker-row">
               <input id="profile-color-input" type="color" value="#1d4ed8" />
@@ -607,6 +609,7 @@
             </div>
           </div>
 
+          <div class="section-label">Duvar Kağıdı &amp; Tipografi</div>
           <div class="card">
             <h3>Sohbet Arka Planı &amp; Desenler</h3>
             <p class="muted">Varsayılan veya belirli bir sohbete özel arka plan, bulanıklık ve desen seç.</p>
@@ -682,8 +685,9 @@
             </div>
           </div>
 
+          <div class="section-label">Hareket &amp; Tepkiler</div>
           <div class="card">
-            <h3>Etkileşim, Animasyon &amp; Tepki Emojileri</h3>
+            <h3>Animasyon, Titreşim &amp; Tepki Paketi</h3>
             <div class="stack-form">
               <div class="pref-row">
                 <span>Animasyon Hızı</span>
@@ -896,13 +900,14 @@
     <div id="admin-modal" class="modal hidden">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Yetki &amp; Davet Yönetimi</h2>
+          <h2>Yönetici Paneli</h2>
           <button id="close-admin-btn" class="icon-btn">Kapat</button>
         </div>
 
         <div class="modal-body">
+          <div class="section-label">Üyeler &amp; Davet Kodları</div>
           <div class="card">
-            <h3>Yeni Erişim Kodu Oluştur</h3>
+            <h3>Yeni Davet Kodu Oluştur</h3>
             <form id="invite-form" class="stack-form">
               <div class="inline-form">
                 <input id="invite-label" type="text" placeholder="Kimin için? (Örn. Mehmet)" maxlength="30" required />
@@ -921,8 +926,9 @@
           <div class="section-label">Kayıtlı Kullanıcılar</div>
           <div id="admin-users-list" class="list-stack"></div>
 
-          <div class="section-label">5 TB Google Drive Medya Ayarı</div>
+          <div class="section-label">Servis &amp; Sunucu Bağlantıları</div>
           <div class="card">
+            <h3>Google Drive Medya Depolama</h3>
             <p class="muted">Apps Script linki ve gizli anahtar GitHub'da değil, burada saklanır.</p>
             <form id="drive-config-form" class="stack-form">
               <input id="drive-url-input" type="url" placeholder="Apps Script Web App URL (.../exec)" />
@@ -931,8 +937,8 @@
             </form>
           </div>
 
-          <div class="section-label">Sesli Arama TURN Sunucusu (Mobil Ağ)</div>
           <div class="card">
+            <h3>Sesli Arama TURN Sunucusu</h3>
             <p class="muted">4.5G/5G ve farklı Wi-Fi ağlarında sesli aramanın bağlanması için ücretsiz <strong>metered.ca</strong> (20 GB/ay) TURN API linkini buraya yapıştır.</p>
             <form id="turn-config-form" class="stack-form">
               <input id="turn-api-url-input" type="url" placeholder="https://uygulaman.metered.live/api/v1/turn/credentials?apiKey=..." />
@@ -940,8 +946,8 @@
             </form>
           </div>
 
-          <div class="section-label">Yerel AI (Ollama) Ayarı</div>
           <div class="card">
+            <h3>Yerel Ollama AI Bağlantısı</h3>
             <p class="muted">Bilgisayarında çalışan Ollama adresi ve modeli. Telefondan istek atıldığında PC Köprüsü bu modeli kullanır.</p>
             <form id="ai-config-form" class="stack-form">
               <input id="ai-ollama-url-input" type="url" placeholder="http://localhost:11434" />
