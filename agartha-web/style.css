@@ -2990,5 +2990,63 @@ html.anim-off *::after {
   resize: vertical;
 }
 
+.ai-top-card {
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.ai-subnav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border);
+}
+
+.ai-subnav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.ai-subnav-btn.active {
+  background: rgba(56, 189, 248, 0.22);
+  color: #38bdf8;
+}
+
+.ai-subnav-count {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text);
+}
+
+.ai-subnav-btn.active .ai-subnav-count {
+  background: rgba(56, 189, 248, 0.28);
+  color: #e0f2fe;
+}
+
+.ai-subpage {
+  display: none;
+}
+
+.ai-subpage.active {
+  display: block;
+}
+
 
 

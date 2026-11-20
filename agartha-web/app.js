@@ -484,6 +484,8 @@ const aiAnalyzeBtn = document.getElementById("ai-analyze-btn");
 const aiStatusMsg = document.getElementById("ai-status-msg");
 const aiDraftsSection = document.getElementById("ai-drafts-section");
 const aiDraftsList = document.getElementById("ai-drafts-list");
+const aiSubnav = document.getElementById("ai-subnav");
+const aiDraftsBadge = document.getElementById("ai-drafts-badge");
 const aiTrainingCount = document.getElementById("ai-training-count");
 const aiTrainingAddForm = document.getElementById("ai-training-add-form");
 const aiTrainName = document.getElementById("ai-train-name");
@@ -7425,6 +7427,28 @@ async function saveRecommendationAsPlace(rec) {
   alert(`"${rec.title || rec.name}" Mekanlar sekmesine kaydedildi!`);
 }
 
+function switchAiSubPage(pageKey) {
+  const pages = ["analyze", "results", "training"];
+  const target = pages.includes(pageKey) ? pageKey : "analyze";
+  if (aiSubnav) {
+    aiSubnav.querySelectorAll("[data-ai-page]").forEach((btn) => {
+      const isAct = btn.dataset.aiPage === target;
+      btn.classList.toggle("active", isAct);
+      btn.setAttribute("aria-selected", String(isAct));
+    });
+  }
+  pages.forEach((p) => {
+    const el = document.getElementById(`ai-page-${p}`);
+    if (el) el.classList.toggle("active", p === target);
+  });
+}
+
+if (aiSubnav) {
+  aiSubnav.querySelectorAll("[data-ai-page]").forEach((btn) => {
+    btn.addEventListener("click", () => switchAiSubPage(btn.dataset.aiPage));
+  });
+}
+
 function listenPersonalAiDrafts() {
   if (!state.db || !state.user || !aiDraftsList || !aiDraftsSection) return;
   state.db.ref(`aiDrafts/${state.user.id}`).limitToLast(30).on("value", (snap) => {
@@ -7432,6 +7456,11 @@ function listenPersonalAiDrafts() {
     const entries = Object.entries(data).sort(
       (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
     );
+
+    if (aiDraftsBadge) {
+      aiDraftsBadge.textContent = String(entries.length);
+      aiDraftsBadge.classList.toggle("hidden", entries.length === 0);
+    }
 
     if (entries.length === 0) {
       aiDraftsSection.classList.add("hidden");
@@ -7511,7 +7540,7 @@ function renderAiTrainingList() {
     (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
   );
   if (aiTrainingCount) {
-    aiTrainingCount.textContent = `${entries.length} yer`;
+    aiTrainingCount.textContent = String(entries.length);
   }
   if (!aiTrainingList) return;
   if (entries.length === 0) {
@@ -7683,6 +7712,7 @@ if (aiAnalyzeForm) {
         });
         showStatus(`Tamamlandı! ${savedCount} öneri taslaklarına eklendi (${direct.model}).`);
         if (aiPromptInput) aiPromptInput.value = "";
+        switchAiSubPage("results");
         return;
       }
 
@@ -7716,6 +7746,7 @@ if (aiAnalyzeForm) {
       }
       showStatus(`Tamamlandı! ${bridgeRes.count} öneri taslaklarına eklendi (${bridgeRes.model}).`);
       if (aiPromptInput) aiPromptInput.value = "";
+      switchAiSubPage("results");
     } catch (err) {
       const msg = err && err.message ? err.message : "AI analizi sırasında bir hata oluştu.";
       showStatus(msg.startsWith("[AG-AI-") ? msg : `[AG-AI-ERR-05] ${msg}`, true);

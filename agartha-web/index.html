@@ -236,41 +236,63 @@
 
         <!-- SEKME 3: AI MEKAN ÖNERİLERİ -->
         <div id="tab-ai" class="tab-pane" role="tabpanel" aria-labelledby="nav-ai" tabindex="0">
-          <div class="card ai-banner">
+          <div class="card ai-top-card">
             <div class="section-row-header">
-              <h3>Yapay Zeka Mekan Önerileri</h3>
+              <h3 style="margin:0;">Yapay Zeka (AI V2)</h3>
               <span id="ai-bridge-status" class="ai-status-pill">Köprü Kontrol Ediliyor</span>
             </div>
-            <p class="muted" style="margin-top:6px;">
-              Seçtiğin sohbetin gizli (E2EE çözülmüş) özeti ve Mekanlar sekmesini bilgisayarındaki yerel Ollama modeliyle analiz eder; öneriler önce sadece sana özel oluşur.
-            </p>
-            <form id="ai-analyze-form" class="stack-form" style="margin-top:10px;">
-              <select id="ai-room-select" aria-label="Analiz edilecek sohbet"></select>
-              <label class="member-check-row" style="padding:6px 10px;">
-                <input id="ai-include-places" type="checkbox" checked />
-                <span class="user-sub" style="color:var(--text);">Mekanlar sekmesini (puan, gidenler ve yorumları) analize kat</span>
-              </label>
-              <input id="ai-prompt-input" type="text" maxlength="160" placeholder="İstek veya semt notu (Örn. Kadıköy'de sakin kafe, akşam buluşması)" />
-              <button id="ai-analyze-btn" type="submit" class="btn-primary">Analiz Et &amp; Öner</button>
-              <div id="ai-status-msg" class="user-sub hidden"></div>
-            </form>
+            <div id="ai-subnav" class="ai-subnav" role="tablist" aria-label="AI Bölümleri">
+              <button type="button" class="ai-subnav-btn active" data-ai-page="analyze" role="tab" aria-selected="true">Analiz Et</button>
+              <button type="button" class="ai-subnav-btn" data-ai-page="results" role="tab" aria-selected="false">
+                Öneriler <span id="ai-drafts-badge" class="ai-subnav-count hidden">0</span>
+              </button>
+              <button type="button" class="ai-subnav-btn" data-ai-page="training" role="tab" aria-selected="false">
+                Eğitim Verisi <span id="ai-training-count" class="ai-subnav-count">0</span>
+              </button>
+            </div>
           </div>
 
-          <div id="ai-drafts-section" class="hidden">
-            <div class="section-label">Sana Özel AI Önerilerin (Taslaklar)</div>
-            <div id="ai-drafts-list" class="list-stack"></div>
-          </div>
-
-          <details id="ai-training-details" class="card ai-memory-card">
-            <summary class="ai-memory-summary">
-              <span>AI Eğitim Verisi (Önceki Gittiğin Yerler)</span>
-              <span id="ai-training-count" class="ai-status-pill">0 yer</span>
-            </summary>
-            <div class="ai-memory-body">
-              <p class="muted" style="margin-top:8px;">
-                Daha önce gittiğiniz ve sevdiğiniz/sevmediğiniz yerleri buraya ekle. AI bunlardan zevkini öğrenip aynı yerleri tekrarlamak yerine tarzına uyan yeni mekanlar önerir.
+          <!-- AI ALT SAYFA 1: ANALİZ ET -->
+          <div id="ai-page-analyze" class="ai-subpage active">
+            <div class="card ai-banner">
+              <h3 style="margin-bottom:4px;">Yeni Sohbet &amp; Mekan Analizi</h3>
+              <p class="muted">
+                Seçtiğin sohbetin gizli (E2EE çözülmüş) özeti, eğitim verin ve Mekanlar sekmesi bilgisayarındaki yerel Ollama modeliyle analiz edilir.
               </p>
-              <form id="ai-training-add-form" class="stack-form" style="margin-top:8px;">
+              <form id="ai-analyze-form" class="stack-form" style="margin-top:12px;">
+                <select id="ai-room-select" aria-label="Analiz edilecek sohbet"></select>
+                <label class="member-check-row" style="padding:8px 10px;">
+                  <input id="ai-include-places" type="checkbox" checked />
+                  <span class="user-sub" style="color:var(--text);">Mekanlar sekmesini (puan, gidenler ve yorumları) analize kat</span>
+                </label>
+                <input id="ai-prompt-input" type="text" maxlength="160" placeholder="İstek veya semt notu (Örn. Kadıköy'de sakin kafe, akşam buluşması)" />
+                <button id="ai-analyze-btn" type="submit" class="btn-primary">Analiz Et &amp; Öner</button>
+                <div id="ai-status-msg" class="user-sub hidden"></div>
+              </form>
+            </div>
+          </div>
+
+          <!-- AI ALT SAYFA 2: ÖNERİLER (TASLAKLAR + ORTAK) -->
+          <div id="ai-page-results" class="ai-subpage">
+            <div id="ai-drafts-section" class="hidden">
+              <div class="section-label">Sana Özel AI Önerilerin (Taslaklar)</div>
+              <div id="ai-drafts-list" class="list-stack"></div>
+            </div>
+
+            <div class="section-label">Ortak AI Önerileri</div>
+            <div id="ai-list" class="list-stack">
+              <div class="empty-hint">Henüz ortak AI önerisi yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>
+            </div>
+          </div>
+
+          <!-- AI ALT SAYFA 3: EĞİTİM VERİSİ -->
+          <div id="ai-page-training" class="ai-subpage">
+            <div class="card">
+              <h3 style="margin-bottom:4px;">Önceki Gittiğin Yerleri Öğret</h3>
+              <p class="muted">
+                Daha önce gidip beğendiğin veya sevmediğin mekanları ekle. AI buradan zevkini öğrenip aynı yerleri tekrarlamak yerine tarzına uyan yeni yerler önerir.
+              </p>
+              <form id="ai-training-add-form" class="stack-form" style="margin-top:10px;">
                 <input id="ai-train-name" type="text" maxlength="80" placeholder="Mekan adı (Örn. Kronotrop, Moda Sahili)" required />
                 <input id="ai-train-area" type="text" maxlength="60" placeholder="Semt / Şehir (Örn. Kadıköy, İstanbul)" required />
                 <select id="ai-train-score" aria-label="Deneyim Puanı">
@@ -283,18 +305,17 @@
                 <input id="ai-train-note" type="text" maxlength="140" placeholder="Neden sevdik / sevmedik? (Örn. Sessiz, sohbetlik, kahvesi iyi)" />
                 <button type="submit" class="btn-primary">Eğitim Verisine Ekle</button>
               </form>
-
-              <div id="ai-training-list" class="list-stack" style="margin-top:10px;"></div>
-
-              <div class="section-label" style="margin-top:12px;">Toplu Not / Serbest Liste (İsteğe Bağlı)</div>
-              <textarea id="ai-train-bulk-input" class="ai-bulk-textarea" rows="3" maxlength="2000" placeholder="Örn:&#10;- Bebek Kahve: Manzara harika ama hafta sonu çok kalabalık&#10;- Akşamları gürültülü bar yerine sakin mekan seviyoruz"></textarea>
-              <button id="save-ai-train-bulk-btn" type="button" class="icon-btn" style="margin-top:6px;width:100%;">Toplu Notu Kaydet</button>
             </div>
-          </details>
 
-          <div class="section-label">Ortak AI Önerileri</div>
-          <div id="ai-list" class="list-stack">
-            <div class="empty-hint">Henüz ortak AI önerisi yok. Kendi önerilerinden beğendiklerini buraya paylaşabilirsin.</div>
+            <div class="section-label">Kayıtlı Eğitim Mekanları</div>
+            <div id="ai-training-list" class="list-stack"></div>
+
+            <div class="card" style="margin-top:12px;">
+              <h3 style="margin-bottom:4px;">Toplu Not / Serbest Liste</h3>
+              <p class="muted">Aklındaki mekanları veya genel tarz tercihlerini tek seferde alt alta yazabilirsin.</p>
+              <textarea id="ai-train-bulk-input" class="ai-bulk-textarea" rows="4" maxlength="2000" style="margin-top:8px;" placeholder="Örn:&#10;- Bebek Kahve: Manzara harika ama hafta sonu çok kalabalık&#10;- Akşamları gürültülü bar yerine sakin mekan seviyoruz"></textarea>
+              <button id="save-ai-train-bulk-btn" type="button" class="btn-primary" style="margin-top:8px;">Toplu Notu Kaydet</button>
+            </div>
           </div>
         </div>
       </main>
