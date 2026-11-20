@@ -717,13 +717,18 @@ document.addEventListener("pointerdown", () => ensureAudioContext(), { once: tru
 
 // Klavye açıldığında mesaj kutusunun klavyenin altında kalmasını önle
 function syncVisualViewportHeight() {
-  if (window.visualViewport) {
-    document.documentElement.style.setProperty(
-      "--app-height",
-      window.visualViewport.height + "px"
-    );
-    window.scrollTo(0, 0);
+  if (!window.visualViewport) return;
+  const fullHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+  const vvHeight = window.visualViewport.height;
+  const isKeyboardOpen = fullHeight > 0 && vvHeight < fullHeight - 110;
+
+  document.documentElement.classList.toggle("keyboard-open", isKeyboardOpen);
+  if (isKeyboardOpen) {
+    document.documentElement.style.setProperty("--app-height", vvHeight + "px");
+  } else {
+    document.documentElement.style.removeProperty("--app-height");
   }
+  window.scrollTo(0, 0);
 }
 
 if (window.visualViewport) {
@@ -8005,13 +8010,38 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – AI V2)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v69)
 // =========================================================
 const APP_CHANGELOG = [
   {
+    v: "v69",
+    title: "iOS Tam Ekran Alt Bar Düzeltmesi",
+    desc: "iPhone PWA modunda klavye kapalıyken alt menü barının altında oluşan siyah boşluk düzeltildi; uygulama ekranın en alt kenarına tam oturuyor."
+  },
+  {
+    v: "v68",
+    title: "AI Önerileri 3'lü Sayfa Düzeni",
+    desc: "AI Önerileri sekmesi kalabalıktan kurtarılıp Analiz Et, Öneriler (taslaklar + ortak) ve Eğitim Verisi olmak üzere 3 temiz alt sayfaya bölündü."
+  },
+  {
+    v: "v67",
+    title: "AI Eğitim Verisi (Önceki Gidilen Yerler)",
+    desc: "Kullanıcıların bugüne kadar gittikleri yerleri puan (1-5) ve notlarla kalıcı olarak öğretebileceği kişisel AI Eğitim Verisi sayfası ile PC tarafı gecmis-mekanlar.txt desteği eklendi."
+  },
+  {
+    v: "v66",
+    title: "Canlı Mekan Doğrulama (OpenStreetMap) & Haritada Gör",
+    desc: "Yerel Ollama modeli analiz sırasında OpenStreetMap (Nominatim + Overpass) üzerinden hedef semtteki gerçek güncel mekanları çekip öneri üretir; öneri kartlarına 'Canlı Doğrulandı' rozeti ve 'Haritada Gör' butonu eklendi."
+  },
+  {
+    v: "v65",
+    title: "PC Kapalı / Oyun Modu AI Hata Kodları",
+    desc: "Bilgisayar kapalıyken veya oyun için köprü/Ollama durdurulduğunda bekletmeden AG-AI-OFFLINE-01, AG-AI-MODEL-02, AG-AI-TIMEOUT-03 ve AG-AI-EMPTY-04 durum bildirimleri eklendi."
+  },
+  {
     v: "AI V2",
     title: "Yapay Zeka Bağlanmaya Başlandı!",
-    desc: "AI Önerileri sekmesinin temelleri atıldı! Artık kendi yetkili sohbetlerinden birini ve Mekanlar sekmesindeki puan/yorumları seçerek bilgisayarındaki yerel Ollama modeliyle mekan & buluşma analizi yapabilirsin. Üretilen öneriler önce sadece sana özel Taslaklar bölümüne düşer; beğendiklerini tek tıkla Ortak AI Önerileri listesine, Mekanlar'a veya bir sohbete gönderebilirsin. Bilgisayar kapalıyken veya köprü durdurulduğunda anında AG-AI-OFFLINE-01 / AG-AI-MODEL-02 hata kodlarıyla bilgilendirir."
+    desc: "AI Önerileri sekmesinin temelleri atıldı! Artık kendi yetkili sohbetlerinden birini ve Mekanlar sekmesindeki puan/yorumları seçerek bilgisayarındaki yerel Ollama modeliyle mekan & buluşma analizi yapabilirsin. Üretilen öneriler önce sadece sana özel Taslaklar bölümüne düşer; beğendiklerini tek tıkla Ortak AI Önerileri listesine, Mekanlar'a veya bir sohbete gönderebilirsin."
   },
   {
     v: "v63",
