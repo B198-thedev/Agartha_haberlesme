@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.17";
+const CURRENT_APP_CACHE = "agartha-V2.18";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -522,11 +522,13 @@ const state = {
   incomingCallRef: null,
   e2eeKeyPair: null,
   e2eePubJwk: null,
+  e2eeDeviceId: "",
   e2eeGroupKeys: {},
   e2eeActiveGroupKeyId: "",
   mainGroupKeysSnap: {},
   customGroups: {},
   customGroupKeys: {},
+  customGroupKeysSnap: {},
   customGroupActiveKeyIds: {},
   customGroupListeners: {},
   customGroupKeyRefs: {},
@@ -1733,14 +1735,62 @@ async function unwrapPrivateJwkWithPassword(wrapped, password) {
   return JSON.parse(new TextDecoder().decode(plainBytes));
 }
 
+function getOrCreateE2eeDeviceId(uid) {
+  const key = "agartha_e2ee_device_v1_" + uid;
+  try {
+    let devId = localStorage.getItem(key);
+    if (!devId || !/^dev_[a-zA-Z0-9_-]+$/.test(devId)) {
+      devId = "dev_" + Math.random().toString(36).slice(2, 8) + "_" + Date.now().toString(36);
+      localStorage.setItem(key, devId);
+    }
+    return devId;
+  } catch {
+    return "dev_mem_" + Math.random().toString(36).slice(2, 10);
+  }
+}
+
+function getUserE2eeDevices(u) {
+  const map = {};
+  if (!u || typeof u !== "object") return map;
+  if (u.e2eeDevices && typeof u.e2eeDevices === "object") {
+    for (const [devId, info] of Object.entries(u.e2eeDevices)) {
+      if (info && info.pub && info.pub.x && info.pub.y) {
+        map[devId] = info.pub;
+      }
+    }
+  }
+  return map;
+}
+
+async function unwrapEcdhMessageKey(senderPub, wrapEntry) {
+  if (!senderPub || !wrapEntry || !wrapEntry.iv || !wrapEntry.ct) return null;
+  const shared = await deriveSharedAesKey(senderPub);
+  if (!shared) return null;
+  const rawBytes = await aesGcmDecryptBytes(shared, wrapEntry.iv, wrapEntry.ct);
+  return window.crypto.subtle.importKey(
+    "raw",
+    rawBytes,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+}
+
 async function ensureE2EEInitialized(loginSecret = "") {
   if (!state.user || !state.db || !window.crypto || !window.crypto.subtle) return;
   const storageKey = "agartha_e2ee_v1_" + state.user.id;
+  const deviceId = getOrCreateE2eeDeviceId(state.user.id);
+  state.e2eeDeviceId = deviceId;
+  state.decryptedCache = {};
+
   try {
     let savedPair = null;
     const rawLocal = localStorage.getItem(storageKey);
     if (rawLocal) {
-      savedPair = JSON.parse(rawLocal);
+      const parsed = JSON.parse(rawLocal);
+      if (parsed && parsed.pubJwk && parsed.privJwk) {
+        savedPair = parsed;
+      }
     }
 
     if (!savedPair && loginSecret) {
@@ -1767,15 +1817,6 @@ async function ensureE2EEInitialized(loginSecret = "") {
       const privJwk = await window.crypto.subtle.exportKey("jwk", kp.privateKey);
       savedPair = { pubJwk, privJwk };
       localStorage.setItem(storageKey, JSON.stringify(savedPair));
-      state.e2eeKeyPair = kp;
-      state.e2eePubJwk = pubJwk;
-
-      const userUpdate = { e2eePub: pubJwk };
-      if (loginSecret) {
-        userUpdate.e2eeWrappedPriv = await wrapPrivateJwkWithPassword(privJwk, loginSecret);
-      }
-      await state.db.ref(`users/${state.user.id}`).update(userUpdate);
-      return;
     }
 
     const publicKey = await importEcdhPublicKey(savedPair.pubJwk);
@@ -1796,9 +1837,27 @@ async function ensureE2EEInitialized(loginSecret = "") {
     }
     if (loginSecret && (!myNode || !myNode.e2eeWrappedPriv)) {
       updates.e2eeWrappedPriv = await wrapPrivateJwkWithPassword(savedPair.privJwk, loginSecret);
+      updates.e2eePub = savedPair.pubJwk;
     }
+    const existingDev = myNode && myNode.e2eeDevices && myNode.e2eeDevices[deviceId];
+    if (!existingDev || !existingDev.pub || existingDev.pub.x !== savedPair.pubJwk.x || existingDev.pub.y !== savedPair.pubJwk.y) {
+      updates[`e2eeDevices/${deviceId}`] = {
+        pub: savedPair.pubJwk,
+        updatedAt: Date.now()
+      };
+    }
+
     if (Object.keys(updates).length > 0) {
       await state.db.ref(`users/${state.user.id}`).update(updates);
+      if (state.usersCache[state.user.id]) {
+        const cur = state.usersCache[state.user.id];
+        if (updates.e2eePub) cur.e2eePub = updates.e2eePub;
+        if (updates.e2eeWrappedPriv) cur.e2eeWrappedPriv = updates.e2eeWrappedPriv;
+        if (updates[`e2eeDevices/${deviceId}`]) {
+          cur.e2eeDevices = cur.e2eeDevices || {};
+          cur.e2eeDevices[deviceId] = updates[`e2eeDevices/${deviceId}`];
+        }
+      }
     }
   } catch (err) {
     console.warn("E2EE başlatılamadı:", err && err.message);
@@ -1811,23 +1870,42 @@ async function distributeGroupKeyToMembers(keyId) {
   try {
     const rawBytes = new Uint8Array(await window.crypto.subtle.exportKey("raw", aesKey));
     const entries = Object.entries(state.usersCache || {}).filter(
-      ([, u]) => u && u.active !== false && u.inMainGroup !== false && u.e2eePub
+      ([, u]) => u && u.active !== false && u.inMainGroup !== false && (u.e2eePub || (u.e2eeDevices && Object.keys(u.e2eeDevices).length > 0))
     );
     for (const [uid, u] of entries) {
-      if (state.mainGroupKeysSnap && state.mainGroupKeysSnap[uid] && state.mainGroupKeysSnap[uid].keyId === keyId) {
-        continue;
+      if (u.e2eePub && !(state.mainGroupKeysSnap && state.mainGroupKeysSnap[uid] && state.mainGroupKeysSnap[uid].keyId === keyId)) {
+        const shared = await deriveSharedAesKey(u.e2eePub);
+        if (shared) {
+          const { iv, ct } = await aesGcmEncryptBytes(shared, rawBytes);
+          await state.db.ref(`config/mainGroupKeys/${uid}`).set({
+            v: 1,
+            keyId,
+            fromId: state.user.id,
+            fromPub: state.e2eePubJwk,
+            iv,
+            ct
+          });
+        }
       }
-      const shared = await deriveSharedAesKey(u.e2eePub);
-      if (!shared) continue;
-      const { iv, ct } = await aesGcmEncryptBytes(shared, rawBytes);
-      await state.db.ref(`config/mainGroupKeys/${uid}`).set({
-        v: 1,
-        keyId,
-        fromId: state.user.id,
-        fromPub: state.e2eePubJwk,
-        iv,
-        ct
-      });
+
+      const devMap = getUserE2eeDevices(u);
+      for (const [devId, devPub] of Object.entries(devMap)) {
+        const slot = `${uid}_d_${devId}`;
+        if (state.mainGroupKeysSnap && state.mainGroupKeysSnap[slot] && state.mainGroupKeysSnap[slot].keyId === keyId) {
+          continue;
+        }
+        const shared = await deriveSharedAesKey(devPub);
+        if (!shared) continue;
+        const { iv, ct } = await aesGcmEncryptBytes(shared, rawBytes);
+        await state.db.ref(`config/mainGroupKeys/${slot}`).set({
+          v: 2,
+          keyId,
+          fromId: state.user.id,
+          fromPub: state.e2eePubJwk,
+          iv,
+          ct
+        });
+      }
     }
   } catch {}
 }
@@ -1856,12 +1934,21 @@ function listenMainGroupKeys() {
       return;
     }
 
-    const myEntry = val[state.user.id];
-    if (myEntry && myEntry.fromPub && myEntry.iv && myEntry.ct && !state.e2eeGroupKeys[myEntry.keyId]) {
+    const candidates = [];
+    if (state.e2eeDeviceId && val[`${state.user.id}_d_${state.e2eeDeviceId}`]) {
+      candidates.push(val[`${state.user.id}_d_${state.e2eeDeviceId}`]);
+    }
+    if (val[state.user.id]) {
+      candidates.push(val[state.user.id]);
+    }
+
+    for (const entry of candidates) {
+      if (!entry || !entry.fromPub || !entry.iv || !entry.ct) continue;
+      if (state.e2eeGroupKeys[entry.keyId]) break;
       try {
-        const shared = await deriveSharedAesKey(myEntry.fromPub);
+        const shared = await deriveSharedAesKey(entry.fromPub);
         if (shared) {
-          const rawKeyBytes = await aesGcmDecryptBytes(shared, myEntry.iv, myEntry.ct);
+          const rawKeyBytes = await aesGcmDecryptBytes(shared, entry.iv, entry.ct);
           const groupKey = await window.crypto.subtle.importKey(
             "raw",
             rawKeyBytes,
@@ -1869,11 +1956,12 @@ function listenMainGroupKeys() {
             true,
             ["encrypt", "decrypt"]
           );
-          state.e2eeGroupKeys[myEntry.keyId] = groupKey;
-          state.e2eeActiveGroupKeyId = myEntry.keyId;
+          state.e2eeGroupKeys[entry.keyId] = groupKey;
+          state.e2eeActiveGroupKeyId = entry.keyId;
           if (typeof state.onGroupKeyReady === "function") {
             state.onGroupKeyReady();
           }
+          break;
         }
       } catch {}
     }
@@ -1921,11 +2009,67 @@ async function encryptOutgoingMessage({ isGroup, roomId = null, otherId, text, r
     }
 
     if (otherId && state.e2eeKeyPair && state.e2eePubJwk) {
-      let peerPub = state.usersCache[otherId] && state.usersCache[otherId].e2eePub;
-      if (!peerPub && state.db) {
-        const snap = await state.db.ref(`users/${otherId}/e2eePub`).once("value");
-        peerPub = snap.val();
+      let otherUser = state.usersCache[otherId];
+      if ((!otherUser || (!otherUser.e2eeDevices && !otherUser.e2eePub)) && state.db) {
+        const snap = await state.db.ref(`users/${otherId}`).once("value");
+        otherUser = snap.val();
+        if (otherUser) state.usersCache[otherId] = otherUser;
       }
+      if (!otherUser) return { text, replyTo };
+
+      const peerDevices = getUserE2eeDevices(otherUser);
+      const hasMultiPeer = Object.keys(peerDevices).length > 0;
+
+      if (hasMultiPeer) {
+        const msgKey = await window.crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        const rawMsgKey = new Uint8Array(await window.crypto.subtle.exportKey("raw", msgKey));
+        const { iv, ct } = await aesGcmEncryptBytes(msgKey, plainJson);
+
+        const targetPubs = {};
+        for (const [devId, pub] of Object.entries(peerDevices)) {
+          targetPubs[devId] = pub;
+        }
+        if (otherUser.e2eePub && otherUser.e2eePub.x && otherUser.e2eePub.y) {
+          const already = Object.values(targetPubs).some((p) => p.x === otherUser.e2eePub.x && p.y === otherUser.e2eePub.y);
+          if (!already) targetPubs._legacy_peer = otherUser.e2eePub;
+        }
+
+        const myDevices = getUserE2eeDevices(state.usersCache[state.user.id]);
+        for (const [devId, pub] of Object.entries(myDevices)) {
+          targetPubs[devId] = pub;
+        }
+        if (state.e2eeDeviceId) {
+          targetPubs[state.e2eeDeviceId] = state.e2eePubJwk;
+        }
+
+        const wrappedKeys = {};
+        for (const [devId, pub] of Object.entries(targetPubs)) {
+          const shared = await deriveSharedAesKey(pub);
+          if (!shared) continue;
+          wrappedKeys[devId] = await aesGcmEncryptBytes(shared, rawMsgKey);
+        }
+
+        if (Object.keys(wrappedKeys).length === 0) return { text, replyTo };
+        return {
+          text: "",
+          replyTo: replyTo ? { msgKey: replyTo.msgKey, senderName: replyTo.senderName, preview: "" } : null,
+          e2ee: {
+            v: 2,
+            alg: "ECDH-MULTI-AES-GCM",
+            iv,
+            ct,
+            senderPub: state.e2eePubJwk,
+            senderDeviceId: state.e2eeDeviceId || "",
+            wrappedKeys
+          }
+        };
+      }
+
+      const peerPub = otherUser.e2eePub;
       if (!peerPub) return { text, replyTo };
       const shared = await deriveSharedAesKey(peerPub);
       if (!shared) return { text, replyTo };
@@ -1956,17 +2100,40 @@ async function decryptMessageRecord(msgKey, m, otherId = null, roomId = null) {
       replyPreview: m.replyTo ? m.replyTo.preview || "" : ""
     };
   }
-  if (msgKey && state.decryptedCache[msgKey]) {
+  if (msgKey && state.decryptedCache[msgKey] && !state.decryptedCache[msgKey].failed) {
     return state.decryptedCache[msgKey];
   }
 
+  let waitingGroupKey = false;
   try {
     let aesKey = null;
     if (m.e2ee.alg === "CUSTOM-GROUP-AES-GCM") {
       const targetRoom = m.e2ee.roomId || roomId;
       aesKey = targetRoom && state.customGroupKeys[targetRoom] ? state.customGroupKeys[targetRoom][m.e2ee.keyId] : null;
+      if (!aesKey) waitingGroupKey = true;
     } else if (m.e2ee.alg === "GROUP-AES-GCM") {
       aesKey = state.e2eeGroupKeys[m.e2ee.keyId];
+      if (!aesKey) waitingGroupKey = true;
+    } else if (m.e2ee.alg === "ECDH-MULTI-AES-GCM") {
+      const wrappedMap = m.e2ee.wrappedKeys && typeof m.e2ee.wrappedKeys === "object" ? m.e2ee.wrappedKeys : null;
+      const senderPub = m.e2ee.senderPub || (state.usersCache[m.senderId] && state.usersCache[m.senderId].e2eePub);
+      if (wrappedMap && senderPub && state.e2eeKeyPair) {
+        const myWrap = state.e2eeDeviceId ? wrappedMap[state.e2eeDeviceId] : null;
+        if (myWrap) {
+          try {
+            aesKey = await unwrapEcdhMessageKey(senderPub, myWrap);
+          } catch {}
+        }
+        if (!aesKey) {
+          for (const wrapEntry of Object.values(wrappedMap)) {
+            if (!wrapEntry || wrapEntry === myWrap) continue;
+            try {
+              aesKey = await unwrapEcdhMessageKey(senderPub, wrapEntry);
+              if (aesKey) break;
+            } catch {}
+          }
+        }
+      }
     } else if (m.e2ee.alg === "ECDH-P256-AES-GCM") {
       const targetPub =
         m.senderId === state.user.id
@@ -1987,10 +2154,15 @@ async function decryptMessageRecord(msgKey, m, otherId = null, roomId = null) {
     }
   } catch {}
 
-  return {
-    text: "[Şifreli mesaj çözülemedi]",
-    replyPreview: "Şifreli mesaj"
+  const failRes = {
+    text: waitingGroupKey ? "[Şifreli mesaj]" : "[Şifreli mesaj (farklı/eski cihaz anahtarı)]",
+    replyPreview: "Şifreli mesaj",
+    failed: !waitingGroupKey
   };
+  if (msgKey && !waitingGroupKey && state.e2eeKeyPair) {
+    state.decryptedCache[msgKey] = failRes;
+  }
+  return failRes;
 }
 
 function compressImageToBase64(file, maxSize = 900, quality = 0.72) {
@@ -3720,6 +3892,11 @@ function listenUsers() {
     if (state.e2eeActiveGroupKeyId && state.e2eeGroupKeys[state.e2eeActiveGroupKeyId]) {
       distributeGroupKeyToMembers(state.e2eeActiveGroupKeyId);
     }
+    Object.entries(state.customGroups || {}).forEach(([gid, g]) => {
+      if (g && g.members && g.members[state.user.id]) {
+        distributeCustomGroupKey(gid, g.members);
+      }
+    });
 
     const myFriends = (state.user && state.user.friends) || {};
     const others = Object.entries(users).filter(
@@ -3857,22 +4034,39 @@ async function distributeCustomGroupKey(groupId, membersMap) {
   if (!gKey) return;
   try {
     const rawKeyBytes = await window.crypto.subtle.exportKey("raw", gKey);
-    const snap = await state.db.ref(`customGroups/${groupId}/keys`).once("value");
-    const existing = snap.val() || {};
+    let existing = state.customGroupKeysSnap && state.customGroupKeysSnap[groupId];
+    if (!existing) {
+      const snap = await state.db.ref(`customGroups/${groupId}/keys`).once("value");
+      existing = snap.val() || {};
+      if (!state.customGroupKeysSnap) state.customGroupKeysSnap = {};
+      state.customGroupKeysSnap[groupId] = existing;
+    }
     const memberIds = Object.keys(membersMap).filter((uid) => membersMap[uid]);
     for (const uid of memberIds) {
-      if (existing[uid] && existing[uid].keyId === keyId) continue;
       const u = state.usersCache[uid];
-      if (!u || u.active === false || !u.e2eePub) continue;
-      const shared = await deriveSharedAesKey(u.e2eePub);
-      if (!shared) continue;
-      const { iv, ct } = await aesGcmEncryptBytes(shared, rawKeyBytes);
-      await state.db.ref(`customGroups/${groupId}/keys/${uid}`).set({
-        keyId,
-        fromPub: state.e2eePubJwk,
-        iv,
-        ct
-      });
+      if (!u || u.active === false) continue;
+
+      if (u.e2eePub && !(existing[uid] && existing[uid].keyId === keyId)) {
+        const shared = await deriveSharedAesKey(u.e2eePub);
+        if (shared) {
+          const { iv, ct } = await aesGcmEncryptBytes(shared, rawKeyBytes);
+          const payload = { keyId, fromPub: state.e2eePubJwk, iv, ct };
+          existing[uid] = payload;
+          await state.db.ref(`customGroups/${groupId}/keys/${uid}`).set(payload);
+        }
+      }
+
+      const devMap = getUserE2eeDevices(u);
+      for (const [devId, devPub] of Object.entries(devMap)) {
+        const slot = `${uid}_d_${devId}`;
+        if (existing[slot] && existing[slot].keyId === keyId) continue;
+        const shared = await deriveSharedAesKey(devPub);
+        if (!shared) continue;
+        const { iv, ct } = await aesGcmEncryptBytes(shared, rawKeyBytes);
+        const payload = { v: 2, keyId, fromPub: state.e2eePubJwk, iv, ct };
+        existing[slot] = payload;
+        await state.db.ref(`customGroups/${groupId}/keys/${slot}`).set(payload);
+      }
     }
   } catch {}
 }
@@ -3884,6 +4078,8 @@ function listenCustomGroupKeys(groupId, membersMap) {
   state.customGroupKeyRefs[groupId] = ref;
   ref.on("value", async (snap) => {
     const val = snap.val() || {};
+    if (!state.customGroupKeysSnap) state.customGroupKeysSnap = {};
+    state.customGroupKeysSnap[groupId] = val;
     if (!state.customGroupKeys[groupId]) state.customGroupKeys[groupId] = {};
 
     if (!val.keyMeta) {
@@ -3904,12 +4100,21 @@ function listenCustomGroupKeys(groupId, membersMap) {
       return;
     }
 
-    const myEntry = val[state.user.id];
-    if (myEntry && myEntry.fromPub && myEntry.iv && myEntry.ct && !state.customGroupKeys[groupId][myEntry.keyId]) {
+    const candidates = [];
+    if (state.e2eeDeviceId && val[`${state.user.id}_d_${state.e2eeDeviceId}`]) {
+      candidates.push(val[`${state.user.id}_d_${state.e2eeDeviceId}`]);
+    }
+    if (val[state.user.id]) {
+      candidates.push(val[state.user.id]);
+    }
+
+    for (const entry of candidates) {
+      if (!entry || !entry.fromPub || !entry.iv || !entry.ct) continue;
+      if (state.customGroupKeys[groupId][entry.keyId]) break;
       try {
-        const shared = await deriveSharedAesKey(myEntry.fromPub);
+        const shared = await deriveSharedAesKey(entry.fromPub);
         if (shared) {
-          const rawKeyBytes = await aesGcmDecryptBytes(shared, myEntry.iv, myEntry.ct);
+          const rawKeyBytes = await aesGcmDecryptBytes(shared, entry.iv, entry.ct);
           const groupKey = await window.crypto.subtle.importKey(
             "raw",
             rawKeyBytes,
@@ -3917,11 +4122,12 @@ function listenCustomGroupKeys(groupId, membersMap) {
             true,
             ["encrypt", "decrypt"]
           );
-          state.customGroupKeys[groupId][myEntry.keyId] = groupKey;
-          state.customGroupActiveKeyIds[groupId] = myEntry.keyId;
+          state.customGroupKeys[groupId][entry.keyId] = groupKey;
+          state.customGroupActiveKeyIds[groupId] = entry.keyId;
           if (typeof state.onGroupKeyReady === "function" && state.activeRoom && state.activeRoom.id === groupId) {
             state.onGroupKeyReady();
           }
+          break;
         }
       } catch {}
     }
@@ -4299,7 +4505,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
 
   function getReplySnippet(m, msgKey = null) {
     const cached = msgKey && state.decryptedCache[msgKey];
-    const resolvedText = cached ? cached.text : (m.text || "");
+    const resolvedText = cached && !cached.failed ? cached.text : (m.text || "");
     if (resolvedText) return resolvedText.slice(0, 80);
     if (m.viewOnce) return "1 kezlik fotoğraf";
     if (m.imageUrl || m.imageData) return "Fotoğraf";
@@ -4382,6 +4588,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
           !m.location &&
           !m.viewOnce &&
           Boolean(resolvedText) &&
+          !(decEntry && decEntry.failed) &&
           resolvedText !== "[Şifreli mesaj çözülemedi]";
         const editBtnHtml = canEdit
           ? `<button class="msg-edit-btn" data-edit-msg="${escapeHtml(msgKey)}" title="Mesajı düzenle">Düzenle</button>`
@@ -4589,7 +4796,7 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         const m = data[msgKey];
         if (!m || m.senderId !== state.user.id) return;
         const dec = state.decryptedCache[msgKey];
-        const rawText = m.e2ee ? (dec ? dec.text : "") : (m.text || "");
+        const rawText = m.e2ee ? (dec && !dec.failed ? dec.text : "") : (m.text || "");
         if (!rawText) return;
         setEditTarget({
           roomId,
@@ -8782,9 +8989,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.17)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.18)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.18",
+    title: "Çoklu Cihaz E2EE Anahtar Senkronu",
+    desc: "PC ve telefon (Safari / PWA Ana Ekran) gibi farklı cihazlardan aynı hesapla girildiğinde E2EE anahtarlarının birbirini ezmesi ve mesajların '[Şifreli mesaj]' olarak kalması giderildi; her cihaz kendi anahtarını kaydettiği için yeni özel ve grup mesajları tüm cihazlarda aynı anda okunur."
+  },
   {
     v: "V2.17",
     title: "iOS & Android PWA Alt Bar ve Klavye Düzeltmesi",
