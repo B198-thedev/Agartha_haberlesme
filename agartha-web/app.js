@@ -3039,14 +3039,97 @@ logoutBtn.addEventListener("click", logout);
 const bottomTabs = Array.from(mainView.querySelectorAll(".bottom-nav .nav-btn"));
 const bottomPanels = bottomTabs.map((tab) => document.getElementById("tab-" + tab.dataset.tab));
 
-function selectBottomTab(index) {
+function selectBottomTab(index, swipeDir = "") {
   bottomTabs.forEach((tab, tabIndex) => {
     const selected = tabIndex === index;
     tab.classList.toggle("active", selected);
     tab.setAttribute("aria-selected", String(selected));
     tab.tabIndex = selected ? 0 : -1;
-    bottomPanels[tabIndex].classList.toggle("active", selected);
+    const panel = bottomPanels[tabIndex];
+    if (panel) {
+      panel.classList.remove("swipe-from-left", "swipe-from-right");
+      panel.classList.toggle("active", selected);
+      if (selected && swipeDir === "left") panel.classList.add("swipe-from-right");
+      if (selected && swipeDir === "right") panel.classList.add("swipe-from-left");
+    }
   });
+}
+
+const mainTabContent = mainView ? mainView.querySelector(".tab-content") : null;
+if (mainTabContent) {
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeDx = 0;
+  let swipeTracking = false;
+  let swipeHorizontal = false;
+
+  mainTabContent.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1 || !mainView.classList.contains("active")) return;
+      if (document.querySelector(".modal:not(.hidden)")) return;
+      if (e.target && e.target.closest("input, textarea, select")) return;
+      swipeStartX = e.touches[0].clientX;
+      swipeStartY = e.touches[0].clientY;
+      swipeDx = 0;
+      swipeTracking = true;
+      swipeHorizontal = false;
+    },
+    { passive: true }
+  );
+
+  mainTabContent.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!swipeTracking || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - swipeStartX;
+      const dy = e.touches[0].clientY - swipeStartY;
+      if (!swipeHorizontal) {
+        if (Math.abs(dy) > 12 && Math.abs(dy) >= Math.abs(dx)) {
+          swipeTracking = false;
+          return;
+        }
+        if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+          swipeHorizontal = true;
+        } else {
+          return;
+        }
+      }
+      swipeDx = dx;
+      const curIdx = bottomTabs.findIndex((t) => t.classList.contains("active"));
+      const curPanel = bottomPanels[curIdx];
+      if (curPanel) {
+        const atLeftEdge = curIdx === 0 && dx > 0;
+        const atRightEdge = curIdx === bottomTabs.length - 1 && dx < 0;
+        const damped = atLeftEdge || atRightEdge ? dx * 0.12 : dx * 0.28;
+        curPanel.style.transform = `translateX(${Math.max(-36, Math.min(36, damped))}px)`;
+      }
+    },
+    { passive: true }
+  );
+
+  const finishTabSwipe = () => {
+    if (!swipeTracking && !swipeHorizontal) return;
+    swipeTracking = false;
+    const curIdx = bottomTabs.findIndex((t) => t.classList.contains("active"));
+    const curPanel = bottomPanels[curIdx];
+    if (curPanel) curPanel.style.transform = "";
+    if (swipeHorizontal && Math.abs(swipeDx) >= 54) {
+      const nextIdx = swipeDx < 0 ? curIdx + 1 : curIdx - 1;
+      if (nextIdx >= 0 && nextIdx < bottomTabs.length) {
+        triggerHaptic(10);
+        selectBottomTab(nextIdx, swipeDx < 0 ? "left" : "right");
+        if (curIdx === 0 && nextIdx > 0) {
+          pushBackState("tab");
+        }
+      }
+    }
+    swipeHorizontal = false;
+    swipeDx = 0;
+  };
+
+  mainTabContent.addEventListener("touchend", finishTabSwipe, { passive: true });
+  mainTabContent.addEventListener("touchcancel", finishTabSwipe, { passive: true });
 }
 
 bottomTabs.forEach((tab, index) => {
@@ -8405,9 +8488,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.12)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.13)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.13",
+    title: "Ana Ekranda Sağa / Sola Kaydırarak Sekme Geçişi",
+    desc: "Sohbetler, Mekanlar ve Akıllı Önerici menüleri arasında parmağını sağa veya sola kaydırarak animasyonlu geçiş eklendi (dikey kaydırma ve yazı kutuları etkilenmez)."
+  },
   {
     v: "V2.12",
     title: "Köprü Kapanınca Ollama Otomatik Kapanıyor",
