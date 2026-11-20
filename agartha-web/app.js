@@ -7325,10 +7325,15 @@ async function tryDirectLocalOllama(contextText, promptHint) {
     if (!chatRes.ok) throw new Error(`Ollama hata kodu: ${chatRes.status}`);
     const chatData = await chatRes.json();
     const content = chatData && chatData.message ? chatData.message.content : "";
-    const liveNames = new Set(liveData.venues.map((v) => v.name.toLocaleLowerCase("tr-TR")));
+    const liveNames = liveData.venues.map((v) => v.name.toLocaleLowerCase("tr-TR"));
+    const isVerifiedMatch = (title) => {
+      const t = String(title || "").toLocaleLowerCase("tr-TR").trim();
+      if (t.length < 3) return false;
+      return liveNames.some((n) => n === t || (n.length >= 4 && (n.includes(t) || t.includes(n))));
+    };
     const recs = parseAiRecommendationsJson(content).map((rec) => ({
       ...rec,
-      verifiedOnline: liveNames.has(rec.title.toLocaleLowerCase("tr-TR"))
+      verifiedOnline: isVerifiedMatch(rec.title)
     }));
     return { reachable: true, model: chosenModel, recs };
   } catch (err) {
@@ -7340,10 +7345,9 @@ async function tryDirectLocalOllama(contextText, promptHint) {
   }
 }
 
-async function sendAiRequestToBridge({ roomId, roomTitle, contextText, promptHint }) {
+async function sendAiRequestToBridge({ roomId, roomTitle, contextText, promptHint, onStatus }) {
   const model = (state.aiConfig && state.aiConfig.model) || "qwen2.5:7b";
   const reqRef = state.db.ref("aiRequests").push();
-  const reqId = reqRef.key;
   await reqRef.set({
     requesterId: state.user.id,
     requesterName: getDisplayName(state.user),
@@ -7358,19 +7362,33 @@ async function sendAiRequestToBridge({ roomId, roomTitle, contextText, promptHin
 
   return new Promise((resolve, reject) => {
     let settled = false;
-    const timeoutId = setTimeout(() => {
+    let processingStarted = false;
+    let timeoutId = setTimeout(() => {
       if (settled) return;
       settled = true;
       reqRef.off();
       reqRef.remove().catch(() => {});
-      reject(new Error("[AG-AI-TIMEOUT-03] Yerel AI 45 saniye içinde yanıt vermedi (bilgisayar kapanmış veya meşgul olabilir)."));
-    }, 45000);
+      reject(new Error("[AG-AI-TIMEOUT-03] PC Köprüsü 22 saniyede isteği almadı (bilgisayar kapanmış veya uyku moduna geçmiş olabilir)."));
+    }, 22000);
 
     reqRef.on("value", (snap) => {
       if (settled) return;
       const val = snap.val();
       if (!val) return;
-      if (val.status === "done") {
+      if (val.status === "processing" && !processingStarted) {
+        processingStarted = true;
+        clearTimeout(timeoutId);
+        if (typeof onStatus === "function") {
+          onStatus("PC Köprüsü modeli çalıştırıyor (ilk açılış 30-50 sn sürebilir)...");
+        }
+        timeoutId = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reqRef.off();
+          reqRef.remove().catch(() => {});
+          reject(new Error("[AG-AI-TIMEOUT-03] Yerel AI 75 saniye içinde yanıt veremedi (PC kapanmış veya model meşgul olabilir)."));
+        }, 75000);
+      } else if (val.status === "done") {
         settled = true;
         clearTimeout(timeoutId);
         reqRef.off();
@@ -7738,12 +7756,13 @@ if (aiAnalyzeForm) {
         return;
       }
 
-      showStatus("PC Köprüsü'ne istek gönderildi, yerel Ollama yanıtı bekleniyor...");
+      showStatus("PC Köprüsü'ne istek gönderildi, yanıt bekleniyor...");
       const bridgeRes = await sendAiRequestToBridge({
         roomId: roomMeta.roomId,
         roomTitle: roomMeta.title,
         contextText: contextText || promptHint,
-        promptHint
+        promptHint,
+        onStatus: (msg) => showStatus(msg)
       });
       if (!bridgeRes.count) {
         showStatus("[AG-AI-EMPTY-04] Ollama geçerli öneri üretemedi, farklı bir istek notu ile dene.", true);
@@ -8010,31 +8029,36 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – v69)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.06)
 // =========================================================
 const APP_CHANGELOG = [
   {
-    v: "v69",
+    v: "V2.06",
+    title: "AI Bağlantı İyileştirmeleri & Tek Tıkla Başlatma",
+    desc: "İlk model yüklemesi için akıllı zaman aşımı (75 sn), esnek canlı mekan doğrulama eşleşmesi, eski AI isteklerinin otomatik temizlenmesi ve köprü başlatıcısının Ollama'yı otomatik açması eklendi."
+  },
+  {
+    v: "V2.05",
     title: "iOS Tam Ekran Alt Bar Düzeltmesi",
     desc: "iPhone PWA modunda klavye kapalıyken alt menü barının altında oluşan siyah boşluk düzeltildi; uygulama ekranın en alt kenarına tam oturuyor."
   },
   {
-    v: "v68",
+    v: "V2.04",
     title: "AI Önerileri 3'lü Sayfa Düzeni",
     desc: "AI Önerileri sekmesi kalabalıktan kurtarılıp Analiz Et, Öneriler (taslaklar + ortak) ve Eğitim Verisi olmak üzere 3 temiz alt sayfaya bölündü."
   },
   {
-    v: "v67",
+    v: "V2.03",
     title: "AI Eğitim Verisi (Önceki Gidilen Yerler)",
     desc: "Kullanıcıların bugüne kadar gittikleri yerleri puan (1-5) ve notlarla kalıcı olarak öğretebileceği kişisel AI Eğitim Verisi sayfası ile PC tarafı gecmis-mekanlar.txt desteği eklendi."
   },
   {
-    v: "v66",
+    v: "V2.02",
     title: "Canlı Mekan Doğrulama (OpenStreetMap) & Haritada Gör",
     desc: "Yerel Ollama modeli analiz sırasında OpenStreetMap (Nominatim + Overpass) üzerinden hedef semtteki gerçek güncel mekanları çekip öneri üretir; öneri kartlarına 'Canlı Doğrulandı' rozeti ve 'Haritada Gör' butonu eklendi."
   },
   {
-    v: "v65",
+    v: "V2.01",
     title: "PC Kapalı / Oyun Modu AI Hata Kodları",
     desc: "Bilgisayar kapalıyken veya oyun için köprü/Ollama durdurulduğunda bekletmeden AG-AI-OFFLINE-01, AG-AI-MODEL-02, AG-AI-TIMEOUT-03 ve AG-AI-EMPTY-04 durum bildirimleri eklendi."
   },
