@@ -1,6 +1,7 @@
 // Service Worker (PWA) kaydı & Otomatik Güncelleme Bildirimi (GitHub Pages Pending + SW)
 const updateBanner = document.getElementById("update-banner");
 const updateBannerText = document.getElementById("update-banner-text");
+const CURRENT_APP_CACHE = "agartha-V2.14";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -24,17 +25,20 @@ function detectGitHubPagesRepo() {
   const owner = host.slice(0, -".github.io".length);
   const segs = String(location.pathname || "").split("/").filter(Boolean);
   const repo = segs[0] || host;
-  return owner && repo ? { owner, repo } : null;
+  const subDir = segs.length > 1 && segs[1].indexOf(".") === -1 ? segs[1] : "";
+  return owner && repo ? { owner, repo, subDir } : null;
 }
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   let hadController = Boolean(navigator.serviceWorker.controller);
   let refreshing = false;
   let swReg = null;
-  let githubDisabled = false;
-  let lastGhCheckAt = 0;
+  let githubBlockedUntil = 0;
+  let lastGhApiCheckAt = 0;
+  let lastRawCheckAt = 0;
   let pendingClearTimer = null;
-  let activePendingRunId = null;
+  let pendingDetected = false;
+  let fastSwPollTimer = null;
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!hadController) {
@@ -43,24 +47,74 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     }
     if (refreshing) return;
     refreshing = true;
+    clearInterval(fastSwPollTimer);
     showUpdateBanner("Uygulama güncellendi, yenileniyor...", false);
     setTimeout(() => location.reload(), 900);
   });
 
   const ghRepo = detectGitHubPagesRepo();
-  async function checkGitHubPendingBuild(force = false) {
-    if (!ghRepo || githubDisabled || refreshing) return;
+
+  function triggerPendingState() {
+    pendingDetected = true;
+    showUpdateBanner(PENDING_UPDATE_MSG, true);
+    clearTimeout(pendingClearTimer);
+    if (!fastSwPollTimer) {
+      fastSwPollTimer = setInterval(() => {
+        if (refreshing) return;
+        if (swReg && document.visibilityState === "visible") {
+          swReg.update().catch(() => {});
+        }
+      }, 4500);
+    }
+    pendingClearTimer = setTimeout(() => {
+      if (!refreshing && (!swReg || (!swReg.installing && !swReg.waiting))) {
+        pendingDetected = false;
+        clearInterval(fastSwPollTimer);
+        fastSwPollTimer = null;
+        hideUpdateBanner();
+      }
+    }, 90000);
+  }
+
+  async function checkGitHubRawSwVersion(force = false) {
+    if (!ghRepo || refreshing) return;
     if (document.visibilityState !== "visible") return;
     const now = Date.now();
-    const minWait = activePendingRunId ? 8000 : 12000;
-    if (!force && now - lastGhCheckAt < minWait) return;
-    lastGhCheckAt = now;
+    if (!force && now - lastRawCheckAt < 12000) return;
+    lastRawCheckAt = now;
+
+    try {
+      const swRelPath = ghRepo.subDir ? `${ghRepo.subDir}/sw.js` : "sw.js";
+      const rawUrl = `https://raw.githubusercontent.com/${encodeURIComponent(ghRepo.owner)}/${encodeURIComponent(ghRepo.repo)}/main/${swRelPath}?cb=${now}`;
+      const res = await fetch(rawUrl, { cache: "no-store" });
+      if (!res.ok) return;
+      const text = await res.text();
+      const match = text.match(/CACHE_NAME\s*=\s*"([^"]+)"/);
+      if (match && match[1] && match[1] !== CURRENT_APP_CACHE) {
+        triggerPendingState();
+        if (swReg) swReg.update().catch(() => {});
+      }
+    } catch {}
+  }
+
+  async function checkGitHubPendingBuild(force = false) {
+    if (!ghRepo || refreshing) return;
+    if (document.visibilityState !== "visible") return;
+    const now = Date.now();
+    if (now < githubBlockedUntil) return;
+    const minWait = pendingDetected ? 12000 : 60000;
+    if (!force && now - lastGhApiCheckAt < minWait) return;
+    lastGhApiCheckAt = now;
 
     try {
       const url = `https://api.github.com/repos/${encodeURIComponent(ghRepo.owner)}/${encodeURIComponent(ghRepo.repo)}/actions/runs?per_page=1`;
       const res = await fetch(url, { cache: "no-store" });
-      if (res.status === 404 || res.status === 403 || res.status === 401) {
-        githubDisabled = true;
+      if (res.status === 404 || res.status === 401) {
+        githubBlockedUntil = Number.MAX_SAFE_INTEGER;
+        return;
+      }
+      if (res.status === 403 || res.status === 429) {
+        githubBlockedUntil = now + 180000;
         return;
       }
       if (!res.ok) return;
@@ -71,24 +125,13 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
       const st = String(run.status || "").toLowerCase();
       const isPending = ["queued", "in_progress", "pending", "waiting", "requested"].includes(st);
       if (isPending) {
-        clearTimeout(pendingClearTimer);
-        activePendingRunId = run.id;
-        showUpdateBanner(PENDING_UPDATE_MSG, true);
+        triggerPendingState();
         setTimeout(() => checkGitHubPendingBuild(true), 8500);
-      } else if (activePendingRunId && run.id === activePendingRunId && st === "completed") {
-        activePendingRunId = null;
-        showUpdateBanner(PENDING_UPDATE_MSG, true);
+      } else if (pendingDetected && st === "completed") {
         if (swReg) {
           swReg.update().catch(() => {});
           setTimeout(() => swReg && swReg.update().catch(() => {}), 3000);
-          setTimeout(() => swReg && swReg.update().catch(() => {}), 7000);
         }
-        clearTimeout(pendingClearTimer);
-        pendingClearTimer = setTimeout(() => {
-          if (!refreshing && (!swReg || (!swReg.installing && !swReg.waiting))) {
-            hideUpdateBanner();
-          }
-        }, 12000);
       }
     } catch {}
   }
@@ -110,7 +153,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
         newWorker.addEventListener("statechange", () => {
           if (newWorker.state === "installed" && hadController) {
             showUpdateBanner("Uygulama güncellendi, yenileniyor...", false);
-          } else if (newWorker.state === "redundant" && !refreshing && !activePendingRunId) {
+          } else if (newWorker.state === "redundant" && !refreshing && !pendingDetected) {
             hideUpdateBanner();
           }
         });
@@ -120,17 +163,22 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
         if (document.visibilityState === "visible") {
           reg.update().catch(() => {});
         }
-      }, 25000);
+      }, 20000);
 
       if (ghRepo) {
-        setTimeout(() => checkGitHubPendingBuild(true), 2500);
-        setInterval(() => checkGitHubPendingBuild(false), 75000);
+        setTimeout(() => {
+          checkGitHubRawSwVersion(true);
+          checkGitHubPendingBuild(true);
+        }, 2000);
+        setInterval(() => checkGitHubRawSwVersion(false), 15000);
+        setInterval(() => checkGitHubPendingBuild(false), 65000);
       }
 
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
           reg.update().catch(() => {});
-          checkGitHubPendingBuild(false);
+          checkGitHubRawSwVersion(true);
+          checkGitHubPendingBuild(true);
         }
       });
     })
@@ -8488,9 +8536,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.13)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.14)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.14",
+    title: "Hızlı Pending Güncelleme Algılama Düzeltmesi",
+    desc: "GitHub Pages derleme aralığını kaçıran 75 saniyelik kontrol yerine her 15 saniyede bir rate-limit olmadan yeni sürümü algılayan çift katmanlı kontrol ve yüksek öncelikli üst bildirim düzeltmesi yapıldı."
+  },
   {
     v: "V2.13",
     title: "Ana Ekranda Sağa / Sola Kaydırarak Sekme Geçişi",

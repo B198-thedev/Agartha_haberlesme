@@ -147,21 +147,23 @@ html, body {
 
 .update-banner {
   position: fixed;
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(14px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
+  z-index: 999;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  border-radius: 999px;
+  border-radius: 16px;
   background: var(--surface-2);
   border: 1px solid var(--accent);
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.35;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  width: max-content;
   max-width: calc(100vw - 24px);
   animation: barSlideUp 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
