@@ -1,4 +1,4 @@
-const CACHE_NAME = "agartha-V2.16-ios1";
+const CACHE_NAME = "agartha-V2.17";
 const ASSETS = [
   "./",
   "./index.html",

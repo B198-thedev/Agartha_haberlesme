@@ -47,14 +47,7 @@ html, body {
   overflow: hidden;
 }
 
-@media (display-mode: standalone) {
-  #app {
-    height: var(--app-height, 100vh);
-    height: var(--app-height, 100lvh);
-  }
-}
-
-html.is-standalone #app {
+html.is-ios-standalone #app {
   height: var(--app-height, 100vh);
   height: var(--app-height, 100lvh);
 }
@@ -1014,14 +1007,7 @@ html.keyboard-open .chat-input-bar {
   z-index: 50;
 }
 
-@media (display-mode: standalone) {
-  .modal {
-    height: var(--app-height, 100vh);
-    height: var(--app-height, 100lvh);
-  }
-}
-
-html.is-standalone .modal {
+html.is-ios-standalone .modal {
   height: var(--app-height, 100vh);
   height: var(--app-height, 100lvh);
 }

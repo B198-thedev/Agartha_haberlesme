@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.16";
+const CURRENT_APP_CACHE = "agartha-V2.17";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -860,11 +860,15 @@ function ensureAudioContext() {
 document.addEventListener("pointerdown", () => ensureAudioContext(), { once: true, passive: true });
 
 function syncStandaloneClass() {
+  const ua = navigator.userAgent || "";
+  const isIOS =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isStandalone = Boolean(
     window.navigator.standalone ||
       (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
   );
-  document.documentElement.classList.toggle("is-standalone", isStandalone);
+  document.documentElement.classList.toggle("is-ios-standalone", isIOS && isStandalone);
 }
 
 syncStandaloneClass();
@@ -8778,9 +8782,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.16)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.17)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.17",
+    title: "iOS & Android PWA Alt Bar ve Klavye Düzeltmesi",
+    desc: "iOS ana ekran (standalone) modunda klavye açılıp kapandıktan sonra alt sekme çubuğunun yukarı kayması, Android PWA'da alt barın ekran dışında kalması ve güncelleme bildirim bandının takılı kalması giderildi."
+  },
   {
     v: "V2.16",
     title: "PC Köprüsü Canlı Donanım & İstek Paneli",
