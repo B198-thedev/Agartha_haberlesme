@@ -8405,9 +8405,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.11)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.12)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.12",
+    title: "Köprü Kapanınca Ollama Otomatik Kapanıyor",
+    desc: "PC AI Köprüsü (baslat-ai-koprusu.bat) kapatıldığında arka plandaki Ollama ve model süreçleri otomatik durdurularak RAM/VRAM hemen serbest bırakılır."
+  },
   {
     v: "V2.11",
     title: "Zenginleştirilmiş AI Mekan Kartları",
