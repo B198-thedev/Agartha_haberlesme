@@ -7269,8 +7269,24 @@ function parseAiRecommendationsJson(rawText) {
       title: String(item.title || item.name).trim().slice(0, 80),
       area: String(item.area || item.district || "Önerilen Bölge").trim().slice(0, 60),
       category: String(item.category || "Kafe").trim().slice(0, 40),
-      reason: String(item.reason || item.description || "").trim().slice(0, 260)
+      reason: String(item.reason || "").trim().slice(0, 260),
+      highlight: String(item.highlight || item.specialty || item.activity || item.whatToDo || "").trim().slice(0, 220),
+      about: String(item.about || item.info || item.summary || item.description || "").trim().slice(0, 260)
     }));
+}
+
+function buildAiDetailBlockHtml(r) {
+  const rows = [];
+  if (r.reason) {
+    rows.push(`<div class="ai-detail-row"><span class="ai-detail-label">Önerme Sebebi:</span>${escapeHtml(r.reason)}</div>`);
+  }
+  if (r.highlight) {
+    rows.push(`<div class="ai-detail-row"><span class="ai-detail-label">Meşhuru / Ne Yapılır:</span>${escapeHtml(r.highlight)}</div>`);
+  }
+  if (r.about) {
+    rows.push(`<div class="ai-detail-row"><span class="ai-detail-label">Kısa Bilgi:</span>${escapeHtml(r.about)}</div>`);
+  }
+  return rows.length ? `<div class="ai-detail-list">${rows.join("")}</div>` : "";
 }
 
 function fallbackAreaFromPlaces() {
@@ -7391,6 +7407,8 @@ async function saveAiDraftsList(items, meta) {
         area: item.area,
         category: item.category,
         reason: item.reason,
+        highlight: item.highlight || "",
+        about: item.about || "",
         verifiedOnline: Boolean(item.verifiedOnline),
         sourceRoomId: meta.roomId || "",
         sourceRoomTitle: meta.roomTitle || "",
@@ -7489,7 +7507,7 @@ async function runCloudAiProvider(contextText, promptHint) {
     : "";
 
   const systemPrompt =
-    `Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Kişilik ve üslup: ${getActiveAiPersonaInstruction()} Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.`;
+    `Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Kişilik ve üslup: ${getActiveAiPersonaInstruction()} Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Önerme sebebi: sohbete ve önceki zevklere göre neden burası?","highlight":"Oranın meşhur şeyi veya orada ne yapabileceğiniz","about":"Orası hakkında ortam, konsept ve atmosferi özetleyen kısa bilgi"}]}. Her 3 alanı da (reason, highlight, about) mutlaka doldur. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.`;
   const userPrompt = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
 
   const rawContent = await callCloudModelRaw({
@@ -7544,7 +7562,7 @@ async function tryDirectLocalOllama(contextText, promptHint) {
     const chatCtrl = new AbortController();
     const chatTimer = setTimeout(() => chatCtrl.abort(), 55000);
     const systemPrompt =
-      `Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Kişilik ve üslup: ${getActiveAiPersonaInstruction()} Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Sohbete, önceki zevklere ve gerçek mekana dayalı kısa Türkçe gerekçe"}]}. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.`;
+      `Sen Agartha arkadaş grubunun Türkçe yerel mekan ve buluşma danışmanısın. Kişilik ve üslup: ${getActiveAiPersonaInstruction()} Sadece geçerli JSON döndür: {"recommendations":[{"title":"Mekan veya Aktivite Adı","area":"Semt/Bölge","category":"Kafe|Restoran|Doğa / Park|Eğlence / Kültür|Diğer","reason":"Önerme sebebi: sohbete ve önceki zevklere göre neden burası?","highlight":"Oranın meşhur şeyi veya orada ne yapabileceğiniz","about":"Orası hakkında ortam, konsept ve atmosferi özetleyen kısa bilgi"}]}. Her 3 alanı da (reason, highlight, about) mutlaka doldur. Eğitim verisindeki yüksek puanlı yerlerin tarzını öğren, düşük puanlı tarzları önerme ve daha önce gidilmiş mekanların aynısını tekrarlama. Eğer İnternetten Çekilen Güncel Gerçek Mekanlar listesi verildiyse önerilerini mutlaka öncelikle bu gerçek mekanlardan seç ve uydurma yer adı yazma. En fazla 3 öneri döndür.`;
     const userMsg = `${promptHint ? `Kullanıcı isteği: ${promptHint}\n\n` : ""}Analiz bağlamı:\n${contextText}${liveListText}`;
 
     const chatRes = await fetch(`${baseUrl}/api/chat`, {
@@ -7658,7 +7676,11 @@ async function sendRecommendationToRoom(rec, fallbackRoomId) {
       return;
     }
   }
-  const text = `AI Önerisi: ${rec.title} (${rec.area || "Öneri"})\n${rec.reason || ""}`.trim();
+  const lines = [`Öneri: ${rec.title} (${rec.area || "Bölge"})`];
+  if (rec.reason) lines.push(`• Sebep: ${rec.reason}`);
+  if (rec.highlight) lines.push(`• Meşhuru / Ne yapılır: ${rec.highlight}`);
+  if (rec.about) lines.push(`• Bilgi: ${rec.about}`);
+  const text = lines.join("\n").trim();
   const enc = await encryptOutgoingMessage({
     isGroup: targetMeta.isGroup,
     roomId: targetMeta.roomId,
@@ -7743,7 +7765,7 @@ function listenPersonalAiDrafts() {
           <div class="ai-card ai-draft-card">
             <div class="place-title">${escapeHtml(r.title || r.name || "Öneri")}${verifiedBadge}</div>
             <div class="place-meta">${escapeHtml(r.category || "Öneri")} • ${escapeHtml(r.area || "")}${srcTag}</div>
-            ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
+            ${buildAiDetailBlockHtml(r)}
             <div class="ai-card-actions">
               <button type="button" class="icon-btn" data-publish-draft="${escapeHtml(key)}">Ortak AI'ya Paylaş</button>
               <button type="button" class="icon-btn" data-place-draft="${escapeHtml(key)}">Mekanlara Ekle</button>
@@ -7766,6 +7788,8 @@ function listenPersonalAiDrafts() {
           area: r.area || "Öneri",
           category: r.category || "Diğer",
           reason: r.reason || "",
+          highlight: r.highlight || "",
+          about: r.about || "",
           verifiedOnline: Boolean(r.verifiedOnline),
           sharedBy: state.user.id,
           sharedByName: getDisplayName(state.user),
@@ -8065,7 +8089,7 @@ function listenAiRecommendations() {
         <div class="ai-card">
           <div class="place-title">${escapeHtml(r.title || r.name)}${verifiedBadge}</div>
           <div class="place-meta">${escapeHtml(r.category ? r.category + " • " : "")}${escapeHtml(r.area || "Öneri")}${byStr}</div>
-          ${r.reason ? `<div class="place-note">${escapeHtml(r.reason)}</div>` : ""}
+          ${buildAiDetailBlockHtml(r)}
           <div class="ai-card-actions">
             <button type="button" class="icon-btn" data-place-pub="${escapeHtml(r.id)}">Mekanlara Ekle</button>
             <a class="icon-btn" href="${mapHref}" target="_blank" rel="noopener noreferrer">Haritada Gör</a>
@@ -8381,9 +8405,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.10)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.11)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.11",
+    title: "Zenginleştirilmiş AI Mekan Kartları",
+    desc: "Akıllı Önerici artık önerdiği her mekan için 3 ayrı bilgi kutusu sunar: Önerme Sebebi, Oranın Meşhur Şeyi / Ne Yapılabileceği ve Orası Hakkında Kısa Bilgi."
+  },
   {
     v: "V2.10",
     title: "Yapay Zeka Kişilik & Karakter Sistemi",

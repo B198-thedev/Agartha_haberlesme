@@ -3067,5 +3067,28 @@ html.anim-off *::after {
   display: block;
 }
 
+.ai-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.ai-detail-row {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.ai-detail-label {
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 4px;
+}
+
 
 
