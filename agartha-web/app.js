@@ -1,19 +1,40 @@
-// Service Worker (PWA) kaydı & Otomatik Güncelleme Bildirimi
+// Service Worker (PWA) kaydı & Otomatik Güncelleme Bildirimi (GitHub Pages Pending + SW)
 const updateBanner = document.getElementById("update-banner");
 const updateBannerText = document.getElementById("update-banner-text");
+const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
-function showUpdateBanner(msg) {
+function showUpdateBanner(msg, isPending = false) {
   if (updateBannerText && msg) updateBannerText.textContent = msg;
-  if (updateBanner) updateBanner.classList.remove("hidden");
+  if (updateBanner) {
+    updateBanner.classList.toggle("pending", Boolean(isPending));
+    updateBanner.classList.remove("hidden");
+  }
 }
 
 function hideUpdateBanner() {
-  if (updateBanner) updateBanner.classList.add("hidden");
+  if (updateBanner) {
+    updateBanner.classList.remove("pending");
+    updateBanner.classList.add("hidden");
+  }
+}
+
+function detectGitHubPagesRepo() {
+  const host = String(location.hostname || "").toLowerCase();
+  if (!host.endsWith(".github.io")) return null;
+  const owner = host.slice(0, -".github.io".length);
+  const segs = String(location.pathname || "").split("/").filter(Boolean);
+  const repo = segs[0] || host;
+  return owner && repo ? { owner, repo } : null;
 }
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   let hadController = Boolean(navigator.serviceWorker.controller);
   let refreshing = false;
+  let swReg = null;
+  let githubDisabled = false;
+  let lastGhCheckAt = 0;
+  let pendingClearTimer = null;
+  let activePendingRunId = null;
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!hadController) {
@@ -22,36 +43,94 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     }
     if (refreshing) return;
     refreshing = true;
-    showUpdateBanner("Uygulama güncellendi, yenileniyor...");
+    showUpdateBanner("Uygulama güncellendi, yenileniyor...", false);
     setTimeout(() => location.reload(), 900);
   });
+
+  const ghRepo = detectGitHubPagesRepo();
+  async function checkGitHubPendingBuild(force = false) {
+    if (!ghRepo || githubDisabled || refreshing) return;
+    if (document.visibilityState !== "visible") return;
+    const now = Date.now();
+    const minWait = activePendingRunId ? 8000 : 12000;
+    if (!force && now - lastGhCheckAt < minWait) return;
+    lastGhCheckAt = now;
+
+    try {
+      const url = `https://api.github.com/repos/${encodeURIComponent(ghRepo.owner)}/${encodeURIComponent(ghRepo.repo)}/actions/runs?per_page=1`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.status === 404 || res.status === 403 || res.status === 401) {
+        githubDisabled = true;
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      const run = Array.isArray(data.workflow_runs) ? data.workflow_runs[0] : null;
+      if (!run) return;
+
+      const st = String(run.status || "").toLowerCase();
+      const isPending = ["queued", "in_progress", "pending", "waiting", "requested"].includes(st);
+      if (isPending) {
+        clearTimeout(pendingClearTimer);
+        activePendingRunId = run.id;
+        showUpdateBanner(PENDING_UPDATE_MSG, true);
+        setTimeout(() => checkGitHubPendingBuild(true), 8500);
+      } else if (activePendingRunId && run.id === activePendingRunId && st === "completed") {
+        activePendingRunId = null;
+        showUpdateBanner(PENDING_UPDATE_MSG, true);
+        if (swReg) {
+          swReg.update().catch(() => {});
+          setTimeout(() => swReg && swReg.update().catch(() => {}), 3000);
+          setTimeout(() => swReg && swReg.update().catch(() => {}), 7000);
+        }
+        clearTimeout(pendingClearTimer);
+        pendingClearTimer = setTimeout(() => {
+          if (!refreshing && (!swReg || (!swReg.installing && !swReg.waiting))) {
+            hideUpdateBanner();
+          }
+        }, 12000);
+      }
+    } catch {}
+  }
 
   navigator.serviceWorker
     .register("./sw.js", { updateViaCache: "none" })
     .then((reg) => {
+      swReg = reg;
       if (reg.waiting && hadController) {
-        showUpdateBanner("Uygulama güncelleniyor, lütfen bekleyin...");
+        showUpdateBanner(PENDING_UPDATE_MSG, true);
       }
 
       reg.addEventListener("updatefound", () => {
         const newWorker = reg.installing;
         if (!newWorker) return;
         if (hadController) {
-          showUpdateBanner("Uygulama güncelleniyor, lütfen bekleyin...");
+          showUpdateBanner(PENDING_UPDATE_MSG, true);
         }
         newWorker.addEventListener("statechange", () => {
           if (newWorker.state === "installed" && hadController) {
-            showUpdateBanner("Uygulama güncellendi, yenileniyor...");
-          } else if (newWorker.state === "redundant" && !refreshing) {
+            showUpdateBanner("Uygulama güncellendi, yenileniyor...", false);
+          } else if (newWorker.state === "redundant" && !refreshing && !activePendingRunId) {
             hideUpdateBanner();
           }
         });
       });
 
-      setInterval(() => reg.update().catch(() => {}), 60000);
+      setInterval(() => {
+        if (document.visibilityState === "visible") {
+          reg.update().catch(() => {});
+        }
+      }, 25000);
+
+      if (ghRepo) {
+        setTimeout(() => checkGitHubPendingBuild(true), 2500);
+        setInterval(() => checkGitHubPendingBuild(false), 75000);
+      }
+
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
           reg.update().catch(() => {});
+          checkGitHubPendingBuild(false);
         }
       });
     })
@@ -8034,9 +8113,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.07)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.08)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.08",
+    title: "Canlı Güncelleme & GitHub Pending Uyarısı",
+    desc: "GitHub drop-to-upload ile yeni dosya yüklendiği anda deploy henüz pending aşamasındayken bile üstte 'Güncelleme yükleniyor, uygulama her an tekrar başlayabilir' uyarısı görünür ve yeni sürüm hazır olunca otomatik yenilenir."
+  },
   {
     v: "V2.07",
     title: "Genel Kategorileştirme, İsim Sadeleştirme & Temiz Ana Ekran",
