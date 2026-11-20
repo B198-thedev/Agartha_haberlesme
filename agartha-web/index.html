@@ -18,6 +18,14 @@
     <span class="loading-spinner update-spinner" aria-hidden="true"></span>
     <span id="update-banner-text">Uygulama güncelleniyor, lütfen bekleyin...</span>
   </div>
+  <div id="inapp-toast" class="inapp-toast hidden" role="status" aria-live="polite">
+    <img id="inapp-toast-avatar" class="inapp-toast-avatar" src="./icon-192.png" alt="" />
+    <div class="inapp-toast-body">
+      <div id="inapp-toast-title" class="inapp-toast-title"></div>
+      <div id="inapp-toast-msg" class="inapp-toast-msg"></div>
+    </div>
+    <button id="inapp-toast-close" type="button" class="inapp-toast-close" aria-label="Bildirimi kapat">&times;</button>
+  </div>
   <div id="app">
     <!-- YÜKLEME EKRANI -->
     <section id="loading-view" class="view">
@@ -88,7 +96,7 @@
         </form>
 
         <button id="auth-announcements-btn" type="button" class="icon-btn auth-announce-btn">
-          Duyurular &amp; Sürüm Geçmişi (V2.14)
+          Duyurular &amp; Sürüm Geçmişi (V2.15)
         </button>
       </div>
     </section>
@@ -146,9 +154,9 @@
             <div class="announcement-banner-body">
               <div class="announcement-banner-top">
                 <span class="announcement-banner-title">Duyurular &amp; Yenilikler</span>
-                <span id="home-announcement-version" class="exp-badge">V2.14</span>
+                <span id="home-announcement-version" class="exp-badge">V2.15</span>
               </div>
-              <div id="home-announcement-summary" class="chat-preview">V2.14: Pending güncelleme uyarısı 15 sn canlı kontrol ve çift katmanlı algılama ile düzeltildi.</div>
+              <div id="home-announcement-summary" class="chat-preview">V2.15: iOS ve tüm cihazlar için dokunulunca ilgili sohbete götüren Uygulama İçi Bildirim Bannerı eklendi!</div>
             </div>
             <span class="announcement-banner-cta">Gör &rsaquo;</span>
           </button>
@@ -494,8 +502,15 @@
               </div>
               <input id="hide-read-toggle" type="checkbox" class="toggle-switch" />
             </label>
+            <label class="settings-item" style="cursor:pointer;">
+              <div>
+                <div>Uygulama İçi Bildirimler</div>
+                <div class="user-sub">Mesaj ve isteklerde üstte bildirim kartı göster</div>
+              </div>
+              <input id="inapp-notify-toggle" type="checkbox" class="toggle-switch" checked />
+            </label>
             <button id="notify-btn" type="button" class="settings-item">
-              <span>Bildirimler</span>
+              <span>Sistem Bildirimleri</span>
               <span id="notify-status-label" class="user-sub">Kapalı</span>
             </button>
             <div class="settings-item">
@@ -517,7 +532,7 @@
           <div class="settings-list">
             <button id="open-announcements-btn" type="button" class="settings-item">
               <span>Duyurular &amp; Sürüm Notları</span>
-              <span class="user-sub">v1 – V2.14 tüm güncellemeler</span>
+              <span class="user-sub">v1 – V2.15 tüm güncellemeler</span>
             </button>
             <button id="open-admin-btn" type="button" class="settings-item hidden">
               <span>Yönetici Paneli</span>
@@ -538,7 +553,7 @@
         <div class="modal-header">
           <div class="call-title-wrap">
             <h2>Duyurular</h2>
-            <span id="announcements-modal-ver" class="exp-badge">V2.14</span>
+            <span id="announcements-modal-ver" class="exp-badge">V2.15</span>
           </div>
           <button id="close-announcements-btn" class="icon-btn">Kapat</button>
         </div>
@@ -557,7 +572,7 @@
             <div id="custom-announcements-list" class="list-stack"></div>
           </div>
 
-          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.14)</div>
+          <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.15)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
         </div>

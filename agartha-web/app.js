@@ -1,7 +1,12 @@
 // Service Worker (PWA) kaydı & Otomatik Güncelleme Bildirimi (GitHub Pages Pending + SW)
 const updateBanner = document.getElementById("update-banner");
 const updateBannerText = document.getElementById("update-banner-text");
-const CURRENT_APP_CACHE = "agartha-V2.14";
+const inappToast = document.getElementById("inapp-toast");
+const inappToastAvatar = document.getElementById("inapp-toast-avatar");
+const inappToastTitle = document.getElementById("inapp-toast-title");
+const inappToastMsg = document.getElementById("inapp-toast-msg");
+const inappToastClose = document.getElementById("inapp-toast-close");
+const CURRENT_APP_CACHE = "agartha-V2.15";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -738,6 +743,7 @@ const prefHapticToggle = document.getElementById("pref-haptic-toggle");
 const prefReactionPresetSelect = document.getElementById("pref-reaction-preset");
 const prefReactionCustomInput = document.getElementById("pref-reaction-custom");
 const hideReadToggle = document.getElementById("hide-read-toggle");
+const inappNotifyToggle = document.getElementById("inapp-notify-toggle");
 
 const userProfileModal = document.getElementById("user-profile-modal");
 const closeUserProfileBtn = document.getElementById("close-user-profile-btn");
@@ -2467,6 +2473,7 @@ const DEFAULT_UI_PREFS = {
   reactionPreset: "classic",
   reactionCustom: "❤️ 😂 👍 🔥 😮",
   hideReadReceipts: false,
+  inAppNotifs: true,
   pinnedChats: {},
   mutedChats: {}
 };
@@ -2553,6 +2560,7 @@ function applyUiPrefs() {
   root.style.setProperty("--chat-bg-bright", `${Number(uiPrefs.bgBrightness ?? 65) / 100}`);
 
   if (hideReadToggle) hideReadToggle.checked = Boolean(uiPrefs.hideReadReceipts);
+  if (inappNotifyToggle) inappNotifyToggle.checked = uiPrefs.inAppNotifs !== false;
 
   const activeRoomId = state.activeRoom ? state.activeRoom.id : "global";
   applyActiveRoomBackground(activeRoomId);
@@ -2960,7 +2968,72 @@ notifyBtn.addEventListener("click", async () => {
   }
 });
 
-async function showIncomingNotification(title, body, uniqueKey, roomId = null) {
+let inappToastTimer = null;
+let inappToastClickHandler = null;
+
+function hideInAppToast() {
+  clearTimeout(inappToastTimer);
+  inappToastTimer = null;
+  inappToastClickHandler = null;
+  if (inappToast) inappToast.classList.add("hidden");
+}
+
+function showInAppToast({ title, body, avatar = "", onClick = null }) {
+  if (uiPrefs.inAppNotifs === false) return;
+  if (!inappToast || !inappToastTitle || !inappToastMsg) return;
+  clearTimeout(inappToastTimer);
+  inappToastTitle.textContent = String(title || "Agartha");
+  inappToastMsg.textContent = String(body || "");
+  if (inappToastAvatar) {
+    const safeAv = sanitizeMediaSrc(avatar, "image");
+    inappToastAvatar.src = safeAv || "./icon-192.png";
+  }
+  inappToastClickHandler = typeof onClick === "function" ? onClick : null;
+  inappToast.classList.remove("hidden");
+  inappToastTimer = setTimeout(hideInAppToast, 4400);
+}
+
+if (inappToastClose) {
+  inappToastClose.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hideInAppToast();
+  });
+}
+
+if (inappToast) {
+  inappToast.addEventListener("click", (e) => {
+    if (e.target.closest("#inapp-toast-close")) return;
+    const handler = inappToastClickHandler;
+    hideInAppToast();
+    if (typeof handler === "function") handler();
+  });
+  let toastTouchY = 0;
+  inappToast.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 1) toastTouchY = e.touches[0].clientY;
+  }, { passive: true });
+  inappToast.addEventListener("touchend", (e) => {
+    if (e.changedTouches.length === 1 && e.changedTouches[0].clientY - toastTouchY < -22) {
+      hideInAppToast();
+    }
+  }, { passive: true });
+}
+
+if (inappNotifyToggle) {
+  inappNotifyToggle.addEventListener("change", () => {
+    const enabled = inappNotifyToggle.checked;
+    saveUiPrefs({ inAppNotifs: enabled });
+    if (enabled) {
+      showInAppToast({
+        title: "Uygulama İçi Bildirimler Açık",
+        body: "Yeni mesaj ve arkadaşlık istekleri burada görünecek."
+      });
+    } else {
+      hideInAppToast();
+    }
+  });
+}
+
+async function showIncomingNotification(title, body, uniqueKey, roomId = null, navMeta = null) {
   if (roomId && isChatMuted(roomId)) return;
   if (uniqueKey && state.notifiedMsgKeys.has(uniqueKey)) return;
   if (uniqueKey) state.notifiedMsgKeys.add(uniqueKey);
@@ -2969,6 +3042,22 @@ async function showIncomingNotification(title, body, uniqueKey, roomId = null) {
   syncAppBadge();
 
   triggerHaptic([120, 60, 120]);
+
+  if (document.visibilityState === "visible") {
+    showInAppToast({
+      title,
+      body,
+      avatar: navMeta && navMeta.avatar ? navMeta.avatar : "",
+      onClick: navMeta && navMeta.roomId
+        ? () => {
+            document.querySelectorAll(".modal:not(.hidden)").forEach((m) => {
+              if (m.id !== "call-modal") m.classList.add("hidden");
+            });
+            openChatRoom(navMeta.roomId, navMeta.title || title, Boolean(navMeta.isGroup), navMeta.otherId || null);
+          }
+        : null
+    });
+  }
 
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
@@ -3280,6 +3369,25 @@ function listenFriendRequests() {
     }
 
     friendRequestsSection.classList.remove("hidden");
+    entries.forEach(([reqKey, r]) => {
+      if ((r.createdAt || 0) > state.startedAt && !state.notifiedMsgKeys.has("fr_" + reqKey)) {
+        state.notifiedMsgKeys.add("fr_" + reqKey);
+        const sender = state.usersCache[r.fromId];
+        const disp = sender ? getDisplayName(sender) : (r.fromName || "Kullanıcı");
+        playMessageSound("receive");
+        triggerHaptic([100, 50, 100]);
+        showInAppToast({
+          title: disp,
+          body: "Sana arkadaşlık isteği gönderdi",
+          avatar: sender && sender.avatarData ? sender.avatarData : "",
+          onClick: () => {
+            document.querySelectorAll(".modal:not(.hidden)").forEach((m) => m.classList.add("hidden"));
+            if (chatView && chatView.classList.contains("active")) closeActiveChatWithAnimation();
+            selectBottomTab(0);
+          }
+        });
+      }
+    });
     friendRequestsList.innerHTML = entries
       .map(([reqKey, r]) => {
         const sender = state.usersCache[r.fromId];
@@ -3545,7 +3653,8 @@ function listenUsers() {
                     ? "Sesli arama başlattı"
                     : "Şifreli mesaj"),
             msgSnap.key,
-            dmId
+            dmId,
+            { roomId: dmId, title: getDisplayName(u), isGroup: false, otherId, avatar: u.avatarData || "" }
           );
         }
       });
@@ -3599,7 +3708,15 @@ function listenMainGroupPreview() {
         const isVisibleViewing = isViewingGroup && document.visibilityState === "visible";
         if (!isVisibleViewing) {
           mainGroupBadge.classList.remove("hidden");
-          showIncomingNotification("Ana Grup", `${msg.senderName}: ${previewText}`, key, "main_group");
+          const mgName = (state.mainGroupInfo && state.mainGroupInfo.name) || "Ana Grup";
+          const mgAv = (state.mainGroupInfo && state.mainGroupInfo.avatarData) || "";
+          showIncomingNotification(
+            mgName,
+            `${msg.senderName}: ${previewText}`,
+            key,
+            "main_group",
+            { roomId: "main_group", title: mgName, isGroup: true, otherId: null, avatar: mgAv }
+          );
         }
       }
     });
@@ -3815,7 +3932,8 @@ function listenCustomGroups() {
               const dec = await decryptMessageRecord(msgSnap.key, msg, null, gid);
               decodedText = dec.text || "";
             }
-            const curGroupName = (state.customGroups[gid] && state.customGroups[gid].name) || "Özel Grup";
+            const curGroupObj = state.customGroups[gid] || {};
+            const curGroupName = curGroupObj.name || "Özel Grup";
             const preview = msg.viewOnce
               ? "1 kezlik fotoğraf gönderdi"
               : decodedText || (msg.imageUrl || msg.imageData ? "Fotoğraf gönderdi" : "Yeni mesaj");
@@ -3823,7 +3941,8 @@ function listenCustomGroups() {
               curGroupName,
               `${msg.senderName || "?"}: ${preview}`,
               msgSnap.key,
-              gid
+              gid,
+              { roomId: gid, title: curGroupName, isGroup: true, otherId: null, avatar: curGroupObj.avatarData || "" }
             );
           }
         });
@@ -8536,9 +8655,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.14)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.15)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.15",
+    title: "Uygulama İçi Bildirim Kartı (iOS & Android)",
+    desc: "Sistem bildirimlerinden bağımsız olarak uygulama açıkken başka odadan gelen mesaj ve arkadaşlık isteklerinde üstte şık Uygulama İçi Bildirim Kartı çıkar; dokununca doğrudan ilgili sohbete geçer ve Ayarlar > Sohbet, Gruplar & Gizlilik altından açılıp kapatılabilir."
+  },
   {
     v: "V2.14",
     title: "Hızlı Pending Güncelleme Algılama Düzeltmesi",
