@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.18";
+const CURRENT_APP_CACHE = "agartha-V2.19";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -4725,25 +4725,31 @@ function openChatRoom(roomId, title, isGroup, otherId) {
         return `
           <div class="msg-row ${isMe ? "me" : "other"}" data-msg-key="${escapeHtml(msgKey)}">
             ${senderAvatarHtml}
-            <div class="msg-bubble ${isMe ? "me" : "other"}"${customStyle}>
-              ${senderHtml}
-              ${replyQuoteHtml}
-              ${imgHtml}
-              ${videoHtml}
-              ${audioHtml}
-              ${locHtml}
-              ${callLogHtml}
-              ${textHtml}
-              <div class="msg-footer">
+            <div class="msg-content-col ${isMe ? "me" : "other"}">
+              <div class="msg-bubble ${isMe ? "me" : "other"}"${customStyle}>
+                ${senderHtml}
+                ${replyQuoteHtml}
+                ${imgHtml}
+                ${videoHtml}
+                ${audioHtml}
+                ${locHtml}
+                ${callLogHtml}
+                <div class="msg-main-wrap">
+                  ${textHtml}
+                  <div class="msg-meta">
+                    ${m.editedAt ? '<span class="msg-edited-tag">Düzenlendi</span>' : ""}
+                    <span class="msg-time">${formatTime(m.timestamp)}</span>
+                    ${tickHtml}
+                  </div>
+                </div>
+                ${reactionsHtml}
+              </div>
+              <div class="msg-actions">
                 ${reactBtnHtml}
                 ${replyBtnHtml}
                 ${editBtnHtml}
                 ${delHtml}
-                ${m.editedAt ? '<span class="msg-edited-tag">Düzenlendi</span>' : ""}
-                <span class="msg-time">${formatTime(m.timestamp)}</span>
-                ${tickHtml}
               </div>
-              ${reactionsHtml}
             </div>
           </div>
         `;
@@ -4837,14 +4843,14 @@ function openChatRoom(roomId, title, isGroup, otherId) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const msgKey = btn.dataset.reactOpen;
-        const bubble = btn.closest(".msg-bubble");
+        const row = btn.closest(".msg-row");
+        const bubble = btn.closest(".msg-bubble") || (row && row.querySelector(".msg-bubble"));
         if (!bubble || !msgKey) return;
         const existingPop = bubble.querySelector(".reaction-picker-pop");
         messagesContainer.querySelectorAll(".reaction-picker-pop").forEach((p) => p.remove());
         messagesContainer.querySelectorAll(".msg-row.has-reaction-pop").forEach((r) => r.classList.remove("has-reaction-pop"));
         if (existingPop) return;
 
-        const row = bubble.closest(".msg-row");
         if (row) row.classList.add("has-reaction-pop");
 
         const pop = document.createElement("div");
@@ -8989,9 +8995,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.18)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.19)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.19",
+    title: "Mesaj Uzunluğuna Göre Dinamik Baloncuk Boyutu",
+    desc: "Mesaj aksiyon butonları (tepki, yanıtla, düzenle, sil) baloncuk dışına taşındı; artık 'OK' gibi kısa mesajlarda baloncuklar metin kadar küçük ve kompakt görünür, uzun mesajlarda metne göre genişler."
+  },
   {
     v: "V2.18",
     title: "Çoklu Cihaz E2EE Anahtar Senkronu",

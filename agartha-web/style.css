@@ -774,9 +774,26 @@ html.keyboard-open .chat-input-bar {
   gap: 8px;
 }
 
-.msg-bubble {
+.msg-content-col {
+  display: flex;
+  flex-direction: column;
   max-width: 78%;
-  padding: 9px 13px;
+  min-width: 0;
+}
+
+.msg-content-col.me {
+  align-items: flex-end;
+}
+
+.msg-content-col.other {
+  align-items: flex-start;
+}
+
+.msg-bubble {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  padding: 7px 12px;
   border-radius: 16px;
   font-size: 14px;
   line-height: 1.4;
@@ -798,6 +815,36 @@ html.keyboard-open .chat-input-bar {
   border-bottom-left-radius: 4px;
 }
 
+.msg-main-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  column-gap: 7px;
+  row-gap: 2px;
+}
+
+.msg-main-wrap:not(:first-child) {
+  margin-top: 3px;
+}
+
+.msg-main-wrap .msg-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-right: auto;
+}
+
+.msg-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  line-height: 1;
+  padding-bottom: 1px;
+}
+
 .msg-sender {
   font-size: 11px;
   font-weight: 700;
@@ -810,7 +857,7 @@ html.keyboard-open .chat-input-bar {
   color: inherit;
   opacity: 0.72;
   text-align: right;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .message-input-bar {
@@ -1107,6 +1154,25 @@ html.is-ios-standalone .modal {
   flex-shrink: 0;
 }
 
+.msg-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 0 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.msg-content-col.me .msg-actions {
+  justify-content: flex-end;
+}
+
+.msg-content-col.other .msg-actions {
+  justify-content: flex-start;
+}
+
 .msg-footer {
   display: flex;
   align-items: center;
@@ -1238,6 +1304,7 @@ html.is-ios-standalone .modal {
 .msg-avatar {
   width: 28px;
   height: 28px;
+  margin-bottom: 18px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
