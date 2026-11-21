@@ -3286,49 +3286,49 @@ html.anim-off *::after {
    LIQUID GLASS TASARIM MODU — OPTİK APPLE LENS MOTORU (V2.22)
    ========================================================= */
 html.liquid-glass {
-  --lg-lens-center: color-mix(in srgb, var(--surface) 24%, transparent);
-  --lg-lens-edge: rgba(255, 255, 255, 0.14);
-  --lg-sheet-center: color-mix(in srgb, var(--surface) 44%, transparent);
-  --lg-modal-center: color-mix(in srgb, var(--bg) 54%, transparent);
-  --lg-card-center: color-mix(in srgb, var(--surface) 28%, transparent);
-  --lg-bubble-other-center: color-mix(in srgb, var(--bubble-other) 30%, transparent);
-  --lg-bubble-me-center: color-mix(in srgb, var(--bubble-me) 42%, transparent);
-  --lg-rim-top: rgba(255, 255, 255, 0.66);
-  --lg-rim-side: rgba(255, 255, 255, 0.22);
-  --lg-rim-bottom: rgba(255, 255, 255, 0.36);
-  --lg-prism-a: color-mix(in srgb, var(--accent) 46%, rgba(255, 255, 255, 0.38));
-  --lg-prism-b: color-mix(in srgb, var(--accent-2) 42%, rgba(255, 255, 255, 0.30));
-  --lg-outer-border: rgba(255, 255, 255, 0.22);
-  --lg-shadow-drop: rgba(2, 6, 23, 0.44);
-  --lg-shadow-contact: rgba(0, 0, 0, 0.56);
-  --lg-inset-dark: rgba(2, 6, 23, 0.30);
-  --lg-glow-tint: rgba(255, 255, 255, 0.24);
-  --lg-ctrl-bg: rgba(255, 255, 255, 0.08);
-  --lg-ctrl-border: rgba(255, 255, 255, 0.20);
-  --lg-modal-item-bg: rgba(255, 255, 255, 0.06);
+  --lg-lens-center: color-mix(in srgb, var(--surface) 10%, transparent);
+  --lg-lens-edge: rgba(255, 255, 255, 0.045);
+  --lg-sheet-center: color-mix(in srgb, var(--surface) 22%, transparent);
+  --lg-modal-center: color-mix(in srgb, var(--bg) 36%, transparent);
+  --lg-card-center: color-mix(in srgb, var(--surface) 11%, transparent);
+  --lg-bubble-other-center: color-mix(in srgb, var(--bubble-other) 16%, transparent);
+  --lg-bubble-me-center: color-mix(in srgb, var(--bubble-me) 26%, transparent);
+  --lg-rim-peak: rgba(255, 255, 255, 0.30);
+  --lg-rim-mid: rgba(255, 255, 255, 0.08);
+  --lg-rim-fade: rgba(255, 255, 255, 0.015);
+  --lg-rim-bottom: rgba(255, 255, 255, 0.14);
+  --lg-rim-caustic: rgba(255, 255, 255, 0.16);
+  --lg-outer-border: rgba(255, 255, 255, 0.065);
+  --lg-shadow-drop: rgba(2, 6, 23, 0.38);
+  --lg-shadow-contact: rgba(0, 0, 0, 0.46);
+  --lg-inset-dark: rgba(2, 6, 23, 0.14);
+  --lg-glow-tint: rgba(255, 255, 255, 0.13);
+  --lg-ctrl-bg: rgba(255, 255, 255, 0.045);
+  --lg-ctrl-border: rgba(255, 255, 255, 0.085);
+  --lg-modal-item-bg: rgba(255, 255, 255, 0.035);
 }
 
 html.liquid-glass.theme-light {
-  --lg-lens-center: rgba(255, 255, 255, 0.38);
-  --lg-lens-edge: rgba(255, 255, 255, 0.78);
-  --lg-sheet-center: rgba(255, 255, 255, 0.58);
-  --lg-modal-center: rgba(248, 250, 252, 0.74);
-  --lg-card-center: rgba(255, 255, 255, 0.48);
-  --lg-bubble-other-center: color-mix(in srgb, var(--bubble-other) 52%, rgba(255, 255, 255, 0.46));
-  --lg-bubble-me-center: color-mix(in srgb, var(--bubble-me) 62%, rgba(255, 255, 255, 0.22));
-  --lg-rim-top: rgba(255, 255, 255, 0.96);
-  --lg-rim-side: rgba(255, 255, 255, 0.56);
-  --lg-rim-bottom: rgba(255, 255, 255, 0.80);
-  --lg-prism-a: color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.84));
-  --lg-prism-b: color-mix(in srgb, var(--accent-2) 30%, rgba(255, 255, 255, 0.76));
-  --lg-outer-border: rgba(15, 23, 42, 0.11);
-  --lg-shadow-drop: rgba(15, 23, 42, 0.14);
-  --lg-shadow-contact: rgba(15, 23, 42, 0.20);
-  --lg-inset-dark: rgba(15, 23, 42, 0.08);
-  --lg-glow-tint: rgba(255, 255, 255, 0.58);
-  --lg-ctrl-bg: rgba(255, 255, 255, 0.54);
-  --lg-ctrl-border: rgba(15, 23, 42, 0.14);
-  --lg-modal-item-bg: rgba(255, 255, 255, 0.56);
+  --lg-lens-center: rgba(255, 255, 255, 0.24);
+  --lg-lens-edge: rgba(255, 255, 255, 0.34);
+  --lg-sheet-center: rgba(255, 255, 255, 0.38);
+  --lg-modal-center: rgba(248, 250, 252, 0.58);
+  --lg-card-center: rgba(255, 255, 255, 0.22);
+  --lg-bubble-other-center: color-mix(in srgb, var(--bubble-other) 30%, rgba(255, 255, 255, 0.32));
+  --lg-bubble-me-center: color-mix(in srgb, var(--bubble-me) 46%, rgba(255, 255, 255, 0.14));
+  --lg-rim-peak: rgba(255, 255, 255, 0.72);
+  --lg-rim-mid: rgba(255, 255, 255, 0.24);
+  --lg-rim-fade: rgba(255, 255, 255, 0.05);
+  --lg-rim-bottom: rgba(255, 255, 255, 0.42);
+  --lg-rim-caustic: rgba(255, 255, 255, 0.62);
+  --lg-outer-border: rgba(15, 23, 42, 0.065);
+  --lg-shadow-drop: rgba(15, 23, 42, 0.10);
+  --lg-shadow-contact: rgba(15, 23, 42, 0.14);
+  --lg-inset-dark: rgba(15, 23, 42, 0.04);
+  --lg-glow-tint: rgba(255, 255, 255, 0.34);
+  --lg-ctrl-bg: rgba(255, 255, 255, 0.30);
+  --lg-ctrl-border: rgba(15, 23, 42, 0.08);
+  --lg-modal-item-bg: rgba(255, 255, 255, 0.32);
 }
 
 /* GPU-composited ortam ışık alanı (iOS Safari background-attachment:fixed takılmasını önler) */
@@ -3344,17 +3344,17 @@ html.liquid-glass body::before {
   pointer-events: none;
   transform: translateZ(0);
   background:
-    radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 44%),
-    radial-gradient(circle at 86% 24%, color-mix(in srgb, var(--accent-2) 24%, transparent), transparent 46%),
-    radial-gradient(circle at 52% 88%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 52%),
-    radial-gradient(circle at 24% 64%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 42%);
+    radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 44%),
+    radial-gradient(circle at 86% 24%, color-mix(in srgb, var(--accent-2) 26%, transparent), transparent 46%),
+    radial-gradient(circle at 52% 88%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 52%),
+    radial-gradient(circle at 24% 64%, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 44%);
 }
 
 html.liquid-glass.theme-light body::before {
   background:
-    radial-gradient(circle at 14% 10%, color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.4)), transparent 46%),
-    radial-gradient(circle at 88% 20%, color-mix(in srgb, var(--accent-2) 18%, rgba(224, 242, 254, 0.7)), transparent 48%),
-    radial-gradient(circle at 46% 90%, color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.5)), transparent 54%);
+    radial-gradient(circle at 14% 10%, color-mix(in srgb, var(--accent) 24%, rgba(255, 255, 255, 0.35)), transparent 46%),
+    radial-gradient(circle at 88% 20%, color-mix(in srgb, var(--accent-2) 20%, rgba(224, 242, 254, 0.65)), transparent 48%),
+    radial-gradient(circle at 46% 90%, color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.45)), transparent 54%);
 }
 
 html.liquid-glass #app {
@@ -3370,7 +3370,7 @@ html.liquid-glass .view {
 }
 
 /* ---------------------------------------------------------
-   ORTAK SPEKÜLER KENAR IŞIĞI (::before) VE DİNAMİK YANSIMA (::after)
+   İNCE IŞIĞA DUYARLI CAM KENAR (::before) & ASİMETRİK SPEKÜLER (::after)
    --------------------------------------------------------- */
 html.liquid-glass .top-bar,
 html.liquid-glass .bottom-nav,
@@ -3434,25 +3434,74 @@ html.liquid-glass .icon-btn::before {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.25px;
+  padding: 1px;
   pointer-events: none;
   z-index: 2;
-  background: linear-gradient(
-    138deg,
-    var(--lg-rim-top) 0%,
-    var(--lg-prism-a) 18%,
-    var(--lg-rim-side) 40%,
-    rgba(255, 255, 255, 0.04) 54%,
-    var(--lg-prism-b) 76%,
-    var(--lg-rim-bottom) 100%
-  );
+  background:
+    radial-gradient(
+      140px circle at var(--lg-x, var(--lg-spec-x, 18%)) var(--lg-y, var(--lg-spec-y, 12%)),
+      rgba(255, 255, 255, calc(0.16 + var(--lg-glow, 0) * 0.24)) 0%,
+      transparent 68%
+    ),
+    linear-gradient(
+      var(--lg-rim-angle, 142deg),
+      var(--lg-rim-peak) 0%,
+      var(--lg-rim-mid) 18%,
+      var(--lg-rim-fade) 46%,
+      var(--lg-rim-fade) 68%,
+      var(--lg-rim-bottom) 92%,
+      var(--lg-rim-mid) 100%
+    );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
 }
 
-/* Dinamik imleç / dokunma yansıması & üst cam menisküsü */
+@media (min-resolution: 2dppx), (-webkit-min-device-pixel-ratio: 2) {
+  html.liquid-glass .top-bar::before,
+  html.liquid-glass .bottom-nav::before,
+  html.liquid-glass .message-input-bar::before,
+  html.liquid-glass .chat-search-bar::before,
+  html.liquid-glass .reply-preview-bar::before,
+  html.liquid-glass .photo-preview-bar::before,
+  html.liquid-glass .live-loc-bar::before,
+  html.liquid-glass .chat-item::before,
+  html.liquid-glass .card::before,
+  html.liquid-glass .settings-item::before,
+  html.liquid-glass .announcement-banner::before,
+  html.liquid-glass .auth-card::before,
+  html.liquid-glass .loading-card::before,
+  html.liquid-glass .modal-card::before,
+  html.liquid-glass .inapp-toast::before,
+  html.liquid-glass .update-banner::before,
+  html.liquid-glass .attach-menu::before,
+  html.liquid-glass .reaction-picker-pop::before,
+  html.liquid-glass .place-card::before,
+  html.liquid-glass .ai-card::before,
+  html.liquid-glass .admin-row::before,
+  html.liquid-glass .group-member-row::before,
+  html.liquid-glass .changelog-card::before,
+  html.liquid-glass .friend-req-row::before,
+  html.liquid-glass .msg-bubble::before,
+  html.liquid-glass .ai-subnav::before,
+  html.liquid-glass .auth-tabs::before,
+  html.liquid-glass .btn-primary::before,
+  html.liquid-glass .send-btn::before,
+  html.liquid-glass .icon-btn::before {
+    padding: 0.75px;
+  }
+}
+
+html.liquid-glass .icon-btn::before,
+html.liquid-glass .btn-primary::before,
+html.liquid-glass .send-btn::before,
+html.liquid-glass .auth-tabs::before,
+html.liquid-glass .ai-subnav::before {
+  opacity: 0.62;
+}
+
+/* Yumuşak asimetrik speküler parlama & imleç/dokunma ışık kırılması */
 html.liquid-glass .top-bar::after,
 html.liquid-glass .bottom-nav::after,
 html.liquid-glass .message-input-bar::after,
@@ -3466,6 +3515,12 @@ html.liquid-glass .inapp-toast::after,
 html.liquid-glass .update-banner::after,
 html.liquid-glass .attach-menu::after,
 html.liquid-glass .reaction-picker-pop::after,
+html.liquid-glass .place-card::after,
+html.liquid-glass .ai-card::after,
+html.liquid-glass .admin-row::after,
+html.liquid-glass .group-member-row::after,
+html.liquid-glass .changelog-card::after,
+html.liquid-glass .friend-req-row::after,
 html.liquid-glass .msg-bubble::after,
 html.liquid-glass .btn-primary::after,
 html.liquid-glass .send-btn::after,
@@ -3477,24 +3532,82 @@ html.liquid-glass .ai-subnav::after {
   border-radius: inherit;
   pointer-events: none;
   z-index: 1;
-  opacity: calc(0.16 + var(--lg-glow, 0) * 0.84);
-  transition: opacity 240ms ease-out;
+  opacity: calc(var(--lg-spec-alpha, 0.34) + var(--lg-glow, 0) * 0.46);
+  transition: opacity 280ms ease-out;
   background:
-    radial-gradient(120% 48% at 50% 0%, rgba(255, 255, 255, 0.20) 0%, transparent 56%),
     radial-gradient(
-      170px circle at var(--lg-x, 50%) var(--lg-y, 20%),
+      85% 62% at var(--lg-spec-x, 16%) var(--lg-spec-y, 8%),
+      rgba(255, 255, 255, 0.09) 0%,
+      rgba(255, 255, 255, 0.02) 44%,
+      transparent 74%
+    ),
+    radial-gradient(
+      210px circle at var(--lg-x, 50%) var(--lg-y, 20%),
       var(--lg-glow-tint) 0%,
-      color-mix(in srgb, var(--accent) 16%, transparent) 42%,
-      transparent 72%
+      color-mix(in srgb, var(--accent) 7%, transparent) 46%,
+      transparent 74%
     );
 }
 
-html.liquid-glass .msg-bubble::after {
-  opacity: calc(0.08 + var(--lg-glow, 0) * 0.52);
+/* Karttan karta doğal asimetrik ışık açısı (aynı metalik parlama tekrarını önler) */
+html.liquid-glass .announcement-banner {
+  --lg-rim-angle: 124deg;
+  --lg-spec-x: 14%;
+  --lg-spec-y: 8%;
+  --lg-spec-alpha: 0.28;
+}
+
+html.liquid-glass .group-card {
+  --lg-rim-angle: 152deg;
+  --lg-spec-x: 84%;
+  --lg-spec-y: 12%;
+  --lg-spec-alpha: 0.30;
+}
+
+html.liquid-glass .list-stack > *:nth-child(4n + 1) {
+  --lg-rim-angle: 130deg;
+  --lg-spec-x: 18%;
+  --lg-spec-y: 10%;
+  --lg-spec-alpha: 0.34;
+}
+
+html.liquid-glass .list-stack > *:nth-child(4n + 2) {
+  --lg-rim-angle: 158deg;
+  --lg-spec-x: 82%;
+  --lg-spec-y: 14%;
+  --lg-spec-alpha: 0.22;
+}
+
+html.liquid-glass .list-stack > *:nth-child(4n + 3) {
+  --lg-rim-angle: 118deg;
+  --lg-spec-x: 34%;
+  --lg-spec-y: 88%;
+  --lg-spec-alpha: 0.26;
+}
+
+html.liquid-glass .list-stack > *:nth-child(4n) {
+  --lg-rim-angle: 146deg;
+  --lg-spec-x: 68%;
+  --lg-spec-y: 8%;
+  --lg-spec-alpha: 0.30;
+}
+
+html.liquid-glass .msg-row.other .msg-bubble {
+  --lg-rim-angle: 132deg;
+  --lg-spec-x: 16%;
+  --lg-spec-y: 10%;
+  --lg-spec-alpha: 0.22;
+}
+
+html.liquid-glass .msg-row.me .msg-bubble {
+  --lg-rim-angle: 154deg;
+  --lg-spec-x: 84%;
+  --lg-spec-y: 12%;
+  --lg-spec-alpha: 0.24;
 }
 
 html.liquid-glass .lg-pressed::after {
-  opacity: 1 !important;
+  opacity: 0.85 !important;
   transition-duration: 70ms;
 }
 
@@ -3507,37 +3620,30 @@ html.liquid-glass .composer-circle-btn.is-collapsed::after {
 
 /* ---------------------------------------------------------
    KATMAN 1: YÜZER OPTİK LENS KROM (BARLAR, NAV, POPOVER)
-   Berrak merkez + kenarda kırılmalı ışık + 5 katman kalınlık gölgesi
+   Berrak merkez + kenarda hafif ışık kırılması + derinlik gölgesi
    --------------------------------------------------------- */
 html.liquid-glass .top-bar,
 html.liquid-glass .bottom-nav,
 html.liquid-glass .message-input-bar {
+  --lg-rim-angle: 136deg;
+  --lg-spec-x: 20%;
+  --lg-spec-y: 10%;
+  --lg-spec-alpha: 0.28;
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.16) 0%,
-      rgba(255, 255, 255, 0.03) 28%,
-      transparent 58%,
-      rgba(255, 255, 255, 0.07) 100%
-    ),
     radial-gradient(
-      ellipse 84% 72% at 50% 48%,
-      transparent 0%,
-      rgba(255, 255, 255, 0.02) 56%,
+      ellipse 92% 80% at 50% 50%,
+      transparent 54%,
+      rgba(255, 255, 255, 0.015) 78%,
       var(--lg-lens-edge) 100%
     ),
     var(--lg-lens-center);
-  backdrop-filter: blur(12px) saturate(190%) brightness(1.06);
-  -webkit-backdrop-filter: blur(12px) saturate(190%) brightness(1.06);
+  backdrop-filter: blur(16px) saturate(195%) brightness(1.03);
+  -webkit-backdrop-filter: blur(16px) saturate(195%) brightness(1.03);
   border: 1px solid var(--lg-outer-border);
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 2px 12px -3px rgba(255, 255, 255, 0.18),
-    inset 1px 0 2px var(--lg-rim-side),
-    inset -1px 0 2px var(--lg-rim-side),
-    inset 0 -1.5px 2px var(--lg-rim-bottom),
-    inset 0 -10px 18px -12px var(--lg-inset-dark),
-    0 12px 30px -6px var(--lg-shadow-drop),
+    inset 0 0.5px 0 var(--lg-rim-caustic),
+    inset 0 0 12px -4px rgba(255, 255, 255, 0.04),
+    0 14px 32px -8px var(--lg-shadow-drop),
     0 2px 8px var(--lg-shadow-contact);
 }
 
@@ -3569,6 +3675,7 @@ html.liquid-glass #main-view > .top-bar .user-sub {
   text-overflow: ellipsis;
 }
 
+/* Alt Navigasyon Çubuğu — Hafif, yüzen ve derinlik hissi veren cam kapsül */
 html.liquid-glass #main-view > .bottom-nav {
   position: absolute;
   left: 10px;
@@ -3576,8 +3683,39 @@ html.liquid-glass #main-view > .bottom-nav {
   bottom: calc(10px + env(safe-area-inset-bottom));
   margin: 0;
   padding: 5px var(--nav-padding);
-  border-radius: 28px;
+  border-radius: 30px;
   z-index: 15;
+  --lg-rim-angle: 148deg;
+  --lg-spec-x: 24%;
+  --lg-spec-y: 12%;
+  --lg-spec-alpha: 0.24;
+  background:
+    radial-gradient(
+      ellipse 94% 84% at 50% 50%,
+      transparent 56%,
+      rgba(255, 255, 255, 0.015) 80%,
+      var(--lg-lens-edge) 100%
+    ),
+    color-mix(in srgb, var(--surface) 8%, transparent);
+  backdrop-filter: blur(18px) saturate(205%) brightness(1.04);
+  -webkit-backdrop-filter: blur(18px) saturate(205%) brightness(1.04);
+  box-shadow:
+    inset 0 0.5px 0 var(--lg-rim-caustic),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 16px -6px rgba(255, 255, 255, 0.05),
+    0 18px 42px -10px var(--lg-shadow-drop),
+    0 4px 14px -2px var(--lg-shadow-contact);
+}
+
+html.liquid-glass.theme-light #main-view > .bottom-nav {
+  background:
+    radial-gradient(
+      ellipse 94% 84% at 50% 50%,
+      transparent 56%,
+      rgba(255, 255, 255, 0.14) 82%,
+      var(--lg-lens-edge) 100%
+    ),
+    rgba(255, 255, 255, 0.22);
 }
 
 html.liquid-glass.keyboard-open #main-view > .bottom-nav {
@@ -3621,12 +3759,12 @@ html.liquid-glass #chat-view:not(:has(.reply-preview-bar:not(.hidden), .photo-pr
   padding-bottom: 26px;
 }
 
-/* Kayan Sıvı Sekme Kapsül Lensi */
+/* Kayan Sıvı Sekme Kapsül Lensi — Güçlü beyaz kenarlık yerine hafif cam parlaması & camgöbeği vurgusu */
 html.liquid-glass .bottom-nav .nav-btn {
   position: relative;
   z-index: 2;
   min-height: 52px;
-  border-radius: 22px;
+  border-radius: 24px;
   background: transparent !important;
   box-shadow: none !important;
   transition: color 200ms ease, transform 220ms cubic-bezier(0.22, 1.35, 0.36, 1);
@@ -3642,7 +3780,7 @@ html.liquid-glass .bottom-nav .nav-btn.active {
 
 html.liquid-glass .bottom-nav .nav-btn.active .nav-icon {
   transform: translateY(-1px) scale(1.06);
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 45%, transparent));
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 42%, transparent));
 }
 
 html.liquid-glass .bottom-nav .nav-indicator {
@@ -3655,27 +3793,44 @@ html.liquid-glass .bottom-nav .nav-indicator {
 html.liquid-glass .bottom-nav .nav-indicator::before {
   width: 100%;
   height: 100%;
-  border-radius: 22px;
+  border-radius: 24px;
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.06) 58%, rgba(255, 255, 255, 0.14) 100%),
-    color-mix(in srgb, var(--accent) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.36));
+    radial-gradient(100% 85% at 30% 18%, rgba(255, 255, 255, 0.12) 0%, transparent 58%),
+    radial-gradient(
+      95% 85% at 50% 58%,
+      color-mix(in srgb, var(--accent) 18%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 6%, transparent) 68%,
+      transparent 100%
+    ),
+    color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.03));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.05));
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 -1px 1px var(--lg-rim-bottom),
-    0 6px 18px color-mix(in srgb, var(--accent) 22%, rgba(0, 0, 0, 0.22));
+    inset 0 0.75px 0 rgba(255, 255, 255, 0.20),
+    inset 0 0 14px color-mix(in srgb, var(--accent) 16%, transparent),
+    0 4px 16px -4px color-mix(in srgb, var(--accent) 26%, transparent);
   transform-origin: center;
+}
+
+html.liquid-glass.theme-light .bottom-nav .nav-indicator::before {
+  background:
+    radial-gradient(100% 85% at 30% 18%, rgba(255, 255, 255, 0.44) 0%, transparent 58%),
+    color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.28));
+  border-color: color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.24));
+  box-shadow:
+    inset 0 0.75px 0 rgba(255, 255, 255, 0.65),
+    inset 0 0 12px color-mix(in srgb, var(--accent) 16%, transparent),
+    0 4px 14px -4px color-mix(in srgb, var(--accent) 22%, rgba(15, 23, 42, 0.06));
 }
 
 @keyframes lgLensElastic {
   0% { transform: scaleX(1) scaleY(1); }
-  38% { transform: scaleX(1.09) scaleY(0.93); }
-  74% { transform: scaleX(0.98) scaleY(1.02); }
+  36% { transform: scaleX(1.06) scaleY(0.95); }
+  74% { transform: scaleX(0.99) scaleY(1.01); }
   100% { transform: scaleX(1) scaleY(1); }
 }
 
 html.liquid-glass .bottom-nav .nav-indicator.is-switching::before {
-  animation: lgLensElastic 360ms cubic-bezier(0.22, 1.25, 0.36, 1);
+  animation: lgLensElastic 340ms cubic-bezier(0.22, 1.25, 0.36, 1);
 }
 
 /* Yüzer Popover / Bildirim / Reaksiyon Lensleri */
@@ -3683,23 +3838,20 @@ html.liquid-glass .inapp-toast,
 html.liquid-glass .update-banner,
 html.liquid-glass .reaction-picker-pop,
 html.liquid-glass .attach-menu {
+  --lg-rim-angle: 138deg;
+  --lg-spec-x: 18%;
+  --lg-spec-y: 12%;
+  --lg-spec-alpha: 0.26;
   background:
-    linear-gradient(
-      148deg,
-      rgba(255, 255, 255, 0.22) 0%,
-      rgba(255, 255, 255, 0.04) 48%,
-      rgba(255, 255, 255, 0.12) 100%
-    ),
-    radial-gradient(ellipse 84% 74% at 50% 48%, transparent 0%, var(--lg-lens-edge) 100%),
-    color-mix(in srgb, var(--surface) 42%, transparent);
-  backdrop-filter: blur(14px) saturate(195%) brightness(1.06);
-  -webkit-backdrop-filter: blur(14px) saturate(195%) brightness(1.06);
+    radial-gradient(ellipse 90% 82% at 50% 50%, transparent 54%, var(--lg-lens-edge) 100%),
+    color-mix(in srgb, var(--surface) 24%, transparent);
+  backdrop-filter: blur(16px) saturate(195%) brightness(1.04);
+  -webkit-backdrop-filter: blur(16px) saturate(195%) brightness(1.04);
   border: 1px solid var(--lg-outer-border);
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 2px 10px -2px rgba(255, 255, 255, 0.18),
-    inset 0 -1.5px 2px var(--lg-rim-bottom),
-    0 16px 38px -6px var(--lg-shadow-drop),
+    inset 0 0.5px 0 var(--lg-rim-caustic),
+    inset 0 0 12px -4px rgba(255, 255, 255, 0.04),
+    0 16px 38px -8px var(--lg-shadow-drop),
     0 4px 12px var(--lg-shadow-contact);
 }
 
@@ -3708,8 +3860,8 @@ html.liquid-glass.theme-light .update-banner,
 html.liquid-glass.theme-light .reaction-picker-pop,
 html.liquid-glass.theme-light .attach-menu {
   background:
-    linear-gradient(148deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.44) 55%, rgba(255, 255, 255, 0.72) 100%),
-    rgba(255, 255, 255, 0.52);
+    radial-gradient(ellipse 90% 82% at 50% 50%, transparent 54%, rgba(255, 255, 255, 0.28) 100%),
+    rgba(255, 255, 255, 0.44);
 }
 
 html.liquid-glass .inapp-toast:active {
@@ -3720,68 +3872,71 @@ html.liquid-glass .inapp-toast:active {
 html.liquid-glass.lg-svg-refract .bottom-nav,
 html.liquid-glass.lg-svg-refract .reaction-picker-pop,
 html.liquid-glass.lg-svg-refract .update-banner {
-  backdrop-filter: url(#lg-refract-pill) blur(10px) saturate(190%) brightness(1.05);
+  backdrop-filter: url(#lg-refract-pill) blur(14px) saturate(200%) brightness(1.04);
 }
 
 html.liquid-glass.lg-svg-refract .top-bar,
 html.liquid-glass.lg-svg-refract .message-input-bar,
 html.liquid-glass.lg-svg-refract .inapp-toast {
-  backdrop-filter: url(#lg-refract-bar) blur(10px) saturate(185%) brightness(1.05);
+  backdrop-filter: url(#lg-refract-bar) blur(13px) saturate(192%) brightness(1.03);
 }
 
 html.liquid-glass.lg-svg-refract .attach-menu {
-  backdrop-filter: url(#lg-refract-pop) blur(12px) saturate(190%) brightness(1.05);
+  backdrop-filter: url(#lg-refract-pop) blur(14px) saturate(195%) brightness(1.04);
 }
 
 /* ---------------------------------------------------------
-   KATMAN 2: KALIN OPTİK CAM LEVHALAR (MODALLAR, AUTH, ŞERİTLER)
+   KATMAN 2: OPTİK CAM LEVHALAR (MODALLAR, AUTH, ŞERİTLER)
    --------------------------------------------------------- */
 html.liquid-glass .modal {
-  background: rgba(2, 6, 23, 0.48);
+  background: rgba(2, 6, 23, 0.42);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 
 html.liquid-glass.theme-light .modal {
-  background: rgba(15, 23, 42, 0.22);
+  background: rgba(15, 23, 42, 0.20);
 }
 
 html.liquid-glass .modal-card {
+  --lg-rim-angle: 140deg;
+  --lg-spec-x: 16%;
+  --lg-spec-y: 8%;
+  --lg-spec-alpha: 0.22;
   background:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 44%, rgba(255, 255, 255, 0.08) 100%),
-    radial-gradient(ellipse 88% 82% at 50% 46%, transparent 0%, var(--lg-lens-edge) 100%),
+    radial-gradient(ellipse 92% 86% at 50% 50%, transparent 56%, var(--lg-lens-edge) 100%),
     var(--lg-modal-center);
-  backdrop-filter: blur(18px) saturate(185%) brightness(1.04);
-  -webkit-backdrop-filter: blur(18px) saturate(185%) brightness(1.04);
+  backdrop-filter: blur(20px) saturate(185%) brightness(1.03);
+  -webkit-backdrop-filter: blur(20px) saturate(185%) brightness(1.03);
   border: 1px solid var(--lg-outer-border);
   border-radius: 24px;
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 3px 16px -4px rgba(255, 255, 255, 0.16),
-    inset 0 -1.5px 2px var(--lg-rim-bottom),
-    inset 0 -14px 24px -14px var(--lg-inset-dark),
-    0 26px 64px -8px var(--lg-shadow-contact);
+    inset 0 0.5px 0 var(--lg-rim-caustic),
+    inset 0 0 18px -6px rgba(255, 255, 255, 0.04),
+    0 26px 64px -10px var(--lg-shadow-contact);
 }
 
 html.liquid-glass .modal-header {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
   border-bottom-color: var(--lg-outer-border);
 }
 
 html.liquid-glass .auth-card,
 html.liquid-glass .loading-card {
+  --lg-rim-angle: 136deg;
+  --lg-spec-x: 18%;
+  --lg-spec-y: 8%;
+  --lg-spec-alpha: 0.24;
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.08) 100%),
-    radial-gradient(ellipse 86% 78% at 50% 48%, transparent 0%, var(--lg-lens-edge) 100%),
+    radial-gradient(ellipse 90% 84% at 50% 50%, transparent 56%, var(--lg-lens-edge) 100%),
     var(--lg-sheet-center);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(185%);
+  -webkit-backdrop-filter: blur(18px) saturate(185%);
   border: 1px solid var(--lg-outer-border);
   border-radius: 24px;
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 2px 14px -4px rgba(255, 255, 255, 0.16),
-    inset 0 -1.5px 2px var(--lg-rim-bottom),
+    inset 0 0.5px 0 var(--lg-rim-caustic),
+    inset 0 0 14px -6px rgba(255, 255, 255, 0.04),
     0 22px 50px -10px var(--lg-shadow-drop);
 }
 
@@ -3792,13 +3947,13 @@ html.liquid-glass .live-loc-bar {
   margin: 6px 10px 0;
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    radial-gradient(ellipse 92% 84% at 50% 50%, transparent 58%, var(--lg-lens-edge) 100%),
     var(--lg-sheet-center);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(185%);
+  -webkit-backdrop-filter: blur(16px) saturate(185%);
   border: 1px solid var(--lg-outer-border);
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 0.5px 0 var(--lg-rim-caustic),
     0 8px 20px -6px var(--lg-shadow-drop);
 }
 
@@ -3831,7 +3986,7 @@ html.liquid-glass .auth-card select {
 }
 
 /* ---------------------------------------------------------
-   KATMAN 3: KARTLAR, MESAJ BALONCULARI & KONTROLLER
+   KATMAN 3: ŞEFFAF KARTLAR, MESAJ BALONCULARI & KONTROLLER
    --------------------------------------------------------- */
 html.liquid-glass .chat-item,
 html.liquid-glass .card,
@@ -3844,40 +3999,44 @@ html.liquid-glass .group-member-row,
 html.liquid-glass .changelog-card,
 html.liquid-glass .friend-req-row {
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.07) 100%),
-    radial-gradient(ellipse 84% 76% at 50% 48%, transparent 0%, var(--lg-lens-edge) 100%),
+    radial-gradient(
+      ellipse 92% 84% at 50% 50%,
+      transparent 56%,
+      rgba(255, 255, 255, 0.015) 82%,
+      var(--lg-lens-edge) 100%
+    ),
     var(--lg-card-center);
-  backdrop-filter: blur(10px) saturate(160%);
-  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(175%);
+  -webkit-backdrop-filter: blur(12px) saturate(175%);
   border: 1px solid var(--lg-outer-border);
   border-radius: 18px;
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 2px 10px -4px rgba(255, 255, 255, 0.14),
-    inset 0 -1px 1.5px var(--lg-rim-bottom),
-    inset 0 -8px 14px -10px var(--lg-inset-dark),
-    0 8px 22px -6px var(--lg-shadow-drop);
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 10px -4px rgba(255, 255, 255, 0.03),
+    0 8px 22px -8px var(--lg-shadow-drop);
   transition: transform 240ms cubic-bezier(0.22, 1.35, 0.36, 1), border-color 180ms ease, box-shadow 220ms ease;
 }
 
 html.liquid-glass .group-card,
 html.liquid-glass .ai-banner {
   background:
+    radial-gradient(ellipse 92% 84% at 50% 50%, transparent 56%, var(--lg-lens-edge) 100%),
     linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.14)),
-      rgba(255, 255, 255, 0.03) 55%,
-      color-mix(in srgb, var(--accent-2) 16%, transparent)
+      142deg,
+      color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+      transparent 58%,
+      color-mix(in srgb, var(--accent-2) 10%, transparent) 100%
     ),
     var(--lg-card-center);
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--lg-outer-border));
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--lg-outer-border));
 }
 
 html.liquid-glass .notify-prompt-banner {
   background:
-    linear-gradient(145deg, rgba(34, 197, 94, 0.22), rgba(56, 189, 248, 0.08) 60%, rgba(255, 255, 255, 0.04)),
+    radial-gradient(ellipse 92% 84% at 50% 50%, transparent 56%, var(--lg-lens-edge) 100%),
+    linear-gradient(142deg, rgba(34, 197, 94, 0.12), rgba(56, 189, 248, 0.04) 60%, transparent),
     var(--lg-card-center);
-  border-color: rgba(34, 197, 94, 0.45);
+  border-color: rgba(34, 197, 94, 0.22);
 }
 
 html.liquid-glass .chat-item:active,
@@ -3896,44 +4055,41 @@ html.liquid-glass .lg-pressed.announcement-banner {
   html.liquid-glass .announcement-banner:hover,
   html.liquid-glass .group-member-row:hover {
     transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--accent) 42%, var(--lg-rim-top));
+    border-color: color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.16));
     box-shadow:
-      inset 0 1px 0.5px var(--lg-rim-top),
-      inset 0 2px 12px -3px rgba(255, 255, 255, 0.22),
-      inset 0 -1px 1.5px var(--lg-rim-bottom),
-      0 12px 28px -6px var(--lg-shadow-drop);
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 0 12px -4px rgba(255, 255, 255, 0.05),
+      0 12px 26px -8px var(--lg-shadow-drop);
   }
 }
 
-/* Mesaj Baloncukları — Berrak merkez, cam kenar kalınlığı, kullanıcı balon şeklini korur */
+/* Mesaj Baloncukları — Berrak merkez, hafif kenar kırılması, kullanıcı balon şeklini korur */
 html.liquid-glass .msg-bubble {
-  backdrop-filter: blur(10px) saturate(165%);
-  -webkit-backdrop-filter: blur(10px) saturate(165%);
+  backdrop-filter: blur(12px) saturate(175%);
+  -webkit-backdrop-filter: blur(12px) saturate(175%);
   box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 2px 10px -4px rgba(255, 255, 255, 0.20),
-    inset 0 -1px 1.5px var(--lg-rim-bottom),
-    inset 0 -8px 14px -10px var(--lg-inset-dark),
-    0 6px 18px -4px var(--lg-shadow-drop);
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.15),
+    inset 0 0 10px -4px rgba(255, 255, 255, 0.03),
+    0 6px 18px -6px var(--lg-shadow-drop);
   transition: transform 200ms cubic-bezier(0.22, 1.3, 0.36, 1), box-shadow 200ms ease;
 }
 
 html.liquid-glass .msg-bubble.other {
   background:
-    linear-gradient(152deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.08) 100%),
+    radial-gradient(ellipse 92% 84% at 50% 50%, transparent 56%, var(--lg-lens-edge) 100%),
     var(--lg-bubble-other-center);
   border: 1px solid var(--lg-outer-border);
 }
 
 html.liquid-glass .msg-bubble.me:not([style*="background"]) {
   background:
-    linear-gradient(152deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.08) 100%),
+    radial-gradient(ellipse 92% 84% at 50% 50%, transparent 56%, rgba(255, 255, 255, 0.04) 100%),
     var(--lg-bubble-me-center);
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--lg-rim-top));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, rgba(255, 255, 255, 0.08));
 }
 
 html.liquid-glass .msg-bubble.me[style*="background"] {
-  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.04) 48%, transparent 100%);
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.02) 44%, transparent 100%);
 }
 
 html.liquid-glass .msg-bubble.lg-pressed {
@@ -3947,13 +4103,13 @@ html.liquid-glass.theme-light .place-comment-item,
 html.liquid-glass.theme-light .ai-train-row,
 html.liquid-glass.theme-light .view-once-card,
 html.liquid-glass.theme-light .loc-card {
-  background: rgba(255, 255, 255, 0.56);
-  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.34);
+  border-color: rgba(15, 23, 42, 0.08);
 }
 
 html.liquid-glass.theme-light .reaction-pill {
-  background: rgba(255, 255, 255, 0.58);
-  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.38);
+  border-color: rgba(15, 23, 42, 0.09);
 }
 
 /* Butonlar, Giriş Alanları, Segmentler & Toggle */
@@ -3969,13 +4125,9 @@ html.liquid-glass input[type="password"],
 html.liquid-glass input[type="search"],
 html.liquid-glass input[type="url"],
 html.liquid-glass select {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
-    var(--lg-ctrl-bg);
+  background: var(--lg-ctrl-bg);
   border-color: var(--lg-ctrl-border);
-  box-shadow:
-    inset 0 1px 0.5px var(--lg-rim-top),
-    inset 0 -1px 1px var(--lg-inset-dark);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
 }
 
 html.liquid-glass .icon-btn,
@@ -3999,22 +4151,22 @@ html.liquid-glass .lg-pressed.send-btn {
 
 html.liquid-glass .btn-primary,
 html.liquid-glass .send-btn {
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, rgba(255, 255, 255, 0.45));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, rgba(255, 255, 255, 0.18));
   box-shadow:
-    inset 0 1px 0.5px rgba(255, 255, 255, 0.62),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.22),
-    0 8px 22px -4px color-mix(in srgb, var(--accent) 42%, transparent);
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.16),
+    0 8px 20px -5px color-mix(in srgb, var(--accent) 36%, transparent);
 }
 
 html.liquid-glass .auth-tab.active,
 html.liquid-glass .ai-subnav-btn.active {
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06)),
-    color-mix(in srgb, var(--accent) 22%, transparent);
+    radial-gradient(100% 80% at 30% 18%, rgba(255, 255, 255, 0.14), transparent 60%),
+    color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
   box-shadow:
-    inset 0 1px 0 var(--lg-rim-top),
-    0 3px 10px var(--lg-shadow-drop);
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    0 2px 10px -2px var(--lg-shadow-drop);
 }
 
 html.liquid-glass .toggle-switch {
@@ -4025,16 +4177,16 @@ html.liquid-glass .toggle-switch {
 
 html.liquid-glass .toggle-switch::after {
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.72),
-    0 2px 6px rgba(0, 0, 0, 0.28);
+    inset 0 0.5px 0.5px rgba(255, 255, 255, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.24);
 }
 
 html.liquid-glass .toggle-switch:checked {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.24);
   box-shadow:
-    inset 0 1px 0.5px rgba(255, 255, 255, 0.45),
-    0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.32),
+    0 0 14px color-mix(in srgb, var(--accent) 36%, transparent);
 }
 
 /* ---------------------------------------------------------
@@ -4049,13 +4201,13 @@ html.liquid-glass .toggle-switch:checked {
   html.liquid-glass .update-banner,
   html.liquid-glass .attach-menu,
   html.liquid-glass .reaction-picker-pop {
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
   }
   html.liquid-glass .chat-item,
   html.liquid-glass .card,
   html.liquid-glass .settings-item,
   html.liquid-glass .auth-card {
-    background: color-mix(in srgb, var(--surface) 84%, transparent);
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
   }
 }
 
@@ -4073,8 +4225,8 @@ html.liquid-glass.lg-low-power .settings-item,
 html.liquid-glass.lg-low-power .announcement-banner,
 html.liquid-glass.lg-low-power .auth-card,
 html.liquid-glass.lg-low-power .msg-bubble {
-  backdrop-filter: blur(8px) saturate(140%);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(145%);
+  -webkit-backdrop-filter: blur(8px) saturate(145%);
 }
 
 html.liquid-glass.lg-low-power *::after {

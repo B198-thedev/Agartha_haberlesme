@@ -60,6 +60,12 @@
     ".update-banner",
     ".attach-menu",
     ".reaction-picker-pop",
+    ".place-card",
+    ".ai-card",
+    ".admin-row",
+    ".group-member-row",
+    ".changelog-card",
+    ".friend-req-row",
     ".msg-bubble",
     ".btn-primary",
     ".send-btn",
@@ -158,9 +164,10 @@
 
         if (d >= 0 && d < bevel) {
           const t = 1 - d / bevel;
-          const mag = Math.pow(t, 2.15);
-          // Dışbükey lens kenarı: arkaplan örneklerini merkez-kenar eğrisi boyunca bük
-          const disp = mag * 118;
+          const smooth = t * t * (3 - 2 * t);
+          const mag = Math.pow(smooth, 1.35);
+          // Dışbükey optik menisküs kenarı: yalnız kenar bevelinde yumuşak Snell kırılması
+          const disp = mag * 96;
           data[idx] = Math.max(0, Math.min(255, Math.round(128 - nx * disp)));
           data[idx + 1] = Math.max(0, Math.min(255, Math.round(128 - ny * disp)));
           data[idx + 2] = 128;
@@ -188,9 +195,9 @@
     if (!document.body) return false;
 
     const specs = [
-      { id: "lg-refract-pill", w: 160, h: 64, r: 30, bevel: 11, scale: 14 },
-      { id: "lg-refract-bar", w: 180, h: 64, r: 22, bevel: 10, scale: 10 },
-      { id: "lg-refract-pop", w: 128, h: 128, r: 20, bevel: 14, scale: 12 }
+      { id: "lg-refract-pill", w: 280, h: 64, r: 30, bevel: 9, scale: 9 },
+      { id: "lg-refract-bar", w: 280, h: 56, r: 22, bevel: 8, scale: 7 },
+      { id: "lg-refract-pop", w: 160, h: 160, r: 20, bevel: 10, scale: 9 }
     ];
 
     const svgNS = "http://www.w3.org/2000/svg";
@@ -228,14 +235,20 @@
       feImg.setAttribute("preserveAspectRatio", "none");
       feImg.setAttribute("result", "dispMap");
 
+      const feBlur = document.createElementNS(svgNS, "feGaussianBlur");
+      feBlur.setAttribute("in", "dispMap");
+      feBlur.setAttribute("stdDeviation", "0.55");
+      feBlur.setAttribute("result", "smoothMap");
+
       const feDisp = document.createElementNS(svgNS, "feDisplacementMap");
       feDisp.setAttribute("in", "SourceGraphic");
-      feDisp.setAttribute("in2", "dispMap");
+      feDisp.setAttribute("in2", "smoothMap");
       feDisp.setAttribute("scale", String(spec.scale));
       feDisp.setAttribute("xChannelSelector", "R");
       feDisp.setAttribute("yChannelSelector", "G");
 
       filter.appendChild(feImg);
+      filter.appendChild(feBlur);
       filter.appendChild(feDisp);
       defs.appendChild(filter);
     }
