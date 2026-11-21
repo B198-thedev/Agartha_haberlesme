@@ -9947,7 +9947,7 @@ const APP_CHANGELOG = [
   {
     v: "V2.22",
     title: "Optik Apple Liquid Glass Motoru (60 FPS)",
-    desc: "Liquid Glass modu gerçek cam materyaline yükseltildi: şeffaf merkezli optik derinlik, kenar ışık kırılması (specular bevel & Chromium SVG displacement), yüzer cam üst/alt barlar, sıvı yaylı kayan sekme lensi, dokunma/imleç yansıması, aydınlık tema uyumu ve iOS Safari / Android Chrome 60 FPS optimizasyonları eklendi."
+    desc: "Liquid Glass modu gerçekçi optik cam materyaline yükseltildi: kalın metalik çizgiler yerine ince ışığa duyarlı kenarlıklar, opak gri katmanlar olmadan berrak/şeffaf merkez, karttan karta asimetrik yumuşak speküler parlamalar, hafif yüzen alt cam kapsül, camgöbeği aktif sekme ışıması, Chromium SVG kenar kırılması ve iOS Safari / Android Chrome 60 FPS optimizasyonları eklendi."
   },
   {
     v: "V2.21",
