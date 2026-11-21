@@ -7698,6 +7698,7 @@ const placesUiState = {
   search: "",
   sort: "newest",
   openMapIds: new Set(),
+  openCommentIds: new Set(),
   expandedCommentIds: new Set(),
   modalPreviewOpen: false,
   parsedLoc: null
@@ -8379,25 +8380,32 @@ function renderPlacesList() {
         )
         .join("");
       const avgLabel = st.ratingVals.length
-        ? `${st.avgRating.toFixed(1)} · ${st.ratingVals.length} oy`
-        : "Henüz puan yok";
+        ? `${st.ratingVals.length} oy`
+        : "Puanla";
 
       const iVisited = Boolean(state.user && st.visitedMap[state.user.id]);
       const visitorNames = st.visitorEntries.map(([uid, v]) => {
         const u = state.usersCache[uid];
         return u ? getDisplayName(u) : typeof v === "string" ? v : "Üye";
       });
-      const visitorsHtml = visitorNames.length
-        ? `<div class="place-visitor-chips">${visitorNames
-            .slice(0, 6)
-            .map((n) => `<span class="place-visitor-pill">${escapeHtml(n)}</span>`)
-            .join("")}${visitorNames.length > 6 ? `<span class="place-visitor-pill">+${visitorNames.length - 6}</span>` : ""}</div>`
-        : `<span class="place-visitors-text">İlk giden sen ol</span>`;
+      const visitorsBarHtml = visitorNames.length
+        ? `<div class="place-visitors-bar">
+            <span class="place-visitors-label" aria-label="Gidenler">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Gidenler</span>
+            </span>
+            <div class="place-visitor-chips">${visitorNames
+              .slice(0, 6)
+              .map((n) => `<span class="place-visitor-pill">${escapeHtml(n)}</span>`)
+              .join("")}${visitorNames.length > 6 ? `<span class="place-visitor-pill">+${visitorNames.length - 6}</span>` : ""}</div>
+          </div>`
+        : "";
 
       const commentsObj = p.comments && typeof p.comments === "object" ? p.comments : {};
       const allComments = Object.entries(commentsObj)
         .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0))
         .filter(([, c]) => Boolean(c && c.text));
+      const commentComposerOpen = placesUiState.openCommentIds.has(key);
       const commentsExpanded = placesUiState.expandedCommentIds.has(key);
       const shownComments = commentsExpanded ? allComments.slice(-30) : allComments.slice(-2);
       const hiddenCommentCount = Math.max(0, allComments.length - shownComments.length);
@@ -8409,19 +8417,22 @@ function renderPlacesList() {
         .join("");
 
       const mapOpen = placesUiState.openMapIds.has(key);
-      const mapCoordsLabel = st.mapLinks.hasCoords
-        ? `${st.mapLinks.lat.toFixed(4)}, ${st.mapLinks.lng.toFixed(4)}`
+      const mapStripText = st.mapLinks.hasCoords
+        ? `<span class="place-map-label">Konum</span><span class="place-map-coords">${st.mapLinks.lat.toFixed(4)}, ${st.mapLinks.lng.toFixed(4)}</span>`
         : st.mapLinks.hasSavedLocation
-          ? "Google Haritalar bağlantısı"
-          : "Konum eklenmedi · İsimden ara";
+          ? `<span class="place-map-label">Google Haritalar</span>`
+          : `<span class="place-map-label muted">Konum eklenmedi</span>`;
 
       const relTime = formatPlaceRelativeTime(p.timestamp);
       const scoreBadge = st.ratingVals.length
-        ? `<span class="place-score-pill"><span class="place-score-star">★</span>${st.avgRating.toFixed(1)}</span>`
-        : `<span class="place-score-pill muted">Yeni</span>`;
+        ? `<span class="place-score-pill" title="${st.ratingVals.length} oy"><span class="place-score-star">★</span>${st.avgRating.toFixed(1)}</span>`
+        : "";
+
+      const commentBtnLabel = allComments.length > 0 ? String(allComments.length) : "Yorum";
+      const showCommentsSection = allComments.length > 0 || commentComposerOpen;
 
       return `
-        <article class="place-card${st.mapLinks.hasSavedLocation ? " has-map" : ""}">
+        <article class="place-card${st.mapLinks.hasSavedLocation ? " has-map" : ""}" data-place-card="${escapeHtml(key)}">
           <div class="place-card-top">
             <div class="place-cat-badge ${catMeta.cls}" title="${escapeHtml(catName)}">${catMeta.icon}</div>
             <div class="place-head-main">
@@ -8453,22 +8464,19 @@ function renderPlacesList() {
             </div>
           </div>
 
-          ${p.note ? `<div class="place-note-box">${escapeHtml(p.note)}</div>` : ""}
+          ${p.note ? `<p class="place-note-box">${escapeHtml(p.note)}</p>` : ""}
 
           <div class="place-map-strip${st.mapLinks.hasSavedLocation ? " verified" : ""}">
             <div class="place-map-info">
               <span class="place-map-pin-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
               </span>
-              <div class="place-map-texts">
-                <div class="place-map-label">${st.mapLinks.hasSavedLocation ? "Google Haritalar Konumu" : "Google Haritalar"}</div>
-                <div class="place-map-sub">${escapeHtml(mapCoordsLabel)}</div>
-              </div>
+              <div class="place-map-texts">${mapStripText}</div>
             </div>
             <div class="place-map-btns">
               <a class="place-map-btn primary" href="${escapeHtml(st.mapLinks.openUrl)}" target="_blank" rel="noopener noreferrer">
                 <span>${st.mapLinks.hasSavedLocation ? "Haritada Aç" : "Haritada Ara"}</span>
-                <span aria-hidden="true">↗</span>
+                <span class="place-ext-arrow" aria-hidden="true">↗</span>
               </a>
               <a class="place-map-btn" href="${escapeHtml(st.mapLinks.directionsUrl)}" target="_blank" rel="noopener noreferrer" title="Google Haritalar yol tarifi">Yol Tarifi</a>
               <button type="button" class="place-map-btn${mapOpen ? " active" : ""}" data-toggle-map="${escapeHtml(key)}">${mapOpen ? "Gizle" : "Önizle"}</button>
@@ -8489,26 +8497,37 @@ function renderPlacesList() {
               <div class="place-stars">${starsHtml}</div>
               <span class="place-rating-avg">${escapeHtml(avgLabel)}</span>
             </div>
-            <button type="button" class="icon-btn place-visit-btn${iVisited ? " visited" : ""}" data-visit-place="${escapeHtml(key)}">${iVisited ? "Gittim ✓" : "Ben de Gittim"}</button>
+            <div class="place-footer-actions">
+              <button type="button" class="place-comment-toggle${commentComposerOpen ? " active" : ""}${allComments.length > 0 ? " has-items" : ""}" data-toggle-comments="${escapeHtml(key)}" aria-expanded="${commentComposerOpen ? "true" : "false"}" title="${allComments.length > 0 ? `${allComments.length} yorum · Yorum yaz` : "Yorum ekle"}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                <span>${escapeHtml(commentBtnLabel)}</span>
+              </button>
+              <button type="button" class="icon-btn place-visit-btn${iVisited ? " visited" : ""}" data-visit-place="${escapeHtml(key)}">${iVisited ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Gittim</span>` : `<span>Ben de Gittim</span>`}</button>
+            </div>
           </div>
 
-          <div class="place-visitors-bar">
-            <span class="place-visitors-label">Gidenler</span>
-            ${visitorsHtml}
-          </div>
+          ${visitorsBarHtml}
 
-          <div class="place-comments-box">
-            ${
-              hiddenCommentCount > 0
-                ? `<button type="button" class="place-comments-more" data-expand-comments="${escapeHtml(key)}">Önceki ${hiddenCommentCount} yorumu göster</button>`
-                : ""
-            }
-            ${commentsHtml ? `<div class="place-comments-list">${commentsHtml}</div>` : ""}
-            <form class="place-comment-form" data-comment-form="${escapeHtml(key)}">
-              <input type="text" class="place-comment-input" maxlength="140" placeholder="Kısa yorum ekle..." required />
-              <button type="submit" class="icon-btn place-comment-send">Yaz</button>
-            </form>
-          </div>
+          ${
+            showCommentsSection
+              ? `<div class="place-comments-box">
+                  ${
+                    hiddenCommentCount > 0
+                      ? `<button type="button" class="place-comments-more" data-expand-comments="${escapeHtml(key)}">Önceki ${hiddenCommentCount} yorumu göster</button>`
+                      : ""
+                  }
+                  ${commentsHtml ? `<div class="place-comments-list">${commentsHtml}</div>` : ""}
+                  ${
+                    commentComposerOpen
+                      ? `<form class="place-comment-form" data-comment-form="${escapeHtml(key)}">
+                          <input type="text" class="place-comment-input" maxlength="140" placeholder="Kısa yorum ekle..." required />
+                          <button type="submit" class="icon-btn place-comment-send">Yaz</button>
+                        </form>`
+                      : ""
+                  }
+                </div>`
+              : ""
+          }
         </article>
       `;
     })
@@ -8538,6 +8557,26 @@ function renderPlacesList() {
         placesUiState.openMapIds.add(id);
       }
       renderPlacesList();
+    });
+  });
+
+  placesList.querySelectorAll("[data-toggle-comments]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.toggleComments;
+      const willOpen = !placesUiState.openCommentIds.has(id);
+      if (willOpen) {
+        placesUiState.openCommentIds.add(id);
+      } else {
+        placesUiState.openCommentIds.delete(id);
+      }
+      renderPlacesList();
+      if (willOpen) {
+        const card = Array.from(placesList.querySelectorAll("[data-place-card]")).find(
+          (el) => el.dataset.placeCard === id
+        );
+        const inp = card ? card.querySelector(".place-comment-input") : null;
+        if (inp) inp.focus();
+      }
     });
   });
 
