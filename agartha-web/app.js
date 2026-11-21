@@ -1201,14 +1201,20 @@ function loadSavedTheme() {
 }
 
 function renderThemeGrid(activeId) {
+  if (applyCustomThemeBtn) {
+    const isCustom = activeId === "custom";
+    applyCustomThemeBtn.classList.toggle("active", isCustom);
+    applyCustomThemeBtn.setAttribute("aria-pressed", isCustom ? "true" : "false");
+  }
   if (!themeGrid) return;
   themeGrid.innerHTML = Object.entries(APP_THEMES)
     .map(([id, t]) => {
-      const isActive = id === activeId ? " active" : "";
+      const isActive = id === activeId;
       return `
-        <button type="button" class="theme-chip${isActive}" data-theme-id="${id}">
+        <button type="button" class="theme-chip${isActive ? " active" : ""}" data-theme-id="${id}" aria-pressed="${isActive ? "true" : "false"}">
           <span class="theme-dot" style="background: linear-gradient(135deg, ${t.accent}, ${t.bg});"></span>
-          <span>${t.name}</span>
+          <span class="theme-chip-name">${t.name}</span>
+          <span class="theme-check" aria-hidden="true">✓</span>
         </button>
       `;
     })
