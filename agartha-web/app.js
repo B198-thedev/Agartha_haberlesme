@@ -4954,9 +4954,12 @@ function openChatRoom(roomId, title, isGroup, otherId) {
             </div>
           `;
         }
-        const audioSrc = sanitizeMediaSrc(m.audioUrl || m.audioData, "audio");
+        const audioSrc = sanitizeMediaSrc(m.audioData || m.audioUrl, "audio");
+        const audioFallbackDriveId = sanitizeDriveFileId(m.audioDriveFileId);
         const audioHtml = audioSrc
-          ? `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
+          ? audioSrc.startsWith("https://drive.google.com/") && audioFallbackDriveId
+            ? `<div class="msg-audio-wrap"><audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio><a class="msg-video-link" href="https://drive.google.com/file/d/${encodeURIComponent(audioFallbackDriveId)}/view" target="_blank" rel="noopener noreferrer">Sesi Drive'da Aç</a></div>`
+            : `<audio class="msg-audio" controls preload="metadata" src="${escapeHtml(audioSrc)}"></audio>`
           : "";
         let locHtml = "";
         if (
@@ -6470,7 +6473,12 @@ messageForm.addEventListener("submit", async (e) => {
 
     if (audioBlob) {
       const safeMime = audioMime || audioBlob.type || "audio/mp4";
-      if (state.driveConfig && state.driveConfig.url) {
+      // iOS Safari <audio> elementi Google Drive uc?export=download URL'lerinde
+      // Range/redirect nedeniyle "Hata" verebildiği için 2 MB altındaki sesler
+      // doğrudan data URL olarak gönderilir.
+      if (audioBlob.size <= 2 * 1024 * 1024) {
+        payload.audioData = await blobToDataUrl(audioBlob);
+      } else if (state.driveConfig && state.driveConfig.url) {
         const ext = safeMime.includes("mp4") || safeMime.includes("m4a")
           ? "m4a"
           : safeMime.includes("ogg")
@@ -6480,25 +6488,16 @@ messageForm.addEventListener("submit", async (e) => {
               : safeMime.includes("wav")
                 ? "wav"
                 : "webm";
-        try {
-          const uploadedAudio = await uploadBlobToGoogleDrive(
-            audioBlob,
-            `agartha_ses_${Date.now()}.${ext}`,
-            safeMime
-          );
-          if (!uploadedAudio.downloadUrl) {
-            throw new Error("Ses bağlantısı oluşturulamadı");
-          }
-          payload.audioUrl = uploadedAudio.downloadUrl;
-          payload.audioDriveFileId = uploadedAudio.id;
-        } catch (driveErr) {
-          if (audioBlob.size <= 1.5 * 1024 * 1024) {
-            console.warn("Drive ses yüklemesi başarısız, doğrudan veri olarak gönderiliyor:", driveErr);
-            payload.audioData = await blobToDataUrl(audioBlob);
-          } else {
-            throw driveErr;
-          }
+        const uploadedAudio = await uploadBlobToGoogleDrive(
+          audioBlob,
+          `agartha_ses_${Date.now()}.${ext}`,
+          safeMime
+        );
+        if (!uploadedAudio.downloadUrl) {
+          throw new Error("Ses bağlantısı oluşturulamadı");
         }
+        payload.audioUrl = uploadedAudio.downloadUrl;
+        payload.audioDriveFileId = uploadedAudio.id;
       } else {
         if (audioBlob.size > 4 * 1024 * 1024) {
           throw new Error("Drive bağlı değilken en fazla 4 MB ses gönderilebilir");
