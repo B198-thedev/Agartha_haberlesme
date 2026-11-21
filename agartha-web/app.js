@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.21";
+const CURRENT_APP_CACHE = "agartha-V2.22";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -1154,6 +1154,8 @@ function applyAppTheme(themeId, customHex = "", customBgHex = "") {
       bubbleOther: bgIsLight ? "#e2e8f0" : "#1e2238"
     };
   }
+
+  root.classList.toggle("theme-light", getContrastTextColor(t.bg) === "#0f172a");
 
   root.style.setProperty("--bg", t.bg);
   root.style.setProperty("--surface", t.surface);
@@ -9130,9 +9132,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.21)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.22)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.22",
+    title: "Optik Apple Liquid Glass Motoru (60 FPS)",
+    desc: "Liquid Glass modu gerçek cam materyaline yükseltildi: şeffaf merkezli optik derinlik, kenar ışık kırılması (specular bevel & Chromium SVG displacement), yüzer cam üst/alt barlar, sıvı yaylı kayan sekme lensi, dokunma/imleç yansıması, aydınlık tema uyumu ve iOS Safari / Android Chrome 60 FPS optimizasyonları eklendi."
+  },
   {
     v: "V2.21",
     title: "Liquid Glass Tasarım Modu (Aç/Kapat)",

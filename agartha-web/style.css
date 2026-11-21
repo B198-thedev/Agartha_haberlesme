@@ -3283,181 +3283,873 @@ html.anim-off *::after {
 }
 
 /* =========================================================
-   LIQUID GLASS TASARIM MODU (AÇ / KAPAT)
+   LIQUID GLASS TASARIM MODU — OPTİK APPLE LENS MOTORU (V2.22)
    ========================================================= */
-html.liquid-glass body {
-  background-image:
-    radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 44%),
-    radial-gradient(circle at 86% 24%, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 46%),
-    radial-gradient(circle at 48% 88%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 52%);
-  background-attachment: fixed;
+html.liquid-glass {
+  --lg-lens-center: color-mix(in srgb, var(--surface) 24%, transparent);
+  --lg-lens-edge: rgba(255, 255, 255, 0.14);
+  --lg-sheet-center: color-mix(in srgb, var(--surface) 44%, transparent);
+  --lg-modal-center: color-mix(in srgb, var(--bg) 54%, transparent);
+  --lg-card-center: color-mix(in srgb, var(--surface) 28%, transparent);
+  --lg-bubble-other-center: color-mix(in srgb, var(--bubble-other) 30%, transparent);
+  --lg-bubble-me-center: color-mix(in srgb, var(--bubble-me) 42%, transparent);
+  --lg-rim-top: rgba(255, 255, 255, 0.66);
+  --lg-rim-side: rgba(255, 255, 255, 0.22);
+  --lg-rim-bottom: rgba(255, 255, 255, 0.36);
+  --lg-prism-a: color-mix(in srgb, var(--accent) 46%, rgba(255, 255, 255, 0.38));
+  --lg-prism-b: color-mix(in srgb, var(--accent-2) 42%, rgba(255, 255, 255, 0.30));
+  --lg-outer-border: rgba(255, 255, 255, 0.22);
+  --lg-shadow-drop: rgba(2, 6, 23, 0.44);
+  --lg-shadow-contact: rgba(0, 0, 0, 0.56);
+  --lg-inset-dark: rgba(2, 6, 23, 0.30);
+  --lg-glow-tint: rgba(255, 255, 255, 0.24);
+  --lg-ctrl-bg: rgba(255, 255, 255, 0.08);
+  --lg-ctrl-border: rgba(255, 255, 255, 0.20);
+  --lg-modal-item-bg: rgba(255, 255, 255, 0.06);
 }
 
-html.liquid-glass #app,
+html.liquid-glass.theme-light {
+  --lg-lens-center: rgba(255, 255, 255, 0.38);
+  --lg-lens-edge: rgba(255, 255, 255, 0.78);
+  --lg-sheet-center: rgba(255, 255, 255, 0.58);
+  --lg-modal-center: rgba(248, 250, 252, 0.74);
+  --lg-card-center: rgba(255, 255, 255, 0.48);
+  --lg-bubble-other-center: color-mix(in srgb, var(--bubble-other) 52%, rgba(255, 255, 255, 0.46));
+  --lg-bubble-me-center: color-mix(in srgb, var(--bubble-me) 62%, rgba(255, 255, 255, 0.22));
+  --lg-rim-top: rgba(255, 255, 255, 0.96);
+  --lg-rim-side: rgba(255, 255, 255, 0.56);
+  --lg-rim-bottom: rgba(255, 255, 255, 0.80);
+  --lg-prism-a: color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.84));
+  --lg-prism-b: color-mix(in srgb, var(--accent-2) 30%, rgba(255, 255, 255, 0.76));
+  --lg-outer-border: rgba(15, 23, 42, 0.11);
+  --lg-shadow-drop: rgba(15, 23, 42, 0.14);
+  --lg-shadow-contact: rgba(15, 23, 42, 0.20);
+  --lg-inset-dark: rgba(15, 23, 42, 0.08);
+  --lg-glow-tint: rgba(255, 255, 255, 0.58);
+  --lg-ctrl-bg: rgba(255, 255, 255, 0.54);
+  --lg-ctrl-border: rgba(15, 23, 42, 0.14);
+  --lg-modal-item-bg: rgba(255, 255, 255, 0.56);
+}
+
+/* GPU-composited ortam ışık alanı (iOS Safari background-attachment:fixed takılmasını önler) */
+html.liquid-glass body {
+  position: relative;
+}
+
+html.liquid-glass body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transform: translateZ(0);
+  background:
+    radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 44%),
+    radial-gradient(circle at 86% 24%, color-mix(in srgb, var(--accent-2) 24%, transparent), transparent 46%),
+    radial-gradient(circle at 52% 88%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 52%),
+    radial-gradient(circle at 24% 64%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 42%);
+}
+
+html.liquid-glass.theme-light body::before {
+  background:
+    radial-gradient(circle at 14% 10%, color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.4)), transparent 46%),
+    radial-gradient(circle at 88% 20%, color-mix(in srgb, var(--accent-2) 18%, rgba(224, 242, 254, 0.7)), transparent 48%),
+    radial-gradient(circle at 46% 90%, color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.5)), transparent 54%);
+}
+
+html.liquid-glass #app {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  border-left-color: var(--lg-outer-border);
+  border-right-color: var(--lg-outer-border);
+}
+
 html.liquid-glass .view {
   background: transparent;
 }
 
+/* ---------------------------------------------------------
+   ORTAK SPEKÜLER KENAR IŞIĞI (::before) VE DİNAMİK YANSIMA (::after)
+   --------------------------------------------------------- */
 html.liquid-glass .top-bar,
 html.liquid-glass .bottom-nav,
 html.liquid-glass .message-input-bar,
 html.liquid-glass .chat-search-bar,
 html.liquid-glass .reply-preview-bar,
 html.liquid-glass .photo-preview-bar,
-html.liquid-glass .live-loc-bar {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
-    color-mix(in srgb, var(--surface) 54%, transparent);
-  backdrop-filter: blur(24px) saturate(185%);
-  -webkit-backdrop-filter: blur(24px) saturate(185%);
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 8px 26px rgba(0, 0, 0, 0.24);
-}
-
-html.liquid-glass .bottom-nav {
-  margin: 0 10px calc(8px + env(safe-area-inset-bottom));
-  padding: 5px 8px;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    0 12px 32px rgba(0, 0, 0, 0.34);
-}
-
-html.liquid-glass .nav-btn {
-  min-height: 54px;
-  border-radius: 18px;
-  transition: background 200ms ease, transform 160ms ease, color 160ms ease;
-}
-
-html.liquid-glass .nav-btn.active {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    0 4px 14px rgba(0, 0, 0, 0.2);
-}
-
-html.liquid-glass .nav-indicator {
-  top: 4px;
-  height: 2px;
-}
-
-html.liquid-glass .nav-indicator::before {
-  box-shadow: 0 0 10px var(--accent);
-}
-
+html.liquid-glass .live-loc-bar,
 html.liquid-glass .chat-item,
 html.liquid-glass .card,
 html.liquid-glass .settings-item,
 html.liquid-glass .announcement-banner,
-html.liquid-glass .auth-card {
+html.liquid-glass .auth-card,
+html.liquid-glass .loading-card,
+html.liquid-glass .modal-card,
+html.liquid-glass .place-card,
+html.liquid-glass .ai-card,
+html.liquid-glass .admin-row,
+html.liquid-glass .group-member-row,
+html.liquid-glass .changelog-card,
+html.liquid-glass .friend-req-row,
+html.liquid-glass .ai-subnav,
+html.liquid-glass .auth-tabs,
+html.liquid-glass .btn-primary,
+html.liquid-glass .send-btn,
+html.liquid-glass .icon-btn {
+  position: relative;
+}
+
+html.liquid-glass .top-bar::before,
+html.liquid-glass .bottom-nav::before,
+html.liquid-glass .message-input-bar::before,
+html.liquid-glass .chat-search-bar::before,
+html.liquid-glass .reply-preview-bar::before,
+html.liquid-glass .photo-preview-bar::before,
+html.liquid-glass .live-loc-bar::before,
+html.liquid-glass .chat-item::before,
+html.liquid-glass .card::before,
+html.liquid-glass .settings-item::before,
+html.liquid-glass .announcement-banner::before,
+html.liquid-glass .auth-card::before,
+html.liquid-glass .loading-card::before,
+html.liquid-glass .modal-card::before,
+html.liquid-glass .inapp-toast::before,
+html.liquid-glass .update-banner::before,
+html.liquid-glass .attach-menu::before,
+html.liquid-glass .reaction-picker-pop::before,
+html.liquid-glass .place-card::before,
+html.liquid-glass .ai-card::before,
+html.liquid-glass .admin-row::before,
+html.liquid-glass .group-member-row::before,
+html.liquid-glass .changelog-card::before,
+html.liquid-glass .friend-req-row::before,
+html.liquid-glass .msg-bubble::before,
+html.liquid-glass .ai-subnav::before,
+html.liquid-glass .auth-tabs::before,
+html.liquid-glass .btn-primary::before,
+html.liquid-glass .send-btn::before,
+html.liquid-glass .icon-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.25px;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(
+    138deg,
+    var(--lg-rim-top) 0%,
+    var(--lg-prism-a) 18%,
+    var(--lg-rim-side) 40%,
+    rgba(255, 255, 255, 0.04) 54%,
+    var(--lg-prism-b) 76%,
+    var(--lg-rim-bottom) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Dinamik imleç / dokunma yansıması & üst cam menisküsü */
+html.liquid-glass .top-bar::after,
+html.liquid-glass .bottom-nav::after,
+html.liquid-glass .message-input-bar::after,
+html.liquid-glass .chat-item::after,
+html.liquid-glass .card::after,
+html.liquid-glass .settings-item::after,
+html.liquid-glass .announcement-banner::after,
+html.liquid-glass .auth-card::after,
+html.liquid-glass .modal-card::after,
+html.liquid-glass .inapp-toast::after,
+html.liquid-glass .update-banner::after,
+html.liquid-glass .attach-menu::after,
+html.liquid-glass .reaction-picker-pop::after,
+html.liquid-glass .msg-bubble::after,
+html.liquid-glass .btn-primary::after,
+html.liquid-glass .send-btn::after,
+html.liquid-glass .icon-btn::after,
+html.liquid-glass .ai-subnav::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  opacity: calc(0.16 + var(--lg-glow, 0) * 0.84);
+  transition: opacity 240ms ease-out;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03)),
-    color-mix(in srgb, var(--surface) 54%, transparent);
-  backdrop-filter: blur(20px) saturate(175%);
-  -webkit-backdrop-filter: blur(20px) saturate(175%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 18px;
+    radial-gradient(120% 48% at 50% 0%, rgba(255, 255, 255, 0.20) 0%, transparent 56%),
+    radial-gradient(
+      170px circle at var(--lg-x, 50%) var(--lg-y, 20%),
+      var(--lg-glow-tint) 0%,
+      color-mix(in srgb, var(--accent) 16%, transparent) 42%,
+      transparent 72%
+    );
+}
+
+html.liquid-glass .msg-bubble::after {
+  opacity: calc(0.08 + var(--lg-glow, 0) * 0.52);
+}
+
+html.liquid-glass .lg-pressed::after {
+  opacity: 1 !important;
+  transition-duration: 70ms;
+}
+
+html.liquid-glass .send-btn.is-collapsed::before,
+html.liquid-glass .send-btn.is-collapsed::after,
+html.liquid-glass .composer-circle-btn.is-collapsed::before,
+html.liquid-glass .composer-circle-btn.is-collapsed::after {
+  display: none;
+}
+
+/* ---------------------------------------------------------
+   KATMAN 1: YÜZER OPTİK LENS KROM (BARLAR, NAV, POPOVER)
+   Berrak merkez + kenarda kırılmalı ışık + 5 katman kalınlık gölgesi
+   --------------------------------------------------------- */
+html.liquid-glass .top-bar,
+html.liquid-glass .bottom-nav,
+html.liquid-glass .message-input-bar {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.03) 28%,
+      transparent 58%,
+      rgba(255, 255, 255, 0.07) 100%
+    ),
+    radial-gradient(
+      ellipse 84% 72% at 50% 48%,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 56%,
+      var(--lg-lens-edge) 100%
+    ),
+    var(--lg-lens-center);
+  backdrop-filter: blur(12px) saturate(190%) brightness(1.06);
+  -webkit-backdrop-filter: blur(12px) saturate(190%) brightness(1.06);
+  border: 1px solid var(--lg-outer-border);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
-    0 8px 24px rgba(0, 0, 0, 0.22);
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 2px 12px -3px rgba(255, 255, 255, 0.18),
+    inset 1px 0 2px var(--lg-rim-side),
+    inset -1px 0 2px var(--lg-rim-side),
+    inset 0 -1.5px 2px var(--lg-rim-bottom),
+    inset 0 -10px 18px -12px var(--lg-inset-dark),
+    0 12px 30px -6px var(--lg-shadow-drop),
+    0 2px 8px var(--lg-shadow-contact);
 }
 
-html.liquid-glass .group-card {
+/* Ana ekranda üst/alt bar içerik üstünde gerçek yüzer lens olur; kartlar altından akar */
+html.liquid-glass #main-view {
+  position: relative;
+}
+
+html.liquid-glass #main-view > .top-bar {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 10px;
+  right: 10px;
+  width: auto;
+  flex-wrap: nowrap;
+  padding: 9px 12px;
+  border-radius: 22px;
+  z-index: 15;
+}
+
+html.liquid-glass #main-view > .top-bar .top-bar-left {
+  min-width: 0;
+  flex: 1;
+}
+
+html.liquid-glass #main-view > .top-bar .user-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html.liquid-glass #main-view > .bottom-nav {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  margin: 0;
+  padding: 5px var(--nav-padding);
+  border-radius: 28px;
+  z-index: 15;
+}
+
+html.liquid-glass.keyboard-open #main-view > .bottom-nav {
+  bottom: 8px;
+}
+
+html.liquid-glass #main-view > .tab-content {
+  height: 100%;
+  min-height: 0;
+  padding: calc(74px + env(safe-area-inset-top)) 14px calc(92px + env(safe-area-inset-bottom));
+}
+
+/* Sohbet odası üst & alt yüzer barlar (dinamik arama/yanıt/önizleme barlarını ezmeden) */
+html.liquid-glass #chat-view > .chat-top-bar {
+  margin: calc(8px + env(safe-area-inset-top)) 10px 0;
+  padding: 8px 10px;
+  border-radius: 22px;
+  z-index: 12;
+}
+
+html.liquid-glass #chat-view > .message-input-bar {
+  margin: 0 10px calc(10px + env(safe-area-inset-bottom));
+  padding: 7px 8px 7px 10px;
+  border-radius: 26px;
+  z-index: 12;
+  overflow: visible;
+}
+
+html.liquid-glass.keyboard-open #chat-view > .message-input-bar {
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+}
+
+html.liquid-glass #chat-view:has(#chat-search-bar.hidden) > .messages-container {
+  margin-top: -18px;
+  padding-top: 28px;
+}
+
+html.liquid-glass #chat-view:not(:has(.reply-preview-bar:not(.hidden), .photo-preview-bar:not(.hidden), .live-loc-bar:not(.hidden), .typing-indicator:not(.hidden))) > .messages-container {
+  margin-bottom: -16px;
+  padding-bottom: 26px;
+}
+
+/* Kayan Sıvı Sekme Kapsül Lensi */
+html.liquid-glass .bottom-nav .nav-btn {
+  position: relative;
+  z-index: 2;
+  min-height: 52px;
+  border-radius: 22px;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: color 200ms ease, transform 220ms cubic-bezier(0.22, 1.35, 0.36, 1);
+}
+
+html.liquid-glass .bottom-nav .nav-btn:active {
+  transform: scale(0.95);
+}
+
+html.liquid-glass .bottom-nav .nav-btn.active {
+  color: var(--accent);
+}
+
+html.liquid-glass .bottom-nav .nav-btn.active .nav-icon {
+  transform: translateY(-1px) scale(1.06);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+html.liquid-glass .bottom-nav .nav-indicator {
+  inset: 5px auto 5px var(--nav-padding);
+  height: auto;
+  z-index: 1;
+  transition: transform 380ms cubic-bezier(0.28, 1.18, 0.32, 1);
+}
+
+html.liquid-glass .bottom-nav .nav-indicator::before {
+  width: 100%;
+  height: 100%;
+  border-radius: 22px;
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.14)), rgba(255, 255, 255, 0.04)),
-    color-mix(in srgb, var(--surface) 52%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.25));
+    linear-gradient(150deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.06) 58%, rgba(255, 255, 255, 0.14) 100%),
+    color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.36));
+  box-shadow:
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 -1px 1px var(--lg-rim-bottom),
+    0 6px 18px color-mix(in srgb, var(--accent) 22%, rgba(0, 0, 0, 0.22));
+  transform-origin: center;
 }
 
-html.liquid-glass .chat-item:active,
-html.liquid-glass .settings-item:active,
-html.liquid-glass .announcement-banner:active {
-  transform: scale(0.985);
+@keyframes lgLensElastic {
+  0% { transform: scaleX(1) scaleY(1); }
+  38% { transform: scaleX(1.09) scaleY(0.93); }
+  74% { transform: scaleX(0.98) scaleY(1.02); }
+  100% { transform: scaleX(1) scaleY(1); }
 }
 
+html.liquid-glass .bottom-nav .nav-indicator.is-switching::before {
+  animation: lgLensElastic 360ms cubic-bezier(0.22, 1.25, 0.36, 1);
+}
+
+/* Yüzer Popover / Bildirim / Reaksiyon Lensleri */
+html.liquid-glass .inapp-toast,
+html.liquid-glass .update-banner,
+html.liquid-glass .reaction-picker-pop,
+html.liquid-glass .attach-menu {
+  background:
+    linear-gradient(
+      148deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.04) 48%,
+      rgba(255, 255, 255, 0.12) 100%
+    ),
+    radial-gradient(ellipse 84% 74% at 50% 48%, transparent 0%, var(--lg-lens-edge) 100%),
+    color-mix(in srgb, var(--surface) 42%, transparent);
+  backdrop-filter: blur(14px) saturate(195%) brightness(1.06);
+  -webkit-backdrop-filter: blur(14px) saturate(195%) brightness(1.06);
+  border: 1px solid var(--lg-outer-border);
+  box-shadow:
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 2px 10px -2px rgba(255, 255, 255, 0.18),
+    inset 0 -1.5px 2px var(--lg-rim-bottom),
+    0 16px 38px -6px var(--lg-shadow-drop),
+    0 4px 12px var(--lg-shadow-contact);
+}
+
+html.liquid-glass.theme-light .inapp-toast,
+html.liquid-glass.theme-light .update-banner,
+html.liquid-glass.theme-light .reaction-picker-pop,
+html.liquid-glass.theme-light .attach-menu {
+  background:
+    linear-gradient(148deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.44) 55%, rgba(255, 255, 255, 0.72) 100%),
+    rgba(255, 255, 255, 0.52);
+}
+
+html.liquid-glass .inapp-toast:active {
+  transform: translateX(-50%) scale(0.985);
+}
+
+/* Chromium SVG Snell Kenar Kırılması (yalnız yetenekli Chromium'da js ile açılır) */
+html.liquid-glass.lg-svg-refract .bottom-nav,
+html.liquid-glass.lg-svg-refract .reaction-picker-pop,
+html.liquid-glass.lg-svg-refract .update-banner {
+  backdrop-filter: url(#lg-refract-pill) blur(10px) saturate(190%) brightness(1.05);
+}
+
+html.liquid-glass.lg-svg-refract .top-bar,
+html.liquid-glass.lg-svg-refract .message-input-bar,
+html.liquid-glass.lg-svg-refract .inapp-toast {
+  backdrop-filter: url(#lg-refract-bar) blur(10px) saturate(185%) brightness(1.05);
+}
+
+html.liquid-glass.lg-svg-refract .attach-menu {
+  backdrop-filter: url(#lg-refract-pop) blur(12px) saturate(190%) brightness(1.05);
+}
+
+/* ---------------------------------------------------------
+   KATMAN 2: KALIN OPTİK CAM LEVHALAR (MODALLAR, AUTH, ŞERİTLER)
+   --------------------------------------------------------- */
 html.liquid-glass .modal {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(2, 6, 23, 0.48);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+html.liquid-glass.theme-light .modal {
+  background: rgba(15, 23, 42, 0.22);
 }
 
 html.liquid-glass .modal-card {
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
-    color-mix(in srgb, var(--bg) 68%, transparent);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+    linear-gradient(155deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 44%, rgba(255, 255, 255, 0.08) 100%),
+    radial-gradient(ellipse 88% 82% at 50% 46%, transparent 0%, var(--lg-lens-edge) 100%),
+    var(--lg-modal-center);
+  backdrop-filter: blur(18px) saturate(185%) brightness(1.04);
+  -webkit-backdrop-filter: blur(18px) saturate(185%) brightness(1.04);
+  border: 1px solid var(--lg-outer-border);
   border-radius: 24px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    0 24px 56px rgba(0, 0, 0, 0.48);
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 3px 16px -4px rgba(255, 255, 255, 0.16),
+    inset 0 -1.5px 2px var(--lg-rim-bottom),
+    inset 0 -14px 24px -14px var(--lg-inset-dark),
+    0 26px 64px -8px var(--lg-shadow-contact);
 }
 
 html.liquid-glass .modal-header {
-  background: rgba(255, 255, 255, 0.06);
-  border-bottom-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  border-bottom-color: var(--lg-outer-border);
 }
 
-html.liquid-glass .inapp-toast,
-html.liquid-glass .reaction-picker-pop,
-html.liquid-glass .update-banner {
+html.liquid-glass .auth-card,
+html.liquid-glass .loading-card {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)),
-    color-mix(in srgb, var(--surface) 64%, transparent);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.24);
+    linear-gradient(150deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.08) 100%),
+    radial-gradient(ellipse 86% 78% at 50% 48%, transparent 0%, var(--lg-lens-edge) 100%),
+    var(--lg-sheet-center);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--lg-outer-border);
+  border-radius: 24px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    0 12px 32px rgba(0, 0, 0, 0.38);
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 2px 14px -4px rgba(255, 255, 255, 0.16),
+    inset 0 -1.5px 2px var(--lg-rim-bottom),
+    0 22px 50px -10px var(--lg-shadow-drop);
 }
 
-html.liquid-glass .msg-bubble {
-  backdrop-filter: blur(18px) saturate(175%);
-  -webkit-backdrop-filter: blur(18px) saturate(175%);
+html.liquid-glass .chat-search-bar,
+html.liquid-glass .reply-preview-bar,
+html.liquid-glass .photo-preview-bar,
+html.liquid-glass .live-loc-bar {
+  margin: 6px 10px 0;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    var(--lg-sheet-center);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--lg-outer-border);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    0 6px 20px rgba(0, 0, 0, 0.22);
+    inset 0 1px 0.5px var(--lg-rim-top),
+    0 8px 20px -6px var(--lg-shadow-drop);
+}
+
+html.liquid-glass .reply-preview-bar,
+html.liquid-glass .photo-preview-bar,
+html.liquid-glass .live-loc-bar {
+  margin: 0 10px 6px;
+}
+
+/* Çift bulanıklık yasağı (60 FPS + HIG): modal-card içindeki alt öğelerde ekstra backdrop-filter açma */
+html.liquid-glass .modal-card .card,
+html.liquid-glass .modal-card .settings-item,
+html.liquid-glass .modal-card .changelog-card,
+html.liquid-glass .modal-card .admin-row,
+html.liquid-glass .modal-card .group-member-row,
+html.liquid-glass .modal-card .member-check-row,
+html.liquid-glass .modal-card .profile-card-preview,
+html.liquid-glass .modal-card .icon-btn,
+html.liquid-glass .modal-card .settings-select,
+html.liquid-glass .modal-card .theme-chip,
+html.liquid-glass .modal-card input,
+html.liquid-glass .modal-card textarea,
+html.liquid-glass .modal-card select,
+html.liquid-glass .auth-card .icon-btn,
+html.liquid-glass .auth-card input,
+html.liquid-glass .auth-card select {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--lg-modal-item-bg);
+}
+
+/* ---------------------------------------------------------
+   KATMAN 3: KARTLAR, MESAJ BALONCULARI & KONTROLLER
+   --------------------------------------------------------- */
+html.liquid-glass .chat-item,
+html.liquid-glass .card,
+html.liquid-glass .settings-item,
+html.liquid-glass .announcement-banner,
+html.liquid-glass .place-card,
+html.liquid-glass .ai-card,
+html.liquid-glass .admin-row,
+html.liquid-glass .group-member-row,
+html.liquid-glass .changelog-card,
+html.liquid-glass .friend-req-row {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.07) 100%),
+    radial-gradient(ellipse 84% 76% at 50% 48%, transparent 0%, var(--lg-lens-edge) 100%),
+    var(--lg-card-center);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid var(--lg-outer-border);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 2px 10px -4px rgba(255, 255, 255, 0.14),
+    inset 0 -1px 1.5px var(--lg-rim-bottom),
+    inset 0 -8px 14px -10px var(--lg-inset-dark),
+    0 8px 22px -6px var(--lg-shadow-drop);
+  transition: transform 240ms cubic-bezier(0.22, 1.35, 0.36, 1), border-color 180ms ease, box-shadow 220ms ease;
+}
+
+html.liquid-glass .group-card,
+html.liquid-glass .ai-banner {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.14)),
+      rgba(255, 255, 255, 0.03) 55%,
+      color-mix(in srgb, var(--accent-2) 16%, transparent)
+    ),
+    var(--lg-card-center);
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--lg-outer-border));
+}
+
+html.liquid-glass .notify-prompt-banner {
+  background:
+    linear-gradient(145deg, rgba(34, 197, 94, 0.22), rgba(56, 189, 248, 0.08) 60%, rgba(255, 255, 255, 0.04)),
+    var(--lg-card-center);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+html.liquid-glass .chat-item:active,
+html.liquid-glass .settings-item:active,
+html.liquid-glass .announcement-banner:active,
+html.liquid-glass .group-member-row:active,
+html.liquid-glass .lg-pressed.chat-item,
+html.liquid-glass .lg-pressed.settings-item,
+html.liquid-glass .lg-pressed.announcement-banner {
+  transform: scale(0.978);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html.liquid-glass .chat-item:hover,
+  html.liquid-glass .settings-item:hover,
+  html.liquid-glass .announcement-banner:hover,
+  html.liquid-glass .group-member-row:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--lg-rim-top));
+    box-shadow:
+      inset 0 1px 0.5px var(--lg-rim-top),
+      inset 0 2px 12px -3px rgba(255, 255, 255, 0.22),
+      inset 0 -1px 1.5px var(--lg-rim-bottom),
+      0 12px 28px -6px var(--lg-shadow-drop);
+  }
+}
+
+/* Mesaj Baloncukları — Berrak merkez, cam kenar kalınlığı, kullanıcı balon şeklini korur */
+html.liquid-glass .msg-bubble {
+  backdrop-filter: blur(10px) saturate(165%);
+  -webkit-backdrop-filter: blur(10px) saturate(165%);
+  box-shadow:
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 2px 10px -4px rgba(255, 255, 255, 0.20),
+    inset 0 -1px 1.5px var(--lg-rim-bottom),
+    inset 0 -8px 14px -10px var(--lg-inset-dark),
+    0 6px 18px -4px var(--lg-shadow-drop);
+  transition: transform 200ms cubic-bezier(0.22, 1.3, 0.36, 1), box-shadow 200ms ease;
 }
 
 html.liquid-glass .msg-bubble.other {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)),
-    color-mix(in srgb, var(--bubble-other) 52%, transparent);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+    linear-gradient(152deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.08) 100%),
+    var(--lg-bubble-other-center);
+  border: 1px solid var(--lg-outer-border);
 }
 
 html.liquid-glass .msg-bubble.me:not([style*="background"]) {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)),
-    color-mix(in srgb, var(--bubble-me) 62%, transparent);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+    linear-gradient(152deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.08) 100%),
+    var(--lg-bubble-me-center);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--lg-rim-top));
 }
 
+html.liquid-glass .msg-bubble.me[style*="background"] {
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.04) 48%, transparent 100%);
+}
+
+html.liquid-glass .msg-bubble.lg-pressed {
+  transform: scale(0.982);
+}
+
+/* Aydınlık ve koyu temada küçük iç kutular */
+html.liquid-glass.theme-light .ai-subnav,
+html.liquid-glass.theme-light .ai-detail-row,
+html.liquid-glass.theme-light .place-comment-item,
+html.liquid-glass.theme-light .ai-train-row,
+html.liquid-glass.theme-light .view-once-card,
+html.liquid-glass.theme-light .loc-card {
+  background: rgba(255, 255, 255, 0.56);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+html.liquid-glass.theme-light .reaction-pill {
+  background: rgba(255, 255, 255, 0.58);
+  border-color: rgba(15, 23, 42, 0.14);
+}
+
+/* Butonlar, Giriş Alanları, Segmentler & Toggle */
 html.liquid-glass .icon-btn,
 html.liquid-glass .settings-select,
+html.liquid-glass .theme-chip,
+html.liquid-glass .ai-subnav,
+html.liquid-glass .auth-tabs,
 html.liquid-glass .message-input-bar input,
 html.liquid-glass .message-input-bar textarea,
 html.liquid-glass input[type="text"],
 html.liquid-glass input[type="password"],
 html.liquid-glass input[type="search"],
-html.liquid-glass input[type="url"] {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+html.liquid-glass input[type="url"],
+html.liquid-glass select {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
+    var(--lg-ctrl-bg);
+  border-color: var(--lg-ctrl-border);
+  box-shadow:
+    inset 0 1px 0.5px var(--lg-rim-top),
+    inset 0 -1px 1px var(--lg-inset-dark);
+}
+
+html.liquid-glass .icon-btn,
+html.liquid-glass .btn-primary,
+html.liquid-glass .send-btn,
+html.liquid-glass .theme-chip,
+html.liquid-glass .ai-subnav-btn,
+html.liquid-glass .auth-tab {
+  transition: transform 200ms cubic-bezier(0.22, 1.35, 0.36, 1), border-color 180ms ease, box-shadow 200ms ease, background 180ms ease;
+}
+
+html.liquid-glass .icon-btn:active,
+html.liquid-glass .btn-primary:active,
+html.liquid-glass .send-btn:active,
+html.liquid-glass .composer-circle-btn:active,
+html.liquid-glass .lg-pressed.icon-btn,
+html.liquid-glass .lg-pressed.btn-primary,
+html.liquid-glass .lg-pressed.send-btn {
+  transform: scale(0.94);
 }
 
 html.liquid-glass .btn-primary,
 html.liquid-glass .send-btn {
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, rgba(255, 255, 255, 0.45));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.42),
-    0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.62),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.22),
+    0 8px 22px -4px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+html.liquid-glass .auth-tab.active,
+html.liquid-glass .ai-subnav-btn.active {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06)),
+    color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim-top),
+    0 3px 10px var(--lg-shadow-drop);
+}
+
+html.liquid-glass .toggle-switch {
+  background: var(--lg-ctrl-bg);
+  border-color: var(--lg-ctrl-border);
+  box-shadow: inset 0 1px 3px var(--lg-inset-dark);
+}
+
+html.liquid-glass .toggle-switch::after {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.72),
+    0 2px 6px rgba(0, 0, 0, 0.28);
+}
+
+html.liquid-glass .toggle-switch:checked {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.45),
+    0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---------------------------------------------------------
+   PERFORMANS & ERİŞİLEBİLİRLİK FALLBACK MEKANİZMALARI
+   --------------------------------------------------------- */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.liquid-glass .top-bar,
+  html.liquid-glass .bottom-nav,
+  html.liquid-glass .message-input-bar,
+  html.liquid-glass .modal-card,
+  html.liquid-glass .inapp-toast,
+  html.liquid-glass .update-banner,
+  html.liquid-glass .attach-menu,
+  html.liquid-glass .reaction-picker-pop {
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+  }
+  html.liquid-glass .chat-item,
+  html.liquid-glass .card,
+  html.liquid-glass .settings-item,
+  html.liquid-glass .auth-card {
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
+  }
+}
+
+html.liquid-glass.lg-low-power .top-bar,
+html.liquid-glass.lg-low-power .bottom-nav,
+html.liquid-glass.lg-low-power .message-input-bar,
+html.liquid-glass.lg-low-power .modal-card,
+html.liquid-glass.lg-low-power .inapp-toast,
+html.liquid-glass.lg-low-power .update-banner,
+html.liquid-glass.lg-low-power .attach-menu,
+html.liquid-glass.lg-low-power .reaction-picker-pop,
+html.liquid-glass.lg-low-power .chat-item,
+html.liquid-glass.lg-low-power .card,
+html.liquid-glass.lg-low-power .settings-item,
+html.liquid-glass.lg-low-power .announcement-banner,
+html.liquid-glass.lg-low-power .auth-card,
+html.liquid-glass.lg-low-power .msg-bubble {
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+}
+
+html.liquid-glass.lg-low-power *::after {
+  --lg-glow: 0;
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html.liquid-glass .top-bar,
+  html.liquid-glass .bottom-nav,
+  html.liquid-glass .message-input-bar,
+  html.liquid-glass .chat-search-bar,
+  html.liquid-glass .reply-preview-bar,
+  html.liquid-glass .photo-preview-bar,
+  html.liquid-glass .live-loc-bar,
+  html.liquid-glass .modal-card,
+  html.liquid-glass .inapp-toast,
+  html.liquid-glass .update-banner,
+  html.liquid-glass .attach-menu,
+  html.liquid-glass .reaction-picker-pop,
+  html.liquid-glass .chat-item,
+  html.liquid-glass .card,
+  html.liquid-glass .settings-item,
+  html.liquid-glass .announcement-banner,
+  html.liquid-glass .auth-card,
+  html.liquid-glass .loading-card,
+  html.liquid-glass .place-card,
+  html.liquid-glass .ai-card,
+  html.liquid-glass .admin-row,
+  html.liquid-glass .group-member-row,
+  html.liquid-glass .changelog-card,
+  html.liquid-glass .friend-req-row,
+  html.liquid-glass .msg-bubble {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+  }
+  html.liquid-glass .msg-bubble.me:not([style*="background"]) {
+    background: var(--bubble-me) !important;
+  }
+  html.liquid-glass .msg-bubble.other {
+    background: var(--bubble-other) !important;
+  }
+  html.liquid-glass .modal {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(2, 6, 23, 0.84);
+  }
+  html.liquid-glass *::after {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.liquid-glass .bottom-nav .nav-indicator,
+  html.liquid-glass .bottom-nav .nav-btn,
+  html.liquid-glass .chat-item,
+  html.liquid-glass .settings-item,
+  html.liquid-glass .announcement-banner,
+  html.liquid-glass .msg-bubble,
+  html.liquid-glass .icon-btn,
+  html.liquid-glass .btn-primary,
+  html.liquid-glass .send-btn {
+    transition: none !important;
+  }
+  html.liquid-glass .bottom-nav .nav-indicator.is-switching::before {
+    animation: none !important;
+  }
+  html.liquid-glass *::after {
+    transition: none !important;
+  }
+}
+
+html.anim-off.liquid-glass .bottom-nav .nav-indicator.is-switching::before {
+  animation: none !important;
 }
 
 

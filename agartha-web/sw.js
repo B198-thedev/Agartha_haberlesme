@@ -1,8 +1,9 @@
-const CACHE_NAME = "agartha-V2.21";
+const CACHE_NAME = "agartha-V2.22";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
+  "./liquid-glass.js",
   "./app.js",
   "./firebase-config.js",
   "./manifest.json",
