@@ -216,6 +216,22 @@ html.is-ios-standalone #app {
   }
 }
 
+@keyframes toastSlideUpOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -16px);
+  }
+}
+
+.inapp-toast.closing {
+  animation: toastSlideUpOut 180ms ease-in forwards;
+  pointer-events: none;
+}
+
 .inapp-toast-avatar {
   width: 38px;
   height: 38px;
@@ -886,7 +902,7 @@ html.keyboard-open .chat-input-bar {
   resize: none;
   min-height: 40px;
   max-height: 120px;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .message-input-bar textarea:focus {
@@ -1877,6 +1893,26 @@ html.is-ios-standalone .modal {
   }
 }
 
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalPopOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+
 @keyframes msgPopIn {
   from {
     opacity: 0;
@@ -2092,6 +2128,16 @@ html.is-ios-standalone .modal {
   animation: modalPopIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.modal.closing {
+  animation: modalFadeOut 170ms ease-in forwards;
+  pointer-events: none;
+}
+
+.modal.closing .modal-card,
+.modal.closing .image-modal-content {
+  animation: modalPopOut 170ms ease-in forwards;
+}
+
 .msg-row.me {
   animation: msgSendPop 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -2168,9 +2214,28 @@ html.is-ios-standalone .modal {
 .typing-dots span:nth-child(3) { animation-delay: 300ms; }
 
 .photo-preview-bar:not(.hidden),
+.video-preview-bar:not(.hidden),
+.audio-preview-bar:not(.hidden),
+.voice-record-bar:not(.hidden),
 .live-loc-bar:not(.hidden),
 .typing-indicator:not(.hidden) {
   animation: barSlideUp 180ms ease-out;
+}
+
+.auth-form:not(.hidden),
+.ai-subpage.active,
+.empty-state {
+  animation: viewFadeIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.places-list.places-no-stagger .place-card {
+  animation: none;
+}
+
+.place-map-box,
+.place-comments-box,
+.place-modal-loc-embed:not(.hidden) {
+  animation: viewFadeIn 190ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mic-recording {
@@ -2217,8 +2282,23 @@ html.is-ios-standalone .modal {
   .modal:not(.hidden),
   .modal:not(.hidden) .modal-card,
   .modal:not(.hidden) .image-modal-content,
+  .modal.closing,
+  .modal.closing .modal-card,
+  .modal.closing .image-modal-content,
+  .inapp-toast,
+  .inapp-toast.closing,
+  .auth-form:not(.hidden),
+  .ai-subpage.active,
+  .empty-state,
+  .place-card,
+  .place-map-box,
+  .place-comments-box,
+  .place-modal-loc-embed:not(.hidden),
   .msg-row,
   .photo-preview-bar:not(.hidden),
+  .video-preview-bar:not(.hidden),
+  .audio-preview-bar:not(.hidden),
+  .voice-record-bar:not(.hidden),
   .live-loc-bar:not(.hidden),
   .typing-indicator:not(.hidden),
   .live-pulse-dot,

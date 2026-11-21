@@ -1275,7 +1275,7 @@ function sanitizeMediaSrc(rawSrc, kind = "image") {
   }
   if (
     kind === "audio" &&
-    /^data:audio\/(mp4|webm|ogg|mpeg|wav|aac|x-m4a)(?:;[a-z0-9=+-]+)?;base64,[A-Za-z0-9+/=]+$/i.test(s)
+    /^data:audio\/(mp4|webm|ogg|mpeg|wav|aac|x-m4a|3gpp|opus)(?:;[a-z0-9=+-\s]+)*;base64,[A-Za-z0-9+/=]+$/i.test(s)
   ) {
     return s;
   }
@@ -1394,13 +1394,72 @@ function pushBackState(tag) {
   }
 }
 
+let chatLeaveTimer = null;
+const modalCloseTimers = new WeakMap();
+
+function shouldSkipAnimations() {
+  if (document.documentElement.classList.contains("anim-off")) return true;
+  return Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function isModalOpen(modalEl) {
+  return Boolean(modalEl && !modalEl.classList.contains("hidden") && !modalEl.classList.contains("closing"));
+}
+
+function openModalEl(modalEl) {
+  if (!modalEl) return;
+  const prevTimer = modalCloseTimers.get(modalEl);
+  if (prevTimer) {
+    clearTimeout(prevTimer);
+    modalCloseTimers.delete(modalEl);
+  }
+  modalEl.classList.remove("closing");
+  modalEl.classList.remove("hidden");
+}
+
+function closeModalEl(modalEl, onDone = null) {
+  if (!modalEl) return;
+  if (modalEl.classList.contains("hidden")) {
+    modalEl.classList.remove("closing");
+    if (typeof onDone === "function") onDone();
+    return;
+  }
+  const prevTimer = modalCloseTimers.get(modalEl);
+  if (prevTimer) {
+    clearTimeout(prevTimer);
+    modalCloseTimers.delete(modalEl);
+  }
+  if (shouldSkipAnimations()) {
+    modalEl.classList.remove("closing");
+    modalEl.classList.add("hidden");
+    if (typeof onDone === "function") onDone();
+    return;
+  }
+  modalEl.classList.add("closing");
+  const timer = setTimeout(() => {
+    modalCloseTimers.delete(modalEl);
+    modalEl.classList.remove("closing");
+    modalEl.classList.add("hidden");
+    if (typeof onDone === "function") onDone();
+  }, 170);
+  modalCloseTimers.set(modalEl, timer);
+}
+
 function closeActiveChatWithAnimation() {
   if (!chatView.classList.contains("active")) return;
+  clearTimeout(chatLeaveTimer);
+  chatLeaveTimer = null;
   blurActiveEditable();
   cleanupActiveRoomListeners();
   state.activeRoom = null;
+  if (shouldSkipAnimations()) {
+    chatView.classList.remove("leaving");
+    showView(mainView);
+    return;
+  }
   chatView.classList.add("leaving");
-  setTimeout(() => {
+  chatLeaveTimer = setTimeout(() => {
+    chatLeaveTimer = null;
     chatView.classList.remove("leaving");
     showView(mainView);
   }, 180);
@@ -1408,59 +1467,65 @@ function closeActiveChatWithAnimation() {
 
 window.addEventListener("popstate", () => {
   // 0. Aktif/gelen sesli arama ekranı açıksa arkadaki sohbeti kapatma
-  if (callModal && !callModal.classList.contains("hidden")) {
+  if (isModalOpen(callModal)) {
     pushBackState("call-modal");
     return;
   }
-  if (avatarCropModal && !avatarCropModal.classList.contains("hidden")) {
+  if (isModalOpen(avatarCropModal)) {
     closeAvatarCropModal();
     return;
   }
   // 1. Önce açık bir modal varsa onu kapat
-  if (imageModal && !imageModal.classList.contains("hidden")) {
-    imageModal.classList.add("hidden");
-    imageModalImg.src = "";
-    consumeViewingOnceMsg();
+  if (isModalOpen(imageModal)) {
+    closeModalEl(imageModal, () => {
+      imageModalImg.src = "";
+      consumeViewingOnceMsg();
+    });
     return;
   }
-  if (createGroupModal && !createGroupModal.classList.contains("hidden")) {
-    createGroupModal.classList.add("hidden");
+  if (isModalOpen(placeModal)) {
+    closePlaceModal();
     return;
   }
-  if (locationModal && !locationModal.classList.contains("hidden")) {
-    locationModal.classList.add("hidden");
+  if (isModalOpen(createGroupModal)) {
+    closeModalEl(createGroupModal);
     return;
   }
-  if (userProfileModal && !userProfileModal.classList.contains("hidden")) {
-    userProfileModal.classList.add("hidden");
+  if (isModalOpen(locationModal)) {
+    closeModalEl(locationModal);
     return;
   }
-  if (groupSettingsModal && !groupSettingsModal.classList.contains("hidden")) {
-    groupSettingsModal.classList.add("hidden");
+  if (isModalOpen(userProfileModal)) {
+    closeModalEl(userProfileModal);
     return;
   }
-  if (announcementsModal && !announcementsModal.classList.contains("hidden")) {
-    announcementsModal.classList.add("hidden");
+  if (isModalOpen(groupSettingsModal)) {
+    closeModalEl(groupSettingsModal);
     return;
   }
-  if (profileModal && !profileModal.classList.contains("hidden")) {
-    profileModal.classList.add("hidden");
+  if (isModalOpen(announcementsModal)) {
+    closeModalEl(announcementsModal);
     return;
   }
-  if (customizeModal && !customizeModal.classList.contains("hidden")) {
-    customizeModal.classList.add("hidden");
+  if (isModalOpen(profileModal)) {
+    closeModalEl(profileModal);
     return;
   }
-  if (adminModal && !adminModal.classList.contains("hidden")) {
-    adminModal.classList.add("hidden");
-    if (state.invitesRef) {
-      state.invitesRef.off();
-      state.invitesRef = null;
-    }
+  if (isModalOpen(customizeModal)) {
+    closeModalEl(customizeModal);
     return;
   }
-  if (settingsModal && !settingsModal.classList.contains("hidden")) {
-    settingsModal.classList.add("hidden");
+  if (isModalOpen(adminModal)) {
+    closeModalEl(adminModal, () => {
+      if (state.invitesRef) {
+        state.invitesRef.off();
+        state.invitesRef = null;
+      }
+    });
+    return;
+  }
+  if (isModalOpen(settingsModal)) {
+    closeModalEl(settingsModal);
     return;
   }
 
@@ -2305,10 +2370,38 @@ function blobToDataUrl(blob) {
   });
 }
 
+function resolveDriveDownloadUrl(data) {
+  if (!data) return "";
+  if (data.downloadUrl) return String(data.downloadUrl);
+  if (data.url) return String(data.url);
+  if (data.id) return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(data.id)}`;
+  return "";
+}
+
+async function parseDriveJsonResponse(res, defaultErr) {
+  const raw = await res.text();
+  let data = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    throw new Error(`${defaultErr} (HTTP ${res.status})`);
+  }
+  if (!res.ok) {
+    throw new Error((data && data.error) || `${defaultErr} (HTTP ${res.status})`);
+  }
+  return data;
+}
+
 async function uploadBlobToGoogleDrive(blob, fileName, mimeType) {
+  if (blob && blob.size > 25 * 1024 * 1024) {
+    throw new Error("Ses dosyası en fazla 25 MB olabilir");
+  }
   const dataUrl = await blobToDataUrl(blob);
   const idx = dataUrl.indexOf(",");
   const base64 = idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
+  if (!base64) {
+    throw new Error("Ses verisi okunamadı");
+  }
   const res = await fetch(state.driveConfig.url, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -2319,11 +2412,14 @@ async function uploadBlobToGoogleDrive(blob, fileName, mimeType) {
       base64
     })
   });
-  const data = await res.json();
+  const data = await parseDriveJsonResponse(res, "Drive ses yükleme hatası");
   if (!data || !data.ok || !data.id) {
     throw new Error((data && data.error) || "Drive ses yükleme hatası");
   }
-  return data;
+  return {
+    ...data,
+    downloadUrl: resolveDriveDownloadUrl(data)
+  };
 }
 
 async function uploadVideoToGoogleDrive(file) {
@@ -3358,19 +3454,36 @@ if (homeNotifyBanner) {
 }
 
 let inappToastTimer = null;
+let inappToastCloseTimer = null;
 let inappToastClickHandler = null;
 
 function hideInAppToast() {
   clearTimeout(inappToastTimer);
   inappToastTimer = null;
+  clearTimeout(inappToastCloseTimer);
+  inappToastCloseTimer = null;
   inappToastClickHandler = null;
-  if (inappToast) inappToast.classList.add("hidden");
+  if (!inappToast || inappToast.classList.contains("hidden")) return;
+  if (shouldSkipAnimations()) {
+    inappToast.classList.remove("closing");
+    inappToast.classList.add("hidden");
+    return;
+  }
+  inappToast.classList.add("closing");
+  inappToastCloseTimer = setTimeout(() => {
+    inappToastCloseTimer = null;
+    inappToast.classList.remove("closing");
+    inappToast.classList.add("hidden");
+  }, 180);
 }
 
 function showInAppToast({ title, body, avatar = "", onClick = null }) {
   if (uiPrefs.inAppNotifs === false) return;
   if (!inappToast || !inappToastTitle || !inappToastMsg) return;
   clearTimeout(inappToastTimer);
+  clearTimeout(inappToastCloseTimer);
+  inappToastCloseTimer = null;
+  inappToast.classList.remove("closing");
   inappToastTitle.textContent = String(title || "Agartha");
   inappToastMsg.textContent = String(body || "");
   if (inappToastAvatar) {
@@ -3584,6 +3697,11 @@ const bottomTabs = Array.from(mainView.querySelectorAll(".bottom-nav .nav-btn"))
 const bottomPanels = bottomTabs.map((tab) => document.getElementById("tab-" + tab.dataset.tab));
 
 function selectBottomTab(index, swipeDir = "") {
+  const prevIndex = bottomTabs.findIndex((t) => t.classList.contains("active"));
+  let resolvedDir = swipeDir;
+  if (!resolvedDir && prevIndex !== -1 && prevIndex !== index) {
+    resolvedDir = index > prevIndex ? "left" : "right";
+  }
   bottomTabs.forEach((tab, tabIndex) => {
     const selected = tabIndex === index;
     tab.classList.toggle("active", selected);
@@ -3592,9 +3710,11 @@ function selectBottomTab(index, swipeDir = "") {
     const panel = bottomPanels[tabIndex];
     if (panel) {
       panel.classList.remove("swipe-from-left", "swipe-from-right");
+      panel.style.transition = "";
+      panel.style.transform = "";
       panel.classList.toggle("active", selected);
-      if (selected && swipeDir === "left") panel.classList.add("swipe-from-right");
-      if (selected && swipeDir === "right") panel.classList.add("swipe-from-left");
+      if (selected && resolvedDir === "left") panel.classList.add("swipe-from-right");
+      if (selected && resolvedDir === "right") panel.classList.add("swipe-from-left");
     }
   });
 }
@@ -3606,6 +3726,7 @@ if (mainTabContent) {
   let swipeDx = 0;
   let swipeTracking = false;
   let swipeHorizontal = false;
+  let swipeSnapTimer = null;
 
   mainTabContent.addEventListener(
     "touchstart",
@@ -3613,6 +3734,10 @@ if (mainTabContent) {
       if (e.touches.length !== 1 || !mainView.classList.contains("active")) return;
       if (document.querySelector(".modal:not(.hidden)")) return;
       if (e.target && e.target.closest("input, textarea, select")) return;
+      clearTimeout(swipeSnapTimer);
+      swipeSnapTimer = null;
+      const curPanel = bottomPanels[bottomTabs.findIndex((t) => t.classList.contains("active"))];
+      if (curPanel) curPanel.style.transition = "";
       swipeStartX = e.touches[0].clientX;
       swipeStartY = e.touches[0].clientY;
       swipeDx = 0;
@@ -3657,15 +3782,32 @@ if (mainTabContent) {
     swipeTracking = false;
     const curIdx = bottomTabs.findIndex((t) => t.classList.contains("active"));
     const curPanel = bottomPanels[curIdx];
-    if (curPanel) curPanel.style.transform = "";
-    if (swipeHorizontal && Math.abs(swipeDx) >= 54) {
-      const nextIdx = swipeDx < 0 ? curIdx + 1 : curIdx - 1;
-      if (nextIdx >= 0 && nextIdx < bottomTabs.length) {
-        triggerHaptic(10);
-        selectBottomTab(nextIdx, swipeDx < 0 ? "left" : "right");
-        if (curIdx === 0 && nextIdx > 0) {
-          pushBackState("tab");
-        }
+    const nextIdx = swipeHorizontal && Math.abs(swipeDx) >= 54
+      ? (swipeDx < 0 ? curIdx + 1 : curIdx - 1)
+      : -1;
+    if (nextIdx >= 0 && nextIdx < bottomTabs.length) {
+      if (curPanel) {
+        curPanel.style.transition = "";
+        curPanel.style.transform = "";
+      }
+      triggerHaptic(10);
+      selectBottomTab(nextIdx, swipeDx < 0 ? "left" : "right");
+      if (curIdx === 0 && nextIdx > 0) {
+        pushBackState("tab");
+      }
+    } else if (curPanel && curPanel.style.transform) {
+      if (shouldSkipAnimations()) {
+        curPanel.style.transition = "";
+        curPanel.style.transform = "";
+      } else {
+        curPanel.style.transition = "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)";
+        curPanel.style.transform = "translateX(0)";
+        clearTimeout(swipeSnapTimer);
+        swipeSnapTimer = setTimeout(() => {
+          swipeSnapTimer = null;
+          curPanel.style.transition = "";
+          curPanel.style.transform = "";
+        }, 230);
       }
     }
     swipeHorizontal = false;
@@ -4467,14 +4609,14 @@ if (openCreateGroupBtn && createGroupModal) {
       }
     }
 
-    createGroupModal.classList.remove("hidden");
+    createGroupModal && openModalEl(createGroupModal);
     pushBackState("create-group-modal");
   });
 }
 
 if (closeCreateGroupBtn && createGroupModal) {
   closeCreateGroupBtn.addEventListener("click", () => {
-    createGroupModal.classList.add("hidden");
+    closeModalEl(createGroupModal);
   });
 }
 
@@ -4528,6 +4670,9 @@ if (createGroupForm) {
 
 // Sohbet Odası
 function openChatRoom(roomId, title, isGroup, otherId) {
+  clearTimeout(chatLeaveTimer);
+  chatLeaveTimer = null;
+  if (chatView) chatView.classList.remove("leaving");
   cleanupActiveRoomListeners();
 
   state.unreadRooms.delete(roomId);
@@ -5986,7 +6131,9 @@ if (callMuteBtn) {
 function resizeMessageInput() {
   if (!messageInput) return;
   messageInput.style.height = "auto";
-  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+  const sh = messageInput.scrollHeight;
+  messageInput.style.height = Math.min(sh, 120) + "px";
+  messageInput.style.overflowY = sh > 120 ? "auto" : "hidden";
 }
 
 function closeAttachMenu() {
@@ -6299,8 +6446,8 @@ messageForm.addEventListener("submit", async (e) => {
       if (state.driveConfig && state.driveConfig.url) {
         const uploaded = await uploadToGoogleDrive(file);
         payload.imageUrl = uploaded.url;
-        payload.downloadUrl = uploaded.downloadUrl;
-        payload.driveFileId = uploaded.id;
+        if (uploaded.downloadUrl) payload.downloadUrl = uploaded.downloadUrl;
+        if (uploaded.id) payload.driveFileId = uploaded.id;
       } else {
         payload.imageData = await compressImageToBase64(file, 900, 0.72);
       }
@@ -6309,7 +6456,9 @@ messageForm.addEventListener("submit", async (e) => {
     if (videoFile) {
       if (state.driveConfig && state.driveConfig.url) {
         const uploadedVideo = await uploadVideoToGoogleDrive(videoFile);
-        payload.videoUrl = uploadedVideo.downloadUrl;
+        const resolvedVideoUrl = resolveDriveDownloadUrl(uploadedVideo);
+        if (!resolvedVideoUrl) throw new Error("Video bağlantısı oluşturulamadı");
+        payload.videoUrl = resolvedVideoUrl;
         payload.videoDriveFileId = uploadedVideo.id;
       } else {
         if (videoFile.size > 4 * 1024 * 1024) {
@@ -6320,16 +6469,40 @@ messageForm.addEventListener("submit", async (e) => {
     }
 
     if (audioBlob) {
+      const safeMime = audioMime || audioBlob.type || "audio/mp4";
       if (state.driveConfig && state.driveConfig.url) {
-        const ext = audioMime.includes("mp4") ? "m4a" : audioMime.includes("ogg") ? "ogg" : "webm";
-        const uploadedAudio = await uploadBlobToGoogleDrive(
-          audioBlob,
-          `agartha_ses_${Date.now()}.${ext}`,
-          audioMime || "audio/mp4"
-        );
-        payload.audioUrl = uploadedAudio.downloadUrl;
-        payload.audioDriveFileId = uploadedAudio.id;
+        const ext = safeMime.includes("mp4") || safeMime.includes("m4a")
+          ? "m4a"
+          : safeMime.includes("ogg")
+            ? "ogg"
+            : safeMime.includes("mpeg")
+              ? "mp3"
+              : safeMime.includes("wav")
+                ? "wav"
+                : "webm";
+        try {
+          const uploadedAudio = await uploadBlobToGoogleDrive(
+            audioBlob,
+            `agartha_ses_${Date.now()}.${ext}`,
+            safeMime
+          );
+          if (!uploadedAudio.downloadUrl) {
+            throw new Error("Ses bağlantısı oluşturulamadı");
+          }
+          payload.audioUrl = uploadedAudio.downloadUrl;
+          payload.audioDriveFileId = uploadedAudio.id;
+        } catch (driveErr) {
+          if (audioBlob.size <= 1.5 * 1024 * 1024) {
+            console.warn("Drive ses yüklemesi başarısız, doğrudan veri olarak gönderiliyor:", driveErr);
+            payload.audioData = await blobToDataUrl(audioBlob);
+          } else {
+            throw driveErr;
+          }
+        }
       } else {
+        if (audioBlob.size > 4 * 1024 * 1024) {
+          throw new Error("Drive bağlı değilken en fazla 4 MB ses gönderilebilir");
+        }
         payload.audioData = await blobToDataUrl(audioBlob);
       }
     }
@@ -6412,14 +6585,14 @@ if (locBtn && locationModal) {
   locBtn.addEventListener("click", () => {
     if (!state.activeRoom) return;
     closeAttachMenu();
-    locationModal.classList.remove("hidden");
+    openModalEl(locationModal);
     pushBackState("location-modal");
   });
 }
 
 if (closeLocBtn && locationModal) {
   closeLocBtn.addEventListener("click", () => {
-    locationModal.classList.add("hidden");
+    closeModalEl(locationModal);
   });
 }
 
@@ -6655,16 +6828,18 @@ async function consumeViewingOnceMsg() {
 }
 
 closeImageBtn.addEventListener("click", () => {
-  imageModal.classList.add("hidden");
-  imageModalImg.src = "";
-  consumeViewingOnceMsg();
+  closeModalEl(imageModal, () => {
+    imageModalImg.src = "";
+    consumeViewingOnceMsg();
+  });
 });
 
 imageModal.addEventListener("click", (e) => {
   if (e.target === imageModal) {
-    imageModal.classList.add("hidden");
-    imageModalImg.src = "";
-    consumeViewingOnceMsg();
+    closeModalEl(imageModal, () => {
+      imageModalImg.src = "";
+      consumeViewingOnceMsg();
+    });
   }
 });
 
@@ -6831,7 +7006,7 @@ function openUserProfileCard(uid) {
     muteDmBtn.textContent = muted ? "Sesi Aç" : "Sessize Al";
     muteDmBtn.classList.toggle("active", muted);
   }
-  userProfileModal.classList.remove("hidden");
+  openModalEl(userProfileModal);
   pushBackState("user-profile-modal");
 }
 
@@ -6864,13 +7039,13 @@ if (removeFriendBtn) {
     if (!confirm(`${name} arkadaş listenden çıkarılsın mı?`)) return;
     await state.db.ref(`users/${state.user.id}/friends/${uid}`).remove();
     await state.db.ref(`users/${uid}/friends/${state.user.id}`).remove();
-    userProfileModal.classList.add("hidden");
+    closeModalEl(userProfileModal);
   });
 }
 
 if (closeUserProfileBtn) {
   closeUserProfileBtn.addEventListener("click", () => {
-    userProfileModal.classList.add("hidden");
+    closeModalEl(userProfileModal);
   });
 }
 
@@ -6973,7 +7148,7 @@ function openGroupSettingsModal() {
   }
 
   renderGroupMembersList(activeGroupSettingsRoomId);
-  groupSettingsModal.classList.remove("hidden");
+  openModalEl(groupSettingsModal);
   pushBackState("group-settings-modal");
 }
 
@@ -7000,7 +7175,7 @@ if (leaveCustomGroupBtn) {
     await state.db
       .ref(`customGroups/${activeGroupSettingsRoomId}/members/${state.user.id}`)
       .remove();
-    groupSettingsModal.classList.add("hidden");
+    closeModalEl(groupSettingsModal);
     if (state.activeRoom && state.activeRoom.id === activeGroupSettingsRoomId) {
       closeActiveChatWithAnimation();
     }
@@ -7013,7 +7188,7 @@ if (groupSettingsBtn) {
 
 if (closeGroupSettingsBtn && groupSettingsModal) {
   closeGroupSettingsBtn.addEventListener("click", () => {
-    groupSettingsModal.classList.add("hidden");
+    closeModalEl(groupSettingsModal);
   });
 }
 
@@ -7154,21 +7329,21 @@ if (saveProfileDetailsBtn) {
 
 if (openSettingsBtn && settingsModal) {
   openSettingsBtn.addEventListener("click", () => {
-    settingsModal.classList.remove("hidden");
+    openModalEl(settingsModal);
     pushBackState("settings-modal");
   });
 }
 
 if (closeSettingsBtn && settingsModal) {
   closeSettingsBtn.addEventListener("click", () => {
-    settingsModal.classList.add("hidden");
+    closeModalEl(settingsModal);
   });
 }
 
 if (settingsModal) {
   settingsModal.addEventListener("click", (e) => {
     if (e.target === settingsModal) {
-      settingsModal.classList.add("hidden");
+      closeModalEl(settingsModal);
     }
   });
 }
@@ -7205,28 +7380,28 @@ if (profileTrigger) {
 
 if (openProfileBtn) {
   openProfileBtn.addEventListener("click", () => {
-    if (settingsModal) settingsModal.classList.add("hidden");
+    if (settingsModal) closeModalEl(settingsModal);
     openProfileModal();
   });
 }
 
 if (openCustomizeBtn) {
   openCustomizeBtn.addEventListener("click", () => {
-    if (settingsModal) settingsModal.classList.add("hidden");
+    if (settingsModal) closeModalEl(settingsModal);
     openCustomizeModal();
   });
 }
 
 if (closeCustomizeBtn && customizeModal) {
   closeCustomizeBtn.addEventListener("click", () => {
-    customizeModal.classList.add("hidden");
+    closeModalEl(customizeModal);
   });
 }
 
 if (customizeModal) {
   customizeModal.addEventListener("click", (e) => {
     if (e.target === customizeModal) {
-      customizeModal.classList.add("hidden");
+      closeModalEl(customizeModal);
     }
   });
 }
@@ -7411,7 +7586,7 @@ if (resetBgBtn) {
 }
 
 closeProfileBtn.addEventListener("click", () => {
-  profileModal.classList.add("hidden");
+  closeModalEl(profileModal);
 });
 
 profileAvatarBtn.addEventListener("click", () => profileAvatarInput.click());
@@ -7493,7 +7668,7 @@ function closeAvatarCropModal() {
   cropState.img = null;
   cropState.onSave = null;
   cropState.dragging = false;
-  if (avatarCropModal) avatarCropModal.classList.add("hidden");
+  if (avatarCropModal) closeModalEl(avatarCropModal);
 }
 
 function openAvatarCropModal(file, opts = {}) {
@@ -7995,7 +8170,8 @@ function openPlaceModal(editKey = "", focusLocation = false) {
   }
 
   updatePlaceLocationStatusUI(false);
-  placeModal.classList.remove("hidden");
+  openModalEl(placeModal);
+  pushBackState("place-modal");
   requestAnimationFrame(() => {
     if (focusLocation && placeMapsInput) {
       placeMapsInput.focus();
@@ -8008,9 +8184,10 @@ function openPlaceModal(editKey = "", focusLocation = false) {
 
 function closePlaceModal() {
   if (!placeModal) return;
-  placeModal.classList.add("hidden");
-  placesUiState.modalPreviewOpen = false;
-  renderModalLocEmbed(null);
+  closeModalEl(placeModal, () => {
+    placesUiState.modalPreviewOpen = false;
+    renderModalLocEmbed(null);
+  });
 }
 
 if (openPlaceModalBtn) {
@@ -8276,8 +8453,9 @@ function updatePlacesHeaderAndCounts(allEntries, visibleEntries) {
   }
 }
 
-function renderPlacesList() {
+function renderPlacesList(animateCards = true) {
   if (!placesList) return;
+  placesList.classList.toggle("places-no-stagger", !animateCards);
   const allEntries = state.placesCache || [];
   const dataByKey = {};
   allEntries.forEach(([k, v]) => {
@@ -8556,7 +8734,7 @@ function renderPlacesList() {
       } else {
         placesUiState.openMapIds.add(id);
       }
-      renderPlacesList();
+      renderPlacesList(false);
     });
   });
 
@@ -8569,7 +8747,7 @@ function renderPlacesList() {
       } else {
         placesUiState.openCommentIds.delete(id);
       }
-      renderPlacesList();
+      renderPlacesList(false);
       if (willOpen) {
         const card = Array.from(placesList.querySelectorAll("[data-place-card]")).find(
           (el) => el.dataset.placeCard === id
@@ -8583,7 +8761,7 @@ function renderPlacesList() {
   placesList.querySelectorAll("[data-expand-comments]").forEach((btn) => {
     btn.addEventListener("click", () => {
       placesUiState.expandedCommentIds.add(btn.dataset.expandComments);
-      renderPlacesList();
+      renderPlacesList(false);
     });
   });
 
@@ -8628,6 +8806,8 @@ function renderPlacesList() {
   });
 }
 
+let hasInitialPlacesRender = false;
+
 function listenPlaces() {
   state.db.ref("places").limitToLast(80).on("value", (snap) => {
     const data = snap.val() || {};
@@ -8635,7 +8815,8 @@ function listenPlaces() {
       (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
     );
     state.placesCache = entries;
-    renderPlacesList();
+    renderPlacesList(!hasInitialPlacesRender);
+    hasInitialPlacesRender = true;
   });
 }
 
@@ -9825,11 +10006,12 @@ if (aiConfigForm) {
 }
 
 closeAdminBtn.addEventListener("click", () => {
-  adminModal.classList.add("hidden");
-  if (state.invitesRef) {
-    state.invitesRef.off();
-    state.invitesRef = null;
-  }
+  closeModalEl(adminModal, () => {
+    if (state.invitesRef) {
+      state.invitesRef.off();
+      state.invitesRef = null;
+    }
+  });
 });
 
 inviteForm.addEventListener("submit", async (e) => {
@@ -10295,13 +10477,13 @@ function listenAnnouncements() {
 
 function openAnnouncementsModal() {
   if (!announcementsModal) return;
-  if (settingsModal) settingsModal.classList.add("hidden");
+  if (settingsModal) closeModalEl(settingsModal);
   const isAdmin = Boolean(state.user && state.user.isAdmin);
   if (adminAnnouncementCard) adminAnnouncementCard.classList.toggle("hidden", !isAdmin);
   if (changelogSearchInput) changelogSearchInput.value = "";
   renderCustomAnnouncements();
   renderChangelogList("");
-  announcementsModal.classList.remove("hidden");
+  openModalEl(announcementsModal);
   pushBackState("announcements-modal");
 }
 
@@ -10316,7 +10498,7 @@ if (openAnnouncementsBtn) {
 }
 if (closeAnnouncementsBtn && announcementsModal) {
   closeAnnouncementsBtn.addEventListener("click", () => {
-    announcementsModal.classList.add("hidden");
+    closeModalEl(announcementsModal);
   });
 }
 if (changelogSearchInput) {
