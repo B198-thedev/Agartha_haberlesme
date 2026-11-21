@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.22";
+const CURRENT_APP_CACHE = "agartha-V2.23";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -9941,9 +9941,14 @@ function renderAdminUsers(users) {
 }
 
 // =========================================================
-// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.22)
+// DUYURULAR & SÜRÜM GEÇMİŞİ (v1 – V2.23)
 // =========================================================
 const APP_CHANGELOG = [
+  {
+    v: "V2.23",
+    title: "Yenilenen Mekanlar Rehberi, Google Haritalar Konumu & Tema Seçici Vurgusu",
+    desc: "Mekanlar sayfası baştan tasarlandı: keşif odaklı üst bar, canlı arama, sıralama, sayı rozetli kategori filtreleri ve yeni mekan ekleme/düzenleme penceresi eklendi. Mekan eklerken Google Haritalar bağlantısı veya koordinat yapıştırma, GPS ile anlık konum alma, kart içinde gömülü harita önizleme ve yol tarifi desteği getirildi. Ayrıca Tema & Tasarım ekranında seçili temanın net görünmesini sağlayan onay rozeti ve vurgu eklendi."
+  },
   {
     v: "V2.22",
     title: "Optik Apple Liquid Glass Motoru (60 FPS)",
