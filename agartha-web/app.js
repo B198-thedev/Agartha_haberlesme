@@ -629,10 +629,33 @@ const friendRequestsList = document.getElementById("friend-requests-list");
 const contactsList = document.getElementById("contacts-list");
 
 const placeForm = document.getElementById("place-form");
+const placeEditIdInput = document.getElementById("place-edit-id");
 const placeNameInput = document.getElementById("place-name");
 const placeAreaInput = document.getElementById("place-area");
 const placeCategoryInput = document.getElementById("place-category");
 const placeNoteInput = document.getElementById("place-note");
+const placeMapsInput = document.getElementById("place-maps-input");
+const placeGpsBtn = document.getElementById("place-gps-btn");
+const placeFindMapBtn = document.getElementById("place-find-map-btn");
+const placeLocStatus = document.getElementById("place-loc-status");
+const placeLocStatusText = document.getElementById("place-loc-status-text");
+const placeLocPreviewBtn = document.getElementById("place-loc-preview-btn");
+const placeLocClearBtn = document.getElementById("place-loc-clear-btn");
+const placeLocEmbedWrap = document.getElementById("place-loc-embed-wrap");
+const placeCatGrid = document.getElementById("place-cat-grid");
+const placeStarPicker = document.getElementById("place-star-picker");
+const placeStarLabel = document.getElementById("place-star-label");
+const placeModal = document.getElementById("place-modal");
+const placeModalTitle = document.getElementById("place-modal-title");
+const placeSubmitBtn = document.getElementById("place-submit-btn");
+const openPlaceModalBtn = document.getElementById("open-place-modal-btn");
+const closePlaceModalBtn = document.getElementById("close-place-modal-btn");
+const placesStatsText = document.getElementById("places-stats-text");
+const placesSearchInput = document.getElementById("places-search-input");
+const placesSearchClearBtn = document.getElementById("places-search-clear");
+const placesSortSelect = document.getElementById("places-sort-select");
+const placesFilterBar = document.getElementById("places-filter-bar");
+const placesResultCount = document.getElementById("places-result-count");
 const placesList = document.getElementById("places-list");
 const aiBridgeStatus = document.getElementById("ai-bridge-status");
 const aiAnalyzeForm = document.getElementById("ai-analyze-form");
@@ -7634,166 +7657,946 @@ quickPlaceBtn.addEventListener("click", async () => {
   });
 });
 
-// Mekanlar Sekmesi
+// Mekanlar Sekmesi — Yenilenen Tasarım & Google Haritalar Konum Desteği
+const PLACE_STAR_LABELS = {
+  1: "1 / 5 · Tavsiye Etmem",
+  2: "2 / 5 · Zayıf",
+  3: "3 / 5 · İdare Eder",
+  4: "4 / 5 · Çok İyi",
+  5: "5 / 5 · Harika"
+};
+
+const PLACE_CATEGORY_META = {
+  "Kafe": {
+    cls: "cat-cafe",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>`
+  },
+  "Restoran": {
+    cls: "cat-restaurant",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path><path d="M7 2v20"></path><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"></path></svg>`
+  },
+  "Bar / Pub": {
+    cls: "cat-bar",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 22h8"></path><path d="M12 11v11"></path><path d="M19 3H5l7 8 7-8z"></path></svg>`
+  },
+  "Doğa / Park": {
+    cls: "cat-nature",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"></path><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path></svg>`
+  },
+  "Eğlence / Kültür": {
+    cls: "cat-culture",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`
+  },
+  "Diğer": {
+    cls: "cat-other",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`
+  }
+};
+
+const placesUiState = {
+  filter: "all",
+  search: "",
+  sort: "newest",
+  openMapIds: new Set(),
+  expandedCommentIds: new Set(),
+  modalPreviewOpen: false,
+  parsedLoc: null
+};
+
+function getPlaceCategoryMeta(cat) {
+  return PLACE_CATEGORY_META[cat] || PLACE_CATEGORY_META["Diğer"];
+}
+
+function isValidLatLng(lat, lng) {
+  return (
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+function parsePlaceLocationInput(rawInput) {
+  const s = String(rawInput || "").trim();
+  if (!s) return { empty: true, valid: true, mapsUrl: "", lat: null, lng: null, suggestedName: "" };
+
+  const coordOnly = s.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (coordOnly) {
+    const lat = Number(coordOnly[1]);
+    const lng = Number(coordOnly[2]);
+    if (isValidLatLng(lat, lng)) {
+      const latFix = Number(lat.toFixed(6));
+      const lngFix = Number(lng.toFixed(6));
+      return {
+        empty: false,
+        valid: true,
+        mapsUrl: `https://www.google.com/maps?q=${latFix},${lngFix}`,
+        lat: latFix,
+        lng: lngFix,
+        suggestedName: ""
+      };
+    }
+    return { empty: false, valid: false, error: "Koordinat aralığı geçersiz (-90..90, -180..180)." };
+  }
+
+  let candidateUrl = s;
+  if (!/^https?:\/\//i.test(candidateUrl) && /^(www\.)?(google\.|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.)/i.test(candidateUrl)) {
+    candidateUrl = "https://" + candidateUrl;
+  }
+
+  const cleanUrl = sanitizeHttpUrl(candidateUrl);
+  if (!cleanUrl) {
+    return {
+      empty: false,
+      valid: false,
+      error: "Geçerli bir Google Haritalar linki veya \"enlem, boylam\" girin."
+    };
+  }
+
+  let lat = null;
+  let lng = null;
+  let suggestedName = "";
+
+  const pinMatch = cleanUrl.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (pinMatch) {
+    const a = Number(pinMatch[1]);
+    const b = Number(pinMatch[2]);
+    if (isValidLatLng(a, b)) {
+      lat = Number(a.toFixed(6));
+      lng = Number(b.toFixed(6));
+    }
+  }
+
+  if (lat === null) {
+    const atMatch = cleanUrl.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+    if (atMatch) {
+      const a = Number(atMatch[1]);
+      const b = Number(atMatch[2]);
+      if (isValidLatLng(a, b)) {
+        lat = Number(a.toFixed(6));
+        lng = Number(b.toFixed(6));
+      }
+    }
+  }
+
+  if (lat === null) {
+    try {
+      const u = new URL(cleanUrl);
+      const qParam = u.searchParams.get("q") || u.searchParams.get("query") || u.searchParams.get("ll") || u.searchParams.get("destination") || "";
+      const qCoord = qParam.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+      if (qCoord) {
+        const a = Number(qCoord[1]);
+        const b = Number(qCoord[2]);
+        if (isValidLatLng(a, b)) {
+          lat = Number(a.toFixed(6));
+          lng = Number(b.toFixed(6));
+        }
+      }
+    } catch {}
+  }
+
+  const placeNameMatch = cleanUrl.match(/\/maps\/place\/([^/@?]+)/i);
+  if (placeNameMatch && placeNameMatch[1]) {
+    try {
+      const decoded = decodeURIComponent(placeNameMatch[1].replace(/\+/g, " ")).trim();
+      if (decoded && !/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(decoded)) {
+        suggestedName = decoded.slice(0, 60);
+      }
+    } catch {}
+  }
+
+  return {
+    empty: false,
+    valid: true,
+    mapsUrl: cleanUrl,
+    lat,
+    lng,
+    suggestedName
+  };
+}
+
+function buildPlaceMapLinks(p) {
+  const cleanMapsUrl = sanitizeHttpUrl(p && p.mapsUrl);
+  const lat = p && typeof p.lat === "number" ? p.lat : Number(p && p.lat);
+  const lng = p && typeof p.lng === "number" ? p.lng : Number(p && p.lng);
+  const hasCoords = p && p.lat !== null && p.lat !== undefined && p.lat !== "" && p.lng !== null && p.lng !== undefined && p.lng !== "" && isValidLatLng(lat, lng);
+  const hasSavedLocation = Boolean(cleanMapsUrl || hasCoords);
+
+  const queryText = [p && p.name, p && p.area].filter(Boolean).join(" ").trim() || "İstanbul";
+  const coordStr = hasCoords ? `${lat.toFixed(6)},${lng.toFixed(6)}` : "";
+  const openUrl = cleanMapsUrl
+    || (hasCoords
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordStr)}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(queryText)}`);
+  const directionsDest = hasCoords ? coordStr : queryText;
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(directionsDest)}`;
+  const embedQuery = hasCoords ? coordStr : queryText;
+  const embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(embedQuery)}&z=15&hl=tr&output=embed`;
+
+  return {
+    hasSavedLocation,
+    hasCoords,
+    lat: hasCoords ? lat : null,
+    lng: hasCoords ? lng : null,
+    openUrl,
+    directionsUrl,
+    embedUrl
+  };
+}
+
+function formatPlaceRelativeTime(ts) {
+  if (!ts || !Number.isFinite(Number(ts))) return "";
+  const diff = Date.now() - Number(ts);
+  if (diff < 60000) return "Az önce";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} dk önce`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} sa önce`;
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)} gün önce`;
+  try {
+    return new Date(Number(ts)).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+  } catch {
+    return "";
+  }
+}
+
+function setPlaceCategorySelection(catVal) {
+  const target = PLACE_CATEGORY_META[catVal] ? catVal : "Kafe";
+  if (placeCategoryInput) placeCategoryInput.value = target;
+  if (placeCatGrid) {
+    placeCatGrid.querySelectorAll("[data-cat-value]").forEach((btn) => {
+      const active = btn.dataset.catValue === target;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+}
+
+function setPlaceStarSelection(val) {
+  const num = Math.min(5, Math.max(1, Number(val) || 4));
+  if (placeRatingSelect) placeRatingSelect.value = String(num);
+  if (placeStarLabel) placeStarLabel.textContent = PLACE_STAR_LABELS[num] || `${num} / 5`;
+  if (placeStarPicker) {
+    placeStarPicker.querySelectorAll("[data-star-val]").forEach((btn) => {
+      const v = Number(btn.dataset.starVal);
+      btn.classList.toggle("filled", v <= num);
+      btn.setAttribute("aria-pressed", v === num ? "true" : "false");
+    });
+  }
+}
+
+function renderModalLocEmbed(parsed) {
+  if (!placeLocEmbedWrap) return;
+  if (!placesUiState.modalPreviewOpen || !parsed || !parsed.valid || parsed.empty) {
+    placeLocEmbedWrap.classList.add("hidden");
+    placeLocEmbedWrap.innerHTML = "";
+    return;
+  }
+  const links = buildPlaceMapLinks({
+    name: placeNameInput ? placeNameInput.value.trim() : "",
+    area: placeAreaInput ? placeAreaInput.value.trim() : "",
+    mapsUrl: parsed.mapsUrl,
+    lat: parsed.lat,
+    lng: parsed.lng
+  });
+  placeLocEmbedWrap.classList.remove("hidden");
+  placeLocEmbedWrap.innerHTML = `
+    <iframe class="place-map-iframe" src="${escapeHtml(links.embedUrl)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Konum önizlemesi" allowfullscreen></iframe>
+  `;
+}
+
+function updatePlaceLocationStatusUI(autoFillName = false) {
+  if (!placeMapsInput || !placeLocStatus || !placeLocStatusText) return;
+  const parsed = parsePlaceLocationInput(placeMapsInput.value);
+  placesUiState.parsedLoc = parsed;
+
+  if (parsed.empty) {
+    placeLocStatus.classList.add("hidden");
+    placeLocStatus.classList.remove("error", "ok");
+    placesUiState.modalPreviewOpen = false;
+    renderModalLocEmbed(null);
+    return;
+  }
+
+  placeLocStatus.classList.remove("hidden");
+  if (!parsed.valid) {
+    placeLocStatus.classList.add("error");
+    placeLocStatus.classList.remove("ok");
+    placeLocStatusText.textContent = parsed.error || "Geçersiz konum bilgisi.";
+    if (placeLocPreviewBtn) placeLocPreviewBtn.classList.add("hidden");
+    placesUiState.modalPreviewOpen = false;
+    renderModalLocEmbed(null);
+    return;
+  }
+
+  placeLocStatus.classList.add("ok");
+  placeLocStatus.classList.remove("error");
+  if (placeLocPreviewBtn) {
+    placeLocPreviewBtn.classList.remove("hidden");
+    placeLocPreviewBtn.textContent = placesUiState.modalPreviewOpen ? "Gizle" : "Önizle";
+  }
+
+  if (parsed.lat !== null && parsed.lng !== null) {
+    placeLocStatusText.textContent = `Konum hazır: ${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)}`;
+  } else {
+    placeLocStatusText.textContent = "Google Haritalar bağlantısı eklendi";
+  }
+
+  if (autoFillName && parsed.suggestedName && placeNameInput && !placeNameInput.value.trim()) {
+    placeNameInput.value = parsed.suggestedName;
+  }
+
+  if (placesUiState.modalPreviewOpen) {
+    renderModalLocEmbed(parsed);
+  }
+}
+
+function openPlaceModal(editKey = "", focusLocation = false) {
+  if (!placeModal) return;
+  const entry = editKey ? (state.placesCache || []).find(([k]) => k === editKey) : null;
+  const existing = entry ? entry[1] : null;
+
+  placesUiState.modalPreviewOpen = false;
+  if (placeEditIdInput) placeEditIdInput.value = existing ? editKey : "";
+
+  if (existing) {
+    if (placeModalTitle) placeModalTitle.textContent = "Mekanı Düzenle";
+    if (placeSubmitBtn) placeSubmitBtn.textContent = "Değişiklikleri Kaydet";
+    if (placeNameInput) placeNameInput.value = existing.name || "";
+    if (placeAreaInput) placeAreaInput.value = existing.area || "";
+    if (placeNoteInput) placeNoteInput.value = existing.note || "";
+    setPlaceCategorySelection(existing.category || "Kafe");
+    const existingMyRating =
+      existing.ratings && state.user && existing.ratings[state.user.id]
+        ? Number(existing.ratings[state.user.id])
+        : 4;
+    setPlaceStarSelection(existingMyRating);
+    if (placeMapsInput) {
+      if (existing.mapsUrl) {
+        placeMapsInput.value = existing.mapsUrl;
+      } else if (existing.lat != null && existing.lng != null) {
+        placeMapsInput.value = `${existing.lat}, ${existing.lng}`;
+      } else {
+        placeMapsInput.value = "";
+      }
+    }
+  } else {
+    if (placeModalTitle) placeModalTitle.textContent = "Yeni Mekan Ekle";
+    if (placeSubmitBtn) placeSubmitBtn.textContent = "Mekanı Kaydet";
+    if (placeNameInput) placeNameInput.value = "";
+    if (placeAreaInput) placeAreaInput.value = "";
+    if (placeNoteInput) placeNoteInput.value = "";
+    if (placeMapsInput) placeMapsInput.value = "";
+    setPlaceCategorySelection("Kafe");
+    setPlaceStarSelection(4);
+  }
+
+  updatePlaceLocationStatusUI(false);
+  placeModal.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    if (focusLocation && placeMapsInput) {
+      placeMapsInput.focus();
+      placeMapsInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else if (placeNameInput) {
+      placeNameInput.focus();
+    }
+  });
+}
+
+function closePlaceModal() {
+  if (!placeModal) return;
+  placeModal.classList.add("hidden");
+  placesUiState.modalPreviewOpen = false;
+  renderModalLocEmbed(null);
+}
+
+if (openPlaceModalBtn) {
+  openPlaceModalBtn.addEventListener("click", () => openPlaceModal("", false));
+}
+if (closePlaceModalBtn) {
+  closePlaceModalBtn.addEventListener("click", closePlaceModal);
+}
+if (placeModal) {
+  placeModal.addEventListener("click", (e) => {
+    if (e.target === placeModal) closePlaceModal();
+  });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && placeModal && !placeModal.classList.contains("hidden")) {
+    closePlaceModal();
+  }
+});
+
+if (placeCatGrid) {
+  placeCatGrid.querySelectorAll("[data-cat-value]").forEach((btn) => {
+    const meta = getPlaceCategoryMeta(btn.dataset.catValue);
+    btn.innerHTML = `<span class="place-cat-opt-icon ${meta.cls}">${meta.icon}</span><span>${escapeHtml(btn.dataset.catValue)}</span>`;
+    btn.addEventListener("click", () => setPlaceCategorySelection(btn.dataset.catValue));
+  });
+}
+
+if (placeStarPicker) {
+  placeStarPicker.querySelectorAll("[data-star-val]").forEach((btn) => {
+    btn.addEventListener("click", () => setPlaceStarSelection(btn.dataset.starVal));
+  });
+}
+
+if (placeMapsInput) {
+  placeMapsInput.addEventListener("input", () => updatePlaceLocationStatusUI(true));
+  placeMapsInput.addEventListener("paste", () => {
+    setTimeout(() => updatePlaceLocationStatusUI(true), 20);
+  });
+}
+
+if (placeLocPreviewBtn) {
+  placeLocPreviewBtn.addEventListener("click", () => {
+    placesUiState.modalPreviewOpen = !placesUiState.modalPreviewOpen;
+    placeLocPreviewBtn.textContent = placesUiState.modalPreviewOpen ? "Gizle" : "Önizle";
+    renderModalLocEmbed(placesUiState.parsedLoc);
+  });
+}
+
+if (placeLocClearBtn) {
+  placeLocClearBtn.addEventListener("click", () => {
+    if (placeMapsInput) placeMapsInput.value = "";
+    placesUiState.modalPreviewOpen = false;
+    updatePlaceLocationStatusUI(false);
+  });
+}
+
+if (placeGpsBtn) {
+  placeGpsBtn.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      alert("Tarayıcınız konum servisini desteklemiyor.");
+      return;
+    }
+    const origHtml = placeGpsBtn.innerHTML;
+    placeGpsBtn.disabled = true;
+    placeGpsBtn.textContent = "Konum alınıyor...";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        if (placeMapsInput) {
+          placeMapsInput.value = `https://www.google.com/maps?q=${lat},${lng}`;
+        }
+        placesUiState.modalPreviewOpen = true;
+        updatePlaceLocationStatusUI(false);
+        placeGpsBtn.disabled = false;
+        placeGpsBtn.innerHTML = origHtml;
+      },
+      (err) => {
+        const msg =
+          err && err.code === 1
+            ? "Konum izni reddedildi. Tarayıcı ayarlarından izin verip tekrar dene."
+            : "Konum alınamadı. Google Haritalar linkini manuel yapıştırabilirsin.";
+        alert(msg);
+        placeGpsBtn.disabled = false;
+        placeGpsBtn.innerHTML = origHtml;
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  });
+}
+
+if (placeFindMapBtn) {
+  placeFindMapBtn.addEventListener("click", () => {
+    const q = [placeNameInput ? placeNameInput.value.trim() : "", placeAreaInput ? placeAreaInput.value.trim() : ""]
+      .filter(Boolean)
+      .join(" ");
+    const targetUrl = q
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
+      : "https://www.google.com/maps";
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  });
+}
+
+if (placesSearchInput) {
+  placesSearchInput.addEventListener("input", () => {
+    placesUiState.search = placesSearchInput.value.trim();
+    if (placesSearchClearBtn) {
+      placesSearchClearBtn.classList.toggle("hidden", !placesUiState.search);
+    }
+    renderPlacesList();
+  });
+}
+
+if (placesSearchClearBtn) {
+  placesSearchClearBtn.addEventListener("click", () => {
+    if (placesSearchInput) placesSearchInput.value = "";
+    placesUiState.search = "";
+    placesSearchClearBtn.classList.add("hidden");
+    renderPlacesList();
+    if (placesSearchInput) placesSearchInput.focus();
+  });
+}
+
+if (placesSortSelect) {
+  placesSortSelect.addEventListener("change", () => {
+    placesUiState.sort = placesSortSelect.value || "newest";
+    renderPlacesList();
+  });
+}
+
+if (placesFilterBar) {
+  placesFilterBar.querySelectorAll("[data-place-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      placesUiState.filter = btn.dataset.placeFilter || "all";
+      placesFilterBar.querySelectorAll("[data-place-filter]").forEach((b) => {
+        const act = b.dataset.placeFilter === placesUiState.filter;
+        b.classList.toggle("active", act);
+        b.setAttribute("aria-selected", act ? "true" : "false");
+      });
+      renderPlacesList();
+    });
+  });
+}
+
 placeForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!state.db || !state.user) return;
   const name = placeNameInput.value.trim();
   const area = placeAreaInput.value.trim();
-  const category = placeCategoryInput.value;
+  const category = placeCategoryInput.value || "Diğer";
   const note = placeNoteInput.value.trim();
   const initialRating = Math.min(5, Math.max(1, Number(placeRatingSelect ? placeRatingSelect.value : 4) || 4));
   if (!name || !area) return;
 
-  await state.db.ref("places").push({
-    name,
-    area,
-    category,
-    note,
-    addedBy: state.user.id,
-    addedByName: getDisplayName(state.user),
-    ratings: { [state.user.id]: initialRating },
-    visitedBy: { [state.user.id]: getDisplayName(state.user) },
-    timestamp: Date.now()
-  });
+  const parsedLoc = parsePlaceLocationInput(placeMapsInput ? placeMapsInput.value : "");
+  if (!parsedLoc.empty && !parsedLoc.valid) {
+    updatePlaceLocationStatusUI(false);
+    if (placeMapsInput) placeMapsInput.focus();
+    return;
+  }
 
-  placeNameInput.value = "";
-  placeAreaInput.value = "";
-  placeNoteInput.value = "";
+  const editId = placeEditIdInput ? placeEditIdInput.value.trim() : "";
+  const locPatch = {
+    mapsUrl: parsedLoc.empty ? "" : parsedLoc.mapsUrl,
+    lat: parsedLoc.empty ? null : parsedLoc.lat,
+    lng: parsedLoc.empty ? null : parsedLoc.lng
+  };
+
+  if (placeSubmitBtn) placeSubmitBtn.disabled = true;
+  try {
+    if (editId) {
+      await state.db.ref("places/" + editId).update({
+        name,
+        area,
+        category,
+        note,
+        ...locPatch
+      });
+      await state.db.ref(`places/${editId}/ratings/${state.user.id}`).set(initialRating);
+    } else {
+      await state.db.ref("places").push({
+        name,
+        area,
+        category,
+        note,
+        ...locPatch,
+        addedBy: state.user.id,
+        addedByName: getDisplayName(state.user),
+        ratings: { [state.user.id]: initialRating },
+        visitedBy: { [state.user.id]: getDisplayName(state.user) },
+        timestamp: Date.now()
+      });
+    }
+
+    placeNameInput.value = "";
+    placeAreaInput.value = "";
+    placeNoteInput.value = "";
+    if (placeMapsInput) placeMapsInput.value = "";
+    if (placeEditIdInput) placeEditIdInput.value = "";
+    closePlaceModal();
+  } finally {
+    if (placeSubmitBtn) placeSubmitBtn.disabled = false;
+  }
 });
 
+function getPlaceStats(p) {
+  const ratingsMap = p && p.ratings && typeof p.ratings === "object" ? p.ratings : {};
+  const ratingVals = Object.values(ratingsMap).map((v) => Number(v)).filter((v) => v >= 1 && v <= 5);
+  const avgRating = ratingVals.length ? ratingVals.reduce((s, v) => s + v, 0) / ratingVals.length : 0;
+  const visitedMap = p && p.visitedBy && typeof p.visitedBy === "object" ? p.visitedBy : {};
+  const visitorEntries = Object.entries(visitedMap).filter(([, v]) => Boolean(v));
+  const mapLinks = buildPlaceMapLinks(p);
+  return { ratingsMap, ratingVals, avgRating, visitedMap, visitorEntries, mapLinks };
+}
+
+function updatePlacesHeaderAndCounts(allEntries, visibleEntries) {
+  if (placesStatsText) {
+    if (!allEntries.length) {
+      placesStatsText.textContent = "İlk mekanı ekle, puanla ve Google Haritalar konumuyla paylaş.";
+    } else {
+      let ratedSum = 0;
+      let ratedCount = 0;
+      let mappedCount = 0;
+      allEntries.forEach(([, p]) => {
+        const st = getPlaceStats(p);
+        if (st.ratingVals.length) {
+          ratedSum += st.avgRating;
+          ratedCount += 1;
+        }
+        if (st.mapLinks.hasSavedLocation) mappedCount += 1;
+      });
+      const parts = [`${allEntries.length} mekan`];
+      if (ratedCount) parts.push(`★ ${(ratedSum / ratedCount).toFixed(1)} ort.`);
+      if (mappedCount) parts.push(`${mappedCount} harita konumu`);
+      placesStatsText.textContent = parts.join(" · ");
+    }
+  }
+
+  if (placesFilterBar) {
+    const counts = { all: allEntries.length };
+    allEntries.forEach(([, p]) => {
+      const c = p.category || "Diğer";
+      counts[c] = (counts[c] || 0) + 1;
+    });
+    placesFilterBar.querySelectorAll("[data-place-filter]").forEach((btn) => {
+      const key = btn.dataset.placeFilter;
+      const baseLabel = key === "all" ? "Tümü" : key;
+      const cnt = counts[key] || 0;
+      btn.innerHTML = cnt > 0
+        ? `${escapeHtml(baseLabel)} <span class="places-filter-count">${cnt}</span>`
+        : escapeHtml(baseLabel);
+    });
+  }
+
+  if (placesResultCount) {
+    if (!allEntries.length) {
+      placesResultCount.textContent = "";
+    } else if (visibleEntries.length === allEntries.length) {
+      placesResultCount.textContent = `${allEntries.length} kayıt`;
+    } else {
+      placesResultCount.textContent = `${visibleEntries.length} / ${allEntries.length} sonuç`;
+    }
+  }
+}
+
+function renderPlacesList() {
+  if (!placesList) return;
+  const allEntries = state.placesCache || [];
+  const dataByKey = {};
+  allEntries.forEach(([k, v]) => {
+    dataByKey[k] = v;
+  });
+
+  const q = placesUiState.search.toLocaleLowerCase("tr");
+  let filtered = allEntries.filter(([, p]) => {
+    if (placesUiState.filter !== "all" && (p.category || "Diğer") !== placesUiState.filter) {
+      return false;
+    }
+    if (q) {
+      const hay = `${p.name || ""} ${p.area || ""} ${p.category || ""} ${p.note || ""} ${p.addedByName || ""}`.toLocaleLowerCase("tr");
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  filtered = filtered.slice().sort((a, b) => {
+    const sa = getPlaceStats(a[1]);
+    const sb = getPlaceStats(b[1]);
+    if (placesUiState.sort === "rating") {
+      if (sb.avgRating !== sa.avgRating) return sb.avgRating - sa.avgRating;
+      return sb.ratingVals.length - sa.ratingVals.length;
+    }
+    if (placesUiState.sort === "visited") {
+      if (sb.visitorEntries.length !== sa.visitorEntries.length) {
+        return sb.visitorEntries.length - sa.visitorEntries.length;
+      }
+      return (b[1].timestamp || 0) - (a[1].timestamp || 0);
+    }
+    if (placesUiState.sort === "mapped") {
+      const ma = sa.mapLinks.hasSavedLocation ? 1 : 0;
+      const mb = sb.mapLinks.hasSavedLocation ? 1 : 0;
+      if (mb !== ma) return mb - ma;
+      return (b[1].timestamp || 0) - (a[1].timestamp || 0);
+    }
+    return (b[1].timestamp || 0) - (a[1].timestamp || 0);
+  });
+
+  updatePlacesHeaderAndCounts(allEntries, filtered);
+
+  if (!allEntries.length) {
+    placesList.innerHTML = `
+      <div class="places-empty-card">
+        <div class="places-empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        </div>
+        <div class="places-empty-title">Henüz mekan eklenmemiş</div>
+        <div class="places-empty-sub">Favori kafeni, restoranını veya keşfettiğin yerleri Google Haritalar konumuyla ekle.</div>
+        <button type="button" class="btn-primary" data-empty-add-place="1">+ İlk Mekanı Ekle</button>
+      </div>
+    `;
+    const emptyAddBtn = placesList.querySelector("[data-empty-add-place]");
+    if (emptyAddBtn) emptyAddBtn.addEventListener("click", () => openPlaceModal("", false));
+    return;
+  }
+
+  if (!filtered.length) {
+    placesList.innerHTML = `
+      <div class="places-empty-card">
+        <div class="places-empty-title">Eşleşen mekan bulunamadı</div>
+        <div class="places-empty-sub">Farklı bir arama kelimesi veya kategori seçmeyi dene.</div>
+        <button type="button" class="icon-btn" data-reset-place-filters="1">Filtreleri Temizle</button>
+      </div>
+    `;
+    const resetBtn = placesList.querySelector("[data-reset-place-filters]");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        placesUiState.filter = "all";
+        placesUiState.search = "";
+        if (placesSearchInput) placesSearchInput.value = "";
+        if (placesSearchClearBtn) placesSearchClearBtn.classList.add("hidden");
+        if (placesFilterBar) {
+          placesFilterBar.querySelectorAll("[data-place-filter]").forEach((b) => {
+            const act = b.dataset.placeFilter === "all";
+            b.classList.toggle("active", act);
+            b.setAttribute("aria-selected", act ? "true" : "false");
+          });
+        }
+        renderPlacesList();
+      });
+    }
+    return;
+  }
+
+  placesList.innerHTML = filtered
+    .map(([key, p]) => {
+      const st = getPlaceStats(p);
+      const catName = p.category || "Diğer";
+      const catMeta = getPlaceCategoryMeta(catName);
+      const canEdit = Boolean(state.user && (state.user.isAdmin || p.addedBy === state.user.id));
+
+      const myRating = state.user ? Number(st.ratingsMap[state.user.id] || 0) : 0;
+      const displayStars = myRating || Math.round(st.avgRating);
+      const starsHtml = [1, 2, 3, 4, 5]
+        .map(
+          (v) =>
+            `<button type="button" class="place-star-btn${v <= displayStars ? " filled" : ""}" data-rate-place="${escapeHtml(key)}" data-rate-val="${v}" title="${v} yıldız" aria-label="${v} yıldız ver">${v <= displayStars ? "★" : "☆"}</button>`
+        )
+        .join("");
+      const avgLabel = st.ratingVals.length
+        ? `${st.avgRating.toFixed(1)} · ${st.ratingVals.length} oy`
+        : "Henüz puan yok";
+
+      const iVisited = Boolean(state.user && st.visitedMap[state.user.id]);
+      const visitorNames = st.visitorEntries.map(([uid, v]) => {
+        const u = state.usersCache[uid];
+        return u ? getDisplayName(u) : typeof v === "string" ? v : "Üye";
+      });
+      const visitorsHtml = visitorNames.length
+        ? `<div class="place-visitor-chips">${visitorNames
+            .slice(0, 6)
+            .map((n) => `<span class="place-visitor-pill">${escapeHtml(n)}</span>`)
+            .join("")}${visitorNames.length > 6 ? `<span class="place-visitor-pill">+${visitorNames.length - 6}</span>` : ""}</div>`
+        : `<span class="place-visitors-text">İlk giden sen ol</span>`;
+
+      const commentsObj = p.comments && typeof p.comments === "object" ? p.comments : {};
+      const allComments = Object.entries(commentsObj)
+        .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0))
+        .filter(([, c]) => Boolean(c && c.text));
+      const commentsExpanded = placesUiState.expandedCommentIds.has(key);
+      const shownComments = commentsExpanded ? allComments.slice(-30) : allComments.slice(-2);
+      const hiddenCommentCount = Math.max(0, allComments.length - shownComments.length);
+      const commentsHtml = shownComments
+        .map(
+          ([, c]) =>
+            `<div class="place-comment-item"><span class="place-comment-author">${escapeHtml(c.authorName || "Üye")}</span><span class="place-comment-body">${escapeHtml(c.text)}</span></div>`
+        )
+        .join("");
+
+      const mapOpen = placesUiState.openMapIds.has(key);
+      const mapCoordsLabel = st.mapLinks.hasCoords
+        ? `${st.mapLinks.lat.toFixed(4)}, ${st.mapLinks.lng.toFixed(4)}`
+        : st.mapLinks.hasSavedLocation
+          ? "Google Haritalar bağlantısı"
+          : "Konum eklenmedi · İsimden ara";
+
+      const relTime = formatPlaceRelativeTime(p.timestamp);
+      const scoreBadge = st.ratingVals.length
+        ? `<span class="place-score-pill"><span class="place-score-star">★</span>${st.avgRating.toFixed(1)}</span>`
+        : `<span class="place-score-pill muted">Yeni</span>`;
+
+      return `
+        <article class="place-card${st.mapLinks.hasSavedLocation ? " has-map" : ""}">
+          <div class="place-card-top">
+            <div class="place-cat-badge ${catMeta.cls}" title="${escapeHtml(catName)}">${catMeta.icon}</div>
+            <div class="place-head-main">
+              <div class="place-title-row">
+                <h3 class="place-title">${escapeHtml(p.name)}</h3>
+              </div>
+              <div class="place-submeta">
+                <span class="place-cat-tag ${catMeta.cls}">${escapeHtml(catName)}</span>
+                <span class="place-dot-sep">·</span>
+                <span class="place-area-text">${escapeHtml(p.area || "Konum belirtilmedi")}</span>
+                ${p.addedByName ? `<span class="place-dot-sep">·</span><span>${escapeHtml(p.addedByName)}</span>` : ""}
+                ${relTime ? `<span class="place-dot-sep">·</span><span>${escapeHtml(relTime)}</span>` : ""}
+              </div>
+            </div>
+            <div class="place-top-right">
+              ${scoreBadge}
+              ${
+                canEdit
+                  ? `<div class="place-card-actions">
+                      <button type="button" class="place-icon-action" data-edit-place="${escapeHtml(key)}" title="Düzenle / Konum Ekle" aria-label="Mekanı düzenle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
+                      <button type="button" class="place-icon-action danger" data-del-place="${escapeHtml(key)}" title="Sil" aria-label="Mekanı sil">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                      </button>
+                    </div>`
+                  : ""
+              }
+            </div>
+          </div>
+
+          ${p.note ? `<div class="place-note-box">${escapeHtml(p.note)}</div>` : ""}
+
+          <div class="place-map-strip${st.mapLinks.hasSavedLocation ? " verified" : ""}">
+            <div class="place-map-info">
+              <span class="place-map-pin-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              </span>
+              <div class="place-map-texts">
+                <div class="place-map-label">${st.mapLinks.hasSavedLocation ? "Google Haritalar Konumu" : "Google Haritalar"}</div>
+                <div class="place-map-sub">${escapeHtml(mapCoordsLabel)}</div>
+              </div>
+            </div>
+            <div class="place-map-btns">
+              <a class="place-map-btn primary" href="${escapeHtml(st.mapLinks.openUrl)}" target="_blank" rel="noopener noreferrer">
+                <span>${st.mapLinks.hasSavedLocation ? "Haritada Aç" : "Haritada Ara"}</span>
+                <span aria-hidden="true">↗</span>
+              </a>
+              <a class="place-map-btn" href="${escapeHtml(st.mapLinks.directionsUrl)}" target="_blank" rel="noopener noreferrer" title="Google Haritalar yol tarifi">Yol Tarifi</a>
+              <button type="button" class="place-map-btn${mapOpen ? " active" : ""}" data-toggle-map="${escapeHtml(key)}">${mapOpen ? "Gizle" : "Önizle"}</button>
+              ${!st.mapLinks.hasSavedLocation && canEdit ? `<button type="button" class="place-map-btn" data-add-loc-place="${escapeHtml(key)}">+ Konum</button>` : ""}
+            </div>
+          </div>
+
+          ${
+            mapOpen
+              ? `<div class="place-map-embed">
+                  <iframe class="place-map-iframe" src="${escapeHtml(st.mapLinks.embedUrl)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="${escapeHtml(p.name)} harita konumu" allowfullscreen></iframe>
+                </div>`
+              : ""
+          }
+
+          <div class="place-interact-row">
+            <div class="place-stars-wrap">
+              <div class="place-stars">${starsHtml}</div>
+              <span class="place-rating-avg">${escapeHtml(avgLabel)}</span>
+            </div>
+            <button type="button" class="icon-btn place-visit-btn${iVisited ? " visited" : ""}" data-visit-place="${escapeHtml(key)}">${iVisited ? "Gittim ✓" : "Ben de Gittim"}</button>
+          </div>
+
+          <div class="place-visitors-bar">
+            <span class="place-visitors-label">Gidenler</span>
+            ${visitorsHtml}
+          </div>
+
+          <div class="place-comments-box">
+            ${
+              hiddenCommentCount > 0
+                ? `<button type="button" class="place-comments-more" data-expand-comments="${escapeHtml(key)}">Önceki ${hiddenCommentCount} yorumu göster</button>`
+                : ""
+            }
+            ${commentsHtml ? `<div class="place-comments-list">${commentsHtml}</div>` : ""}
+            <form class="place-comment-form" data-comment-form="${escapeHtml(key)}">
+              <input type="text" class="place-comment-input" maxlength="140" placeholder="Kısa yorum ekle..." required />
+              <button type="submit" class="icon-btn place-comment-send">Yaz</button>
+            </form>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  placesList.querySelectorAll("[data-del-place]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!confirm("Bu mekan kaydı silinsin mi?")) return;
+      state.db.ref("places/" + btn.dataset.delPlace).remove();
+    });
+  });
+
+  placesList.querySelectorAll("[data-edit-place]").forEach((btn) => {
+    btn.addEventListener("click", () => openPlaceModal(btn.dataset.editPlace, false));
+  });
+
+  placesList.querySelectorAll("[data-add-loc-place]").forEach((btn) => {
+    btn.addEventListener("click", () => openPlaceModal(btn.dataset.addLocPlace, true));
+  });
+
+  placesList.querySelectorAll("[data-toggle-map]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.toggleMap;
+      if (placesUiState.openMapIds.has(id)) {
+        placesUiState.openMapIds.delete(id);
+      } else {
+        placesUiState.openMapIds.add(id);
+      }
+      renderPlacesList();
+    });
+  });
+
+  placesList.querySelectorAll("[data-expand-comments]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      placesUiState.expandedCommentIds.add(btn.dataset.expandComments);
+      renderPlacesList();
+    });
+  });
+
+  placesList.querySelectorAll("[data-rate-place]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const placeId = btn.dataset.ratePlace;
+      const val = Number(btn.dataset.rateVal);
+      if (!placeId || val < 1 || val > 5 || !state.user) return;
+      state.db.ref(`places/${placeId}/ratings/${state.user.id}`).set(val).catch(() => {});
+    });
+  });
+
+  placesList.querySelectorAll("[data-visit-place]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const placeId = btn.dataset.visitPlace;
+      if (!placeId || !state.user) return;
+      const ref = state.db.ref(`places/${placeId}/visitedBy/${state.user.id}`);
+      const cur = dataByKey[placeId] && dataByKey[placeId].visitedBy && dataByKey[placeId].visitedBy[state.user.id];
+      if (cur) {
+        ref.remove().catch(() => {});
+      } else {
+        ref.set(getDisplayName(state.user)).catch(() => {});
+      }
+    });
+  });
+
+  placesList.querySelectorAll("[data-comment-form]").forEach((form) => {
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const placeId = form.dataset.commentForm;
+      const inp = form.querySelector(".place-comment-input");
+      const commentText = inp ? inp.value.trim().slice(0, 140) : "";
+      if (!placeId || !commentText || !state.user) return;
+      if (inp) inp.value = "";
+      await state.db.ref(`places/${placeId}/comments`).push({
+        authorId: state.user.id,
+        authorName: getDisplayName(state.user),
+        text: commentText,
+        timestamp: Date.now()
+      });
+    });
+  });
+}
+
 function listenPlaces() {
-  state.db.ref("places").limitToLast(50).on("value", (snap) => {
+  state.db.ref("places").limitToLast(80).on("value", (snap) => {
     const data = snap.val() || {};
     const entries = Object.entries(data).sort(
       (a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)
     );
     state.placesCache = entries;
-
-    if (entries.length === 0) {
-      placesList.innerHTML = `<div class="empty-hint">Henüz mekan eklenmemiş.</div>`;
-      return;
-    }
-
-    placesList.innerHTML = entries
-      .map(([key, p]) => {
-        const canDel = state.user.isAdmin || p.addedBy === state.user.id;
-        const delBtn = canDel
-          ? `<button class="icon-btn danger" data-del-place="${escapeHtml(key)}">Sil</button>`
-          : "";
-        const cat = p.category ? `${escapeHtml(p.category)} • ` : "";
-
-        const ratingsMap = p.ratings && typeof p.ratings === "object" ? p.ratings : {};
-        const ratingVals = Object.values(ratingsMap).map((v) => Number(v)).filter((v) => v >= 1 && v <= 5);
-        const avgRating = ratingVals.length ? ratingVals.reduce((s, v) => s + v, 0) / ratingVals.length : 0;
-        const myRating = Number(ratingsMap[state.user.id] || 0);
-        const displayStars = myRating || Math.round(avgRating);
-        const starsHtml = [1, 2, 3, 4, 5]
-          .map(
-            (v) =>
-              `<button type="button" class="place-star-btn${v <= displayStars ? " filled" : ""}" data-rate-place="${escapeHtml(key)}" data-rate-val="${v}" title="${v} yıldız">${v <= displayStars ? "★" : "☆"}</button>`
-          )
-          .join("");
-        const avgLabel = ratingVals.length
-          ? `${avgRating.toFixed(1)} (${ratingVals.length} oy)`
-          : "Henüz puan yok";
-
-        const visitedMap = p.visitedBy && typeof p.visitedBy === "object" ? p.visitedBy : {};
-        const iVisited = Boolean(visitedMap[state.user.id]);
-        const visitorNames = Object.entries(visitedMap)
-          .filter(([, v]) => Boolean(v))
-          .map(([uid, v]) => {
-            const u = state.usersCache[uid];
-            return u ? getDisplayName(u) : typeof v === "string" ? v : "Üye";
-          });
-        const visitorsLabel = visitorNames.length
-          ? `Gidenler: ${visitorNames.map((n) => escapeHtml(n)).join(", ")}`
-          : "Henüz giden işaretlenmedi";
-
-        const commentsObj = p.comments && typeof p.comments === "object" ? p.comments : {};
-        const commentsHtml = Object.entries(commentsObj)
-          .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0))
-          .slice(-20)
-          .map(([, c]) => {
-            if (!c || !c.text) return "";
-            return `<div class="place-comment-item"><span class="place-comment-author">${escapeHtml(c.authorName || "Üye")}:</span>${escapeHtml(c.text)}</div>`;
-          })
-          .join("");
-
-        return `
-        <div class="place-card">
-          <div class="place-header">
-            <div>
-              <div class="place-title">${escapeHtml(p.name)}</div>
-              <div class="place-meta">${cat}${escapeHtml(p.area)} • ${escapeHtml(p.addedByName || "")}</div>
-            </div>
-            ${delBtn}
-          </div>
-          ${p.note ? `<div class="place-note">${escapeHtml(p.note)}</div>` : ""}
-          <div class="place-rating-row">
-            <div class="place-stars">${starsHtml}<span class="place-rating-avg">${escapeHtml(avgLabel)}</span></div>
-          </div>
-          <div class="place-visit-row">
-            <button type="button" class="icon-btn place-visit-btn${iVisited ? " visited" : ""}" data-visit-place="${escapeHtml(key)}">${iVisited ? "Gittim ✓" : "Ben de Gittim"}</button>
-            <span class="place-visitors-text">${visitorsLabel}</span>
-          </div>
-          <div class="place-comments-box">
-            ${commentsHtml}
-            <form class="place-comment-form" data-comment-form="${escapeHtml(key)}">
-              <input type="text" class="place-comment-input" maxlength="140" placeholder="Kısa yorum ekle..." required />
-              <button type="submit" class="icon-btn">Yaz</button>
-            </form>
-          </div>
-        </div>
-      `;
-      })
-      .join("");
-
-    placesList.querySelectorAll("[data-del-place]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (!confirm("Bu mekan kaydı silinsin mi?")) return;
-        state.db.ref("places/" + btn.dataset.delPlace).remove();
-      });
-    });
-
-    placesList.querySelectorAll("[data-rate-place]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const placeId = btn.dataset.ratePlace;
-        const val = Number(btn.dataset.rateVal);
-        if (!placeId || val < 1 || val > 5 || !state.user) return;
-        state.db.ref(`places/${placeId}/ratings/${state.user.id}`).set(val).catch(() => {});
-      });
-    });
-
-    placesList.querySelectorAll("[data-visit-place]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const placeId = btn.dataset.visitPlace;
-        if (!placeId || !state.user) return;
-        const ref = state.db.ref(`places/${placeId}/visitedBy/${state.user.id}`);
-        const cur = data[placeId] && data[placeId].visitedBy && data[placeId].visitedBy[state.user.id];
-        if (cur) {
-          ref.remove().catch(() => {});
-        } else {
-          ref.set(getDisplayName(state.user)).catch(() => {});
-        }
-      });
-    });
-
-    placesList.querySelectorAll("[data-comment-form]").forEach((form) => {
-      form.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        const placeId = form.dataset.commentForm;
-        const inp = form.querySelector(".place-comment-input");
-        const commentText = inp ? inp.value.trim().slice(0, 140) : "";
-        if (!placeId || !commentText || !state.user) return;
-        if (inp) inp.value = "";
-        await state.db.ref(`places/${placeId}/comments`).push({
-          authorId: state.user.id,
-          authorName: getDisplayName(state.user),
-          text: commentText,
-          timestamp: Date.now()
-        });
-      });
-    });
+    renderPlacesList();
   });
 }
 

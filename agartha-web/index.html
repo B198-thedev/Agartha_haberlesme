@@ -220,34 +220,49 @@
 
         <!-- SEKME 2: ZİYARET EDİLEN MEKANLAR -->
         <div id="tab-places" class="tab-pane" role="tabpanel" aria-labelledby="nav-places" tabindex="0">
-          <div class="card">
-            <h3>Yeni Yer Ekle</h3>
-            <p class="muted">Gittiğiniz yerleri puanlayıp paylaşın; akıllı önerici buradan zevkinizi öğrenir.</p>
-            <form id="place-form" class="stack-form">
-              <input id="place-name" type="text" placeholder="Mekan adı (Örn. Walter's Coffee)" maxlength="60" required />
-              <input id="place-area" type="text" placeholder="Semt / Şehir (Örn. Moda, Kadıköy)" maxlength="50" required />
-              <select id="place-category">
-                <option value="Kafe">Kafe</option>
-                <option value="Restoran">Restoran</option>
-                <option value="Bar / Pub">Bar / Pub</option>
-                <option value="Doğa / Park">Doğa / Park</option>
-                <option value="Eğlence / Kültür">Eğlence / Kültür</option>
-                <option value="Diğer">Diğer</option>
+          <div class="card places-hero">
+            <div class="places-hero-row">
+              <div class="places-hero-copy">
+                <div class="places-hero-kicker">AGARTHA REHBERİ</div>
+                <h2 class="places-hero-title">Mekanlar</h2>
+                <p id="places-stats-text" class="places-hero-stats">Gittiğiniz yerleri keşfedin, puanlayın ve haritada işaretleyin.</p>
+              </div>
+              <button id="open-place-modal-btn" type="button" class="btn-primary places-add-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Yer Ekle</span>
+              </button>
+            </div>
+
+            <div class="places-toolbar">
+              <div class="places-search-wrap">
+                <svg class="places-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input id="places-search-input" type="search" class="places-search-input" placeholder="Mekan, semt veya not ara..." autocomplete="off" />
+                <button id="places-search-clear" type="button" class="places-search-clear hidden" aria-label="Aramayı temizle">×</button>
+              </div>
+              <select id="places-sort-select" class="settings-select places-sort-select" aria-label="Sıralama">
+                <option value="newest">En Yeni</option>
+                <option value="rating">En Yüksek Puan</option>
+                <option value="visited">En Çok Gidilen</option>
+                <option value="mapped">Konumlu Olanlar</option>
               </select>
-              <select id="place-rating-select" aria-label="Puan">
-                <option value="5">5 Yıldız (Harika)</option>
-                <option value="4" selected>4 Yıldız (Çok İyi)</option>
-                <option value="3">3 Yıldız (İdare Eder)</option>
-                <option value="2">2 Yıldız (Zayıf)</option>
-                <option value="1">1 Yıldız (Tavsiye Etmem)</option>
-              </select>
-              <input id="place-note" type="text" placeholder="Kısa not (Örn. Sessiz, kahvesi güzel)" maxlength="100" />
-              <button type="submit" class="btn-primary">Listeye Kaydet</button>
-            </form>
+            </div>
+
+            <div id="places-filter-bar" class="places-filter-bar" role="tablist" aria-label="Kategori filtresi">
+              <button type="button" class="places-filter-chip active" data-place-filter="all" aria-selected="true">Tümü</button>
+              <button type="button" class="places-filter-chip" data-place-filter="Kafe" aria-selected="false">Kafe</button>
+              <button type="button" class="places-filter-chip" data-place-filter="Restoran" aria-selected="false">Restoran</button>
+              <button type="button" class="places-filter-chip" data-place-filter="Bar / Pub" aria-selected="false">Bar / Pub</button>
+              <button type="button" class="places-filter-chip" data-place-filter="Doğa / Park" aria-selected="false">Doğa / Park</button>
+              <button type="button" class="places-filter-chip" data-place-filter="Eğlence / Kültür" aria-selected="false">Eğlence / Kültür</button>
+              <button type="button" class="places-filter-chip" data-place-filter="Diğer" aria-selected="false">Diğer</button>
+            </div>
           </div>
 
-          <div class="section-label">Gidilen Mekanlar</div>
-          <div id="places-list" class="list-stack">
+          <div class="places-list-header">
+            <div class="section-label" style="margin:0;">Gidilen Mekanlar</div>
+            <span id="places-result-count" class="places-result-count"></span>
+          </div>
+          <div id="places-list" class="list-stack places-grid">
             <div class="empty-hint">Henüz mekan eklenmemiş.</div>
           </div>
         </div>
@@ -595,6 +610,101 @@
           <div class="section-label" id="changelog-section-label">Sürüm Geçmişi (v1 – V2.22)</div>
           <input id="changelog-search-input" type="search" class="changelog-search" placeholder="Sürüm veya özellik ara (ör. v44, video, şifreleme)..." autocomplete="off" />
           <div id="changelog-list" class="list-stack" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEKAN EKLE / DÜZENLE MODALI -->
+    <div id="place-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="place-modal-title">
+      <div class="modal-card place-modal-card">
+        <div class="modal-header">
+          <div>
+            <h2 id="place-modal-title" style="margin:0;">Yeni Mekan Ekle</h2>
+            <div class="place-modal-sub">Gittiğiniz yerleri paylaşın; Akıllı Önerici buradan zevkinizi öğrenir.</div>
+          </div>
+          <button id="close-place-modal-btn" type="button" class="icon-btn">Kapat</button>
+        </div>
+        <div class="modal-body">
+          <form id="place-form" class="place-form-modern">
+            <input id="place-edit-id" type="hidden" value="" />
+            <input id="place-category" type="hidden" value="Kafe" />
+            <input id="place-rating-select" type="hidden" value="4" />
+
+            <div class="place-field-group">
+              <label class="place-field-label" for="place-name">Mekan Adı</label>
+              <input id="place-name" type="text" placeholder="Örn. Walter's Coffee Roastery" maxlength="60" required />
+            </div>
+
+            <div class="place-field-group">
+              <label class="place-field-label" for="place-area">Semt / Şehir</label>
+              <input id="place-area" type="text" placeholder="Örn. Moda, Kadıköy" maxlength="50" required />
+            </div>
+
+            <div class="place-field-group">
+              <span class="place-field-label">Kategori</span>
+              <div id="place-cat-grid" class="place-cat-grid" role="radiogroup" aria-label="Kategori">
+                <button type="button" class="place-cat-option active" data-cat-value="Kafe" aria-pressed="true">Kafe</button>
+                <button type="button" class="place-cat-option" data-cat-value="Restoran" aria-pressed="false">Restoran</button>
+                <button type="button" class="place-cat-option" data-cat-value="Bar / Pub" aria-pressed="false">Bar / Pub</button>
+                <button type="button" class="place-cat-option" data-cat-value="Doğa / Park" aria-pressed="false">Doğa / Park</button>
+                <button type="button" class="place-cat-option" data-cat-value="Eğlence / Kültür" aria-pressed="false">Eğlence / Kültür</button>
+                <button type="button" class="place-cat-option" data-cat-value="Diğer" aria-pressed="false">Diğer</button>
+              </div>
+            </div>
+
+            <div class="place-field-group">
+              <div class="place-field-label-row">
+                <span class="place-field-label">Puanın</span>
+                <span id="place-star-label" class="place-star-label">4 / 5 · Çok İyi</span>
+              </div>
+              <div id="place-star-picker" class="place-star-picker" role="radiogroup" aria-label="Puan seçimi">
+                <button type="button" class="place-picker-star filled" data-star-val="1" aria-label="1 yıldız">★</button>
+                <button type="button" class="place-picker-star filled" data-star-val="2" aria-label="2 yıldız">★</button>
+                <button type="button" class="place-picker-star filled" data-star-val="3" aria-label="3 yıldız">★</button>
+                <button type="button" class="place-picker-star filled" data-star-val="4" aria-label="4 yıldız">★</button>
+                <button type="button" class="place-picker-star" data-star-val="5" aria-label="5 yıldız">★</button>
+              </div>
+            </div>
+
+            <div class="place-location-panel">
+              <div class="place-loc-header">
+                <div class="place-loc-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  <span>Google Haritalar Konumu</span>
+                </div>
+                <span class="place-loc-optional">İsteğe bağlı</span>
+              </div>
+              <p class="place-loc-hint">Google Haritalar'dan <strong>Paylaş → Bağlantıyı kopyala</strong> yapıp buraya yapıştırabilir veya mevcut konumunu alabilirsin.</p>
+              <input id="place-maps-input" type="text" placeholder="Google Maps linki veya koordinat (Örn. 40.988, 29.028)" maxlength="500" autocomplete="off" />
+              <div class="place-loc-actions">
+                <button id="place-gps-btn" type="button" class="icon-btn place-loc-action-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
+                  <span>Konumumu Al</span>
+                </button>
+                <button id="place-find-map-btn" type="button" class="icon-btn place-loc-action-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <span>Haritada Bul</span>
+                </button>
+              </div>
+              <div id="place-loc-status" class="place-loc-status hidden">
+                <div class="place-loc-status-main">
+                  <span id="place-loc-status-text" class="place-loc-status-text"></span>
+                </div>
+                <div class="place-loc-status-btns">
+                  <button id="place-loc-preview-btn" type="button" class="icon-btn place-mini-btn">Önizle</button>
+                  <button id="place-loc-clear-btn" type="button" class="icon-btn place-mini-btn danger">Temizle</button>
+                </div>
+              </div>
+              <div id="place-loc-embed-wrap" class="place-loc-embed-wrap hidden"></div>
+            </div>
+
+            <div class="place-field-group">
+              <label class="place-field-label" for="place-note">Kısa Not</label>
+              <input id="place-note" type="text" placeholder="Örn. Sessiz ortam, kahvesi harika, priz var" maxlength="160" />
+            </div>
+
+            <button id="place-submit-btn" type="submit" class="btn-primary place-submit-btn">Mekanı Kaydet</button>
+          </form>
         </div>
       </div>
     </div>
