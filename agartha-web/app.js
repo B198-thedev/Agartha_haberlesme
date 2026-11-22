@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.24";
+const CURRENT_APP_CACHE = "agartha-V2.25";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -489,6 +489,7 @@ const state = {
   deliveredByRef: null,
   typingRef: null,
   invitesRef: null,
+  announcementsRef: null,
   typingTimeout: null,
   usersCache: {},
   startedAt: Date.now(),
@@ -1273,11 +1274,15 @@ function sanitizeMediaSrc(rawSrc, kind = "image") {
   if (kind === "image" && /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(s)) {
     return s;
   }
-  if (
-    kind === "audio" &&
-    /^data:audio\/(mp4|webm|ogg|mpeg|wav|aac|x-m4a|3gpp|opus)(?:;[a-z0-9=+-\s]+)*;base64,[A-Za-z0-9+/=]+$/i.test(s)
-  ) {
-    return s;
+  if (kind === "audio") {
+    const audioDataMatch = s.match(
+      /^data:(?:audio\/(mp4|webm|ogg|mpeg|wav|aac|x-m4a|m4a|3gpp|opus|flac)|video\/mp4)(?:;[a-z0-9=._,"+\s-]+)*;base64,([A-Za-z0-9+/=\s]+)$/i
+    );
+    if (audioDataMatch) {
+      const subtype = (audioDataMatch[1] || "mp4").toLowerCase();
+      const b64 = audioDataMatch[2].replace(/\s+/g, "");
+      return `data:audio/${subtype};base64,${b64}`;
+    }
   }
   if (
     kind === "video" &&
@@ -2795,7 +2800,8 @@ registerForm.addEventListener("submit", async (e) => {
   const username = regUsername.value.trim();
   const nickname = regNickname ? regNickname.value.trim() : "";
   const password = regPassword.value.trim();
-  const code = regInvite.value.trim();
+  const rawCode = regInvite.value.replace(/[\u2010-\u2015\u2212]/g, "-").trim();
+  const code = rawCode.toUpperCase();
   if (!username || !password || !code) return;
 
   if (!/^[A-Za-z0-9_-]{4,32}$/.test(code)) {
@@ -2807,94 +2813,136 @@ registerForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  let claimedInviteRef = null;
   try {
     await ensureFirebaseAuthSession();
-    const inviteSnap = await state.db.ref("invites/" + code).once("value");
-    const invite = inviteSnap.val();
-    if (!invite || invite.active !== true) {
-      showRegisterError("Geçersiz veya daha önce kullanılmış erişim kodu.");
-      return;
-    }
 
-    const usersSnap = await state.db.ref("users").once("value");
-    const allUsers = usersSnap.val() || {};
-    const nameTaken = Object.values(allUsers).some(
-      (u) => String(u.name || "").trim().toLowerCase() === username.toLowerCase()
-    );
-    if (nameTaken) {
-      showRegisterError("Bu kullanıcı adı zaten alınmış. Farklı bir kullanıcı adı seçin.");
-      return;
-    }
-
-    const userId = slugifyId(username);
-    const finalNickname = nickname || username;
-
-    // Aynı davet kodunun eşzamanlı olarak iki kez kullanılmasını transaction ile engelle
-    const txResult = await state.db.ref("invites/" + code).transaction((current) => {
-      if (!current || current.active !== true) return;
-      return {
-        ...current,
-        active: false,
-        usedBy: finalNickname,
-        claimedByUserId: userId,
-        usedAt: Date.now()
-      };
-    });
-    if (!txResult.committed) {
-      showRegisterError("Bu erişim kodu az önce kullanıldı veya geçersiz.");
-      return;
-    }
-
-    const passwordSalt = randomBytesHex(16);
-    const passwordHash = await hashPasswordPBKDF2(password, passwordSalt);
-    const avatarData = sanitizeMediaSrc(state.pendingRegAvatar, "image");
-    const isPersonalOnly = Boolean(invite.onlyPersonal);
-    const friendCode = generateStrongInviteCode("ARK");
-    const initialFriends = {};
-    if (invite.createdBy && allUsers[invite.createdBy]) {
-      initialFriends[invite.createdBy] = true;
-    }
-
-    await state.db.ref("users/" + userId).set({
-      name: username,
-      nickname: finalNickname,
-      isAdmin: false,
-      active: true,
-      online: true,
-      inMainGroup: !isPersonalOnly,
-      friendsInit: isPersonalOnly,
-      friendCode,
-      friends: initialFriends,
-      passwordSalt,
-      passwordHash,
-      hashAlgo: "pbkdf2-sha256-100k",
-      avatarData,
-      joinedAt: Date.now()
-    });
-
-    if (invite.createdBy && allUsers[invite.createdBy]) {
-      await state.db.ref(`users/${invite.createdBy}/friends/${userId}`).set(true).catch(() => {});
-    }
-
-    state.user = {
-      id: userId,
-      name: username,
-      nickname: finalNickname,
-      isAdmin: false,
-      inMainGroup: !isPersonalOnly,
-      friends: initialFriends,
-      friendsInit: isPersonalOnly,
-      friendCode,
-      avatarData,
-      bubbleColor: "",
-      bio: "",
-      statusEmoji: "",
-      bannerColor: ""
+    // Firebase RTDB transaction() dinleyicisiz yolda önce local cache (null) ile çağrılır;
+    // aktif dinleyici tutarak sunucudan gelen gerçek değerin önbellekte olmasını sağlıyoruz.
+    const loadInviteWithListener = async (candidateCode) => {
+      const ref = state.db.ref("invites/" + candidateCode);
+      let listenerFn = null;
+      const snap = await new Promise((resolve, reject) => {
+        let settled = false;
+        listenerFn = (s) => {
+          if (!settled) {
+            settled = true;
+            resolve(s);
+          }
+        };
+        ref.on("value", listenerFn, (err) => {
+          if (!settled) {
+            settled = true;
+            ref.off("value", listenerFn);
+            reject(err);
+          }
+        });
+      });
+      return { ref, listenerFn, invite: snap.val() };
     };
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: false }));
-    state.pendingLoginSecret = password;
-    enterMainApp();
+
+    let inviteCtx = await loadInviteWithListener(code);
+    if (!inviteCtx.invite && rawCode !== code) {
+      inviteCtx.ref.off("value", inviteCtx.listenerFn);
+      inviteCtx = await loadInviteWithListener(rawCode);
+    }
+
+    const invite = inviteCtx.invite;
+    try {
+      if (!invite || invite.active !== true) {
+        showRegisterError("Geçersiz veya daha önce kullanılmış erişim kodu.");
+        return;
+      }
+
+      const usersSnap = await state.db.ref("users").once("value");
+      const allUsers = usersSnap.val() || {};
+      const nameTaken = Object.values(allUsers).some(
+        (u) => String(u.name || "").trim().toLowerCase() === username.toLowerCase()
+      );
+      if (nameTaken) {
+        showRegisterError("Bu kullanıcı adı zaten alınmış. Farklı bir kullanıcı adı seçin.");
+        return;
+      }
+
+      const userId = slugifyId(username);
+      const finalNickname = nickname || username;
+
+      // Aynı davet kodunun eşzamanlı olarak iki kez kullanılmasını transaction ile engelle
+      const txResult = await inviteCtx.ref.transaction((current) => {
+        if (!current || current.active !== true) return;
+        return {
+          ...current,
+          active: false,
+          usedBy: finalNickname,
+          claimedByUserId: userId,
+          usedAt: Date.now()
+        };
+      });
+      if (!txResult.committed) {
+        showRegisterError("Bu erişim kodu az önce kullanıldı veya geçersiz.");
+        return;
+      }
+      claimedInviteRef = inviteCtx.ref;
+
+      const passwordSalt = randomBytesHex(16);
+      const passwordHash = await hashPasswordPBKDF2(password, passwordSalt);
+      const avatarData = sanitizeMediaSrc(state.pendingRegAvatar, "image");
+      const isPersonalOnly = Boolean(invite.onlyPersonal);
+      const friendCode = generateStrongInviteCode("ARK");
+      const initialFriends = {};
+      if (invite.createdBy && allUsers[invite.createdBy]) {
+        initialFriends[invite.createdBy] = true;
+      }
+
+      await state.db.ref("users/" + userId).set({
+        name: username,
+        nickname: finalNickname,
+        isAdmin: false,
+        active: true,
+        online: true,
+        inMainGroup: !isPersonalOnly,
+        friendsInit: isPersonalOnly,
+        friendCode,
+        friends: initialFriends,
+        passwordSalt,
+        passwordHash,
+        hashAlgo: "pbkdf2-sha256-100k",
+        avatarData,
+        joinedAt: Date.now()
+      });
+      claimedInviteRef = null;
+
+      if (invite.createdBy && allUsers[invite.createdBy]) {
+        await state.db.ref(`users/${invite.createdBy}/friends/${userId}`).set(true).catch(() => {});
+      }
+
+      state.user = {
+        id: userId,
+        name: username,
+        nickname: finalNickname,
+        isAdmin: false,
+        inMainGroup: !isPersonalOnly,
+        friends: initialFriends,
+        friendsInit: isPersonalOnly,
+        friendCode,
+        avatarData,
+        bubbleColor: "",
+        bio: "",
+        statusEmoji: "",
+        bannerColor: ""
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ id: userId, name: username, isAdmin: false }));
+      state.pendingLoginSecret = password;
+      enterMainApp();
+    } finally {
+      inviteCtx.ref.off("value", inviteCtx.listenerFn);
+    }
   } catch (err) {
+    if (claimedInviteRef) {
+      await claimedInviteRef
+        .update({ active: true, usedBy: null, claimedByUserId: null, usedAt: null })
+        .catch(() => {});
+    }
     showRegisterError("Kayıt hatası: " + (err.message || "Bağlantı sorunu"));
   }
 });
@@ -6472,12 +6520,20 @@ messageForm.addEventListener("submit", async (e) => {
     }
 
     if (audioBlob) {
-      const safeMime = audioMime || audioBlob.type || "audio/mp4";
+      const rawMime = String(audioMime || audioBlob.type || "audio/mp4").split(";")[0].trim().toLowerCase();
+      const safeMime = rawMime.startsWith("audio/") ? rawMime : "audio/mp4";
+      const toNormalizedAudioDataUrl = async (blobObj) => {
+        const rawDataUrl = await blobToDataUrl(blobObj);
+        const commaIdx = rawDataUrl.indexOf(",");
+        return commaIdx !== -1
+          ? `data:${safeMime};base64,${rawDataUrl.slice(commaIdx + 1)}`
+          : rawDataUrl;
+      };
       // iOS Safari <audio> elementi Google Drive uc?export=download URL'lerinde
       // Range/redirect nedeniyle "Hata" verebildiği için 2 MB altındaki sesler
       // doğrudan data URL olarak gönderilir.
       if (audioBlob.size <= 2 * 1024 * 1024) {
-        payload.audioData = await blobToDataUrl(audioBlob);
+        payload.audioData = await toNormalizedAudioDataUrl(audioBlob);
       } else if (state.driveConfig && state.driveConfig.url) {
         const ext = safeMime.includes("mp4") || safeMime.includes("m4a")
           ? "m4a"
@@ -6502,7 +6558,7 @@ messageForm.addEventListener("submit", async (e) => {
         if (audioBlob.size > 4 * 1024 * 1024) {
           throw new Error("Drive bağlı değilken en fazla 4 MB ses gönderilebilir");
         }
-        payload.audioData = await blobToDataUrl(audioBlob);
+        payload.audioData = await toNormalizedAudioDataUrl(audioBlob);
       }
     }
 
@@ -6755,15 +6811,16 @@ micBtn.addEventListener("click", async () => {
         state.audioStream = null;
       }
       state.mediaRecorder = null;
-      const finalType = recorder.mimeType || mimeType || "audio/mp4";
-      const blob = new Blob(state.audioChunks, { type: finalType });
+      const rawType = String(recorder.mimeType || mimeType || "audio/mp4").split(";")[0].trim().toLowerCase();
+      const cleanMime = rawType.startsWith("audio/") ? rawType : "audio/mp4";
+      const blob = new Blob(state.audioChunks, { type: cleanMime });
       state.audioChunks = [];
       if (blob.size === 0) {
         alert("Ses kaydı boş oluştu, lütfen tekrar deneyin.");
         return;
       }
       state.pendingAudioBlob = blob;
-      state.pendingAudioMime = finalType.split(";")[0].trim();
+      state.pendingAudioMime = cleanMime;
       state.pendingAudioPreviewUrl = URL.createObjectURL(blob);
       audioPreviewPlayer.src = state.pendingAudioPreviewUrl;
       audioPreviewPlayer.load();
@@ -10414,10 +10471,15 @@ function renderCustomAnnouncements() {
     .join("");
 
   customAnnouncementsList.querySelectorAll("[data-del-ann]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       if (!state.user || !state.user.isAdmin) return;
       if (!confirm("Bu duyuru silinsin mi?")) return;
-      state.db.ref("announcements/" + btn.dataset.delAnn).remove();
+      try {
+        await ensureFirebaseAuthSession();
+        await state.db.ref("announcements/" + btn.dataset.delAnn).remove();
+      } catch (err) {
+        alert("Duyuru silinemedi: " + (err && err.message ? err.message : "Yetki veya bağlantı hatası"));
+      }
     });
   });
 }
@@ -10462,16 +10524,28 @@ function renderChangelogList(query = "") {
 
 function listenAnnouncements() {
   if (!state.db) return;
-  state.db.ref("announcements").limitToLast(20).on("value", (snap) => {
-    const data = snap.val() || {};
-    customAnnouncementsCache = Object.entries(data)
-      .map(([id, val]) => ({ id, ...(val || {}) }))
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    updateHomeAnnouncementBanner();
-    if (announcementsModal && !announcementsModal.classList.contains("hidden")) {
-      renderCustomAnnouncements();
+  if (state.announcementsRef) {
+    state.announcementsRef.off();
+    state.announcementsRef = null;
+  }
+  const ref = state.db.ref("announcements").limitToLast(20);
+  state.announcementsRef = ref;
+  ref.on(
+    "value",
+    (snap) => {
+      const data = snap.val() || {};
+      customAnnouncementsCache = Object.entries(data)
+        .map(([id, val]) => ({ id, ...(val || {}) }))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      updateHomeAnnouncementBanner();
+      if (announcementsModal && !announcementsModal.classList.contains("hidden")) {
+        renderCustomAnnouncements();
+      }
+    },
+    (err) => {
+      console.warn("Duyurular okunamadı:", err && err.message ? err.message : err);
     }
-  });
+  );
 }
 
 function openAnnouncementsModal() {
@@ -10512,15 +10586,37 @@ if (announcementForm) {
     const title = announcementTitleInput ? announcementTitleInput.value.trim() : "";
     const body = announcementBodyInput ? announcementBodyInput.value.trim() : "";
     if (!title || !body) return;
-    await state.db.ref("announcements").push({
-      title,
-      body,
-      authorId: state.user.id,
-      authorName: getDisplayName(state.user),
-      createdAt: Date.now()
-    });
-    if (announcementTitleInput) announcementTitleInput.value = "";
-    if (announcementBodyInput) announcementBodyInput.value = "";
+    const submitBtn = announcementForm.querySelector('button[type="submit"]');
+    const prevLabel = submitBtn ? submitBtn.textContent : "";
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Yayınlanıyor...";
+    }
+    try {
+      await ensureFirebaseAuthSession();
+      await state.db.ref("announcements").push({
+        title,
+        body,
+        authorId: state.user.id,
+        authorName: getDisplayName(state.user),
+        createdAt: Date.now()
+      });
+      if (announcementTitleInput) announcementTitleInput.value = "";
+      if (announcementBodyInput) announcementBodyInput.value = "";
+    } catch (err) {
+      const msg = err && err.message ? err.message : "Bilinmeyen hata";
+      const isPermErr = /permission[_\s-]?denied/i.test(msg);
+      alert(
+        isPermErr
+          ? 'Duyuru yayınlanamadı: Firebase Realtime Database kurallarında "announcements" düğümüne yazma izni yok. Firebase Console → Realtime Database → Rules bölümüne announcements kuralını ekleyin.'
+          : "Duyuru yayınlanamadı: " + msg
+      );
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = prevLabel || "Duyuru Yayınla";
+      }
+    }
   });
 }
 
