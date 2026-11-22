@@ -6,7 +6,7 @@ const inappToastAvatar = document.getElementById("inapp-toast-avatar");
 const inappToastTitle = document.getElementById("inapp-toast-title");
 const inappToastMsg = document.getElementById("inapp-toast-msg");
 const inappToastClose = document.getElementById("inapp-toast-close");
-const CURRENT_APP_CACHE = "agartha-V2.25";
+const CURRENT_APP_CACHE = "agartha-V2.26";
 const PENDING_UPDATE_MSG = "Güncelleme yükleniyor, uygulama her an tekrar başlayabilir";
 
 function showUpdateBanner(msg, isPending = false) {
@@ -1284,11 +1284,15 @@ function sanitizeMediaSrc(rawSrc, kind = "image") {
       return `data:audio/${subtype};base64,${b64}`;
     }
   }
-  if (
-    kind === "video" &&
-    /^data:video\/(mp4|webm|ogg|quicktime|3gpp|x-m4v)(?:;[a-z0-9=+-]+)?;base64,[A-Za-z0-9+/=]+$/i.test(s)
-  ) {
-    return s;
+  if (kind === "video") {
+    const videoDataMatch = s.match(
+      /^data:video\/(mp4|webm|ogg|quicktime|3gpp|x-m4v)(?:;[a-z0-9=._,"+\s-]+)*;base64,([A-Za-z0-9+/=\s]+)$/i
+    );
+    if (videoDataMatch) {
+      const subtype = videoDataMatch[1].toLowerCase();
+      const b64 = videoDataMatch[2].replace(/\s+/g, "");
+      return `data:video/${subtype};base64,${b64}`;
+    }
   }
   return sanitizeHttpUrl(s);
 }
@@ -10072,21 +10076,42 @@ closeAdminBtn.addEventListener("click", () => {
 
 inviteForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!state.user || !state.user.isAdmin) return;
+  if (!state.db || !state.user || !state.user.isAdmin) return;
   const label = inviteLabelInput.value.trim();
   if (!label) return;
 
-  const onlyPersonal = inviteScopeSelect ? inviteScopeSelect.value === "personal" : false;
-  const code = generateStrongInviteCode("AGAR");
-  await state.db.ref("invites/" + code).set({
-    label,
-    onlyPersonal,
-    createdBy: state.user.id,
-    active: true,
-    createdAt: Date.now()
-  });
-
-  inviteLabelInput.value = "";
+  const submitBtn = inviteForm.querySelector('button[type="submit"]');
+  const prevLabel = submitBtn ? submitBtn.textContent : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Üretiliyor...";
+  }
+  try {
+    await ensureFirebaseAuthSession();
+    const onlyPersonal = inviteScopeSelect ? inviteScopeSelect.value === "personal" : false;
+    const code = generateStrongInviteCode("AGAR");
+    await state.db.ref("invites/" + code).set({
+      label,
+      onlyPersonal,
+      createdBy: state.user.id,
+      active: true,
+      createdAt: Date.now()
+    });
+    inviteLabelInput.value = "";
+  } catch (err) {
+    const msg = err && err.message ? err.message : "Bilinmeyen hata";
+    const isPermErr = /permission[_\s-]?denied/i.test(msg);
+    alert(
+      isPermErr
+        ? 'Davet kodu üretilemedi: Firebase Realtime Database kurallarında "invites" düğümüne yazma izni yok. Firebase Console → Realtime Database → Rules bölümüne invites kuralını ekleyin.'
+        : "Davet kodu üretilemedi: " + msg
+    );
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = prevLabel || "Kod Üret";
+    }
+  }
 });
 
 function listenInvites() {
@@ -10094,52 +10119,69 @@ function listenInvites() {
     state.invitesRef.off();
   }
   state.invitesRef = state.db.ref("invites");
-  state.invitesRef.on("value", (snap) => {
-    const data = snap.val() || {};
-    const entries = Object.entries(data).sort(
-      (a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)
-    );
+  state.invitesRef.on(
+    "value",
+    (snap) => {
+      const data = snap.val() || {};
+      const entries = Object.entries(data).sort(
+        (a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)
+      );
 
-    if (entries.length === 0) {
-      invitesList.innerHTML = `<div class="empty-hint">Henüz davet kodu yok.</div>`;
-      return;
+      if (entries.length === 0) {
+        invitesList.innerHTML = `<div class="empty-hint">Henüz davet kodu yok.</div>`;
+        return;
+      }
+
+      invitesList.innerHTML = entries
+        .map(([code, inv]) => {
+          const status = inv.active
+            ? `<span class="badge-active">Kullanılabilir</span>`
+            : `<span class="badge-revoked">Kullanıldı (${escapeHtml(inv.usedBy || "-")})</span>`;
+          const scopeLabel = inv.onlyPersonal ? "Sadece Arkadaş (Gizli)" : "Ana Grup";
+          return `
+            <div class="admin-row">
+              <div>
+                <div class="place-title">${escapeHtml(code)}</div>
+                <div class="user-sub">${escapeHtml(inv.label)} • ${scopeLabel} • ${status}</div>
+              </div>
+              <div class="admin-row-actions">
+                <button class="icon-btn" data-copy="${escapeHtml(code)}">Kopyala</button>
+                <button class="icon-btn danger" data-del-invite="${escapeHtml(code)}">Sil</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      invitesList.querySelectorAll("[data-copy]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          navigator.clipboard?.writeText(btn.dataset.copy);
+          btn.textContent = "Kopyalandı";
+          setTimeout(() => (btn.textContent = "Kopyala"), 1200);
+        });
+      });
+
+      invitesList.querySelectorAll("[data-del-invite]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await ensureFirebaseAuthSession();
+            await state.db.ref("invites/" + btn.dataset.delInvite).remove();
+          } catch (err) {
+            alert("Davet kodu silinemedi: " + (err && err.message ? err.message : "Yetki veya bağlantı hatası"));
+          }
+        });
+      });
+    },
+    (err) => {
+      const msg = err && err.message ? err.message : "Yetki hatası";
+      const isPermErr = /permission[_\s-]?denied/i.test(msg);
+      invitesList.innerHTML = `<div class="empty-hint">${
+        isPermErr
+          ? 'Davet kodları okunamadı: Firebase Realtime Database kurallarında "invites" izni eksik.'
+          : "Davet kodları okunamadı: " + escapeHtml(msg)
+      }</div>`;
     }
-
-    invitesList.innerHTML = entries
-      .map(([code, inv]) => {
-        const status = inv.active
-          ? `<span class="badge-active">Kullanılabilir</span>`
-          : `<span class="badge-revoked">Kullanıldı (${escapeHtml(inv.usedBy || "-")})</span>`;
-        const scopeLabel = inv.onlyPersonal ? "Sadece Arkadaş (Gizli)" : "Ana Grup";
-        return `
-          <div class="admin-row">
-            <div>
-              <div class="place-title">${escapeHtml(code)}</div>
-              <div class="user-sub">${escapeHtml(inv.label)} • ${scopeLabel} • ${status}</div>
-            </div>
-            <div class="admin-row-actions">
-              <button class="icon-btn" data-copy="${escapeHtml(code)}">Kopyala</button>
-              <button class="icon-btn danger" data-del-invite="${escapeHtml(code)}">Sil</button>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-
-    invitesList.querySelectorAll("[data-copy]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        navigator.clipboard?.writeText(btn.dataset.copy);
-        btn.textContent = "Kopyalandı";
-        setTimeout(() => (btn.textContent = "Kopyala"), 1200);
-      });
-    });
-
-    invitesList.querySelectorAll("[data-del-invite]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        state.db.ref("invites/" + btn.dataset.delInvite).remove();
-      });
-    });
-  });
+  );
 }
 
 function renderAdminUsers(users) {
